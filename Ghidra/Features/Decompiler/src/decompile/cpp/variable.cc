@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -124,7 +124,7 @@ Varnode *HighVariable::getTypeRepresentative(void) const
 {
   vector<Varnode *>::const_iterator iter;
   Varnode *vn,*rep;
-  
+
   iter = inst.begin();
   rep = *iter;
   ++iter;
@@ -429,7 +429,7 @@ void HighVariable::printInfo(ostream &s) const
   s << "Type: ";
   type->printRaw(s);
   s << "\n\n";
-				
+
   for(viter=inst.begin();viter!=inst.end();++viter) {
     vn = *viter;
     s << dec << vn->getMergeGroup() << ": ";
@@ -488,7 +488,7 @@ void HighVariable::saveXml(ostream &s) const
     a_v_u(s,"ref",inst[j]->getCreateIndex());
     s << "/>";
   }
-  s << "</high>";
+  s << "</high>\n";
 }
 
 /// Given a Varnode at the root of an expression, we collect all the \e explicit HighVariables

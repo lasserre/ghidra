@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -282,7 +282,7 @@ void DecompileAt::loadParameters(void)
   delete doc;
 }
 
-void DecompileAt::rawAction(void) 
+void DecompileAt::rawAction(void)
 
 {
   Funcdata *fd = ghidra->symboltab->getGlobalScope()->queryFunction(addr);
@@ -324,6 +324,19 @@ void DecompileAt::rawAction(void)
 	pidanalysis.saveXml( sout, true );
       }
       fd->saveXml(sout,0,ghidra->getSendSyntaxTree());
+
+      #include <fstream>
+      ofstream outfile("C:/Users/knigh/dev/ghidra/function.xml", ios::out);
+      outfile << "getSendSyntaxTree = " << ghidra->getSendSyntaxTree() << endl;
+      fd->saveXml(outfile, 0, ghidra->getSendSyntaxTree());
+      outfile.close();
+
+      ofstream astfile("C:/Users/knigh/dev/ghidra/ast.xml", ios::out);
+      auto outstream = ghidra->print->getOutputStream();
+      ghidra->print->setOutputStream(&astfile);
+      ghidra->print->docFunction(fd);
+      ghidra->print->setOutputStream(outstream);
+
       if (ghidra->getSendCCode()&&
 	  (ghidra->allacts.getCurrentName() == "decompile"))
         ghidra->print->docFunction(fd);
@@ -377,7 +390,7 @@ void SetAction::rawAction(void)
 
 {
   res = false;
-  
+
   if (actionstring.size() != 0)
     ghidra->allacts.setCurrent(actionstring);
   if (printstring.size() != 0) {
@@ -510,9 +523,22 @@ void GhidraDecompCapability::initialize(void)
   commandmap["setOptions"] = new SetOptions();
 }
 
+#include <thread>
+#include <chrono>
+
+volatile bool debugger_present = false;
+void wait_for_debugger()
+{
+  while (!debugger_present) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  }
+}
+
 int main(int argc,char **argv)
 
 {
+  wait_for_debugger();
+
   signal(SIGSEGV, &ArchitectureGhidra::segvHandler);  // Exit on SEGV errors
   CapabilityPoint::initializeAll();
   int4 status = 0;

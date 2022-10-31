@@ -17,6 +17,9 @@
 #include "flow.hh"
 #include "blockaction.hh"
 
+#include "../../../third-party/json/single_include/nlohmann/json.hpp"
+using json = nlohmann::json;
+
 #ifdef __REMOTE_SOCKET__
 
 #include "ifacedecomp.hh"

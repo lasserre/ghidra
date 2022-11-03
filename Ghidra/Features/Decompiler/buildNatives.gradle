@@ -51,7 +51,8 @@ model {
 		            source {
 		                srcDir "src/decompile/cpp"
 
-		                include "space.cc"
+		                include "astbuilder.cc"
+						include "space.cc"
 		                include "float.cc"
 		                include "address.cc"
 		                include "pcoderaw.cc"

@@ -17,9 +17,6 @@
 #include "flow.hh"
 #include "blockaction.hh"
 
-#include "../../../third-party/json/single_include/nlohmann/json.hpp"
-using json = nlohmann::json;
-
 #ifdef __REMOTE_SOCKET__
 
 #include "ifacedecomp.hh"
@@ -328,17 +325,17 @@ void DecompileAt::rawAction(void)
       }
       fd->saveXml(sout,0,ghidra->getSendSyntaxTree());
 
-      #include <fstream>
-      ofstream outfile("C:/Users/knigh/dev/ghidra/function.xml", ios::out);
-      outfile << "getSendSyntaxTree = " << ghidra->getSendSyntaxTree() << endl;
-      fd->saveXml(outfile, 0, ghidra->getSendSyntaxTree());
-      outfile.close();
+      // #include <fstream>
+      // ofstream outfile("C:/Users/knigh/dev/ghidra/function.xml", ios::out);
+      // outfile << "getSendSyntaxTree = " << ghidra->getSendSyntaxTree() << endl;
+      // fd->saveXml(outfile, 0, ghidra->getSendSyntaxTree());
+      // outfile.close();
 
-      ofstream astfile("C:/Users/knigh/dev/ghidra/ast.xml", ios::out);
-      auto outstream = ghidra->print->getOutputStream();
-      ghidra->print->setOutputStream(&astfile);
-      ghidra->print->docFunction(fd);
-      ghidra->print->setOutputStream(outstream);
+      // ofstream astfile("C:/Users/knigh/dev/ghidra/ast.xml", ios::out);
+      // auto outstream = ghidra->print->getOutputStream();
+      // ghidra->print->setOutputStream(&astfile);
+      // ghidra->print->docFunction(fd);
+      // ghidra->print->setOutputStream(outstream);
 
       if (ghidra->getSendCCode()&&
 	  (ghidra->allacts.getCurrentName() == "decompile"))

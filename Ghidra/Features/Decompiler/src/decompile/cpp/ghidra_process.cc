@@ -17,6 +17,8 @@
 #include "flow.hh"
 #include "blockaction.hh"
 
+#include "astbuilder.h"
+
 #ifdef __REMOTE_SOCKET__
 
 #include "ifacedecomp.hh"
@@ -340,6 +342,7 @@ void DecompileAt::rawAction(void)
       if (ghidra->getSendCCode()&&
 	  (ghidra->allacts.getCurrentName() == "decompile"))
         ghidra->print->docFunction(fd);
+        json ast_json = buildAstForFunction(fd);
     }
     sout << "</doc>\n";
   }

@@ -343,6 +343,11 @@ void DecompileAt::rawAction(void)
 	  (ghidra->allacts.getCurrentName() == "decompile"))
         ghidra->print->docFunction(fd);
         json ast_json = buildAstForFunction(fd);
+
+        #include <fstream>
+        ofstream outfile("C:/Users/knigh/dev/ghidra/testfile.json", ios::out);
+        outfile << setw(4) << ast_json << endl;
+        outfile.close();
     }
     sout << "</doc>\n";
   }

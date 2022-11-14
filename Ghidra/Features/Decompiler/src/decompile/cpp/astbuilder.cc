@@ -1,6 +1,32 @@
 #include "astbuilder.h"
 
 #include "funcdata.hh"
+#include "printc.hh"
+
+class AstBuilder : public PrintC
+{
+public:
+    AstBuilder()
+        : PrintC(nullptr)
+    { }
+
+    /**
+     * This is the BlockVisitor interface inside PrintLanguage, but it is not
+     * broken out into its own interface...so I have to inherit from PrintC to
+     * avoid implementing all the other pure virtual functions I don't care about
+     */
+    virtual void emitBlockBasic(const BlockBasic *bb);
+    virtual void emitBlockGraph(const BlockGraph *bl);
+    virtual void emitBlockCopy(const BlockCopy *bl);
+    virtual void emitBlockGoto(const BlockGoto *bl);
+    virtual void emitBlockLs(const BlockList *bl);
+    virtual void emitBlockCondition(const BlockCondition *bl);
+    virtual void emitBlockIf(const BlockIf *bl);
+    virtual void emitBlockWhileDo(const BlockWhileDo *bl);
+    virtual void emitBlockDoWhile(const BlockDoWhile *bl);
+    virtual void emitBlockInfLoop(const BlockInfLoop *bl);
+    virtual void emitBlockSwitch(const BlockSwitch *bl);
+};
 
 template<typename T> string to_hex(T data)
 {
@@ -156,11 +182,12 @@ json buildAstForFunction(Funcdata* fd)
     fdecl["return_dtype"] = datatype_to_json(fp.getOutputType());
     buildFunctionParams(fp, &fdecl["children"]);
 
-    // FUNCTION BODY
+    // -------- FUNCTION BODY
     json fbody;
     fbody["NODE"] = "CompoundStmt";
     fbody["children"] = json::array();
 
+    // -------- LOCAL DECLS
     // locals (main scope)
     ScopeLocal& const scope = *fd->getScopeLocal();
     buildLocalDeclsFromScope(scope, fbody);
@@ -172,6 +199,73 @@ json buildAstForFunction(Funcdata* fd)
         buildLocalDeclsFromScope(*l1, fbody);
     }
 
+    // -------- FUNCTION CODE
+    AstBuilder builder;
+    builder.emitBlockGraph(&fd->getStructure());
+
     fdecl["children"].push_back(fbody);
     return fdecl;
+}
+
+void AstBuilder::emitBlockBasic(const BlockBasic *bb)
+{
+
+}
+
+void AstBuilder::emitBlockGraph(const BlockGraph *bl)
+{
+    // const vector<FlowBlock *> &list(bl->getList());
+    // auto list = bl->getList()
+
+    for (FlowBlock* fb : bl->getList()) {
+        fb->emit(this);
+    }
+}
+
+void AstBuilder::emitBlockCopy(const BlockCopy *bl)
+{
+
+}
+
+void AstBuilder::emitBlockGoto(const BlockGoto *bl)
+{
+
+}
+
+void AstBuilder::emitBlockLs(const BlockList *bl)
+{
+    for (int i = 0; i < bl->getSize(); i++) {
+        /** NOTE: maybe these need to be sibling entries in the json? */
+        bl->getBlock(i)->emit(this);
+    }
+}
+
+void AstBuilder::emitBlockCondition(const BlockCondition *bl)
+{
+
+}
+
+void AstBuilder::emitBlockIf(const BlockIf *bl)
+{
+
+}
+
+void AstBuilder::emitBlockWhileDo(const BlockWhileDo *bl)
+{
+
+}
+
+void AstBuilder::emitBlockDoWhile(const BlockDoWhile *bl)
+{
+
+}
+
+void AstBuilder::emitBlockInfLoop(const BlockInfLoop *bl)
+{
+
+}
+
+void AstBuilder::emitBlockSwitch(const BlockSwitch *bl)
+{
+
 }

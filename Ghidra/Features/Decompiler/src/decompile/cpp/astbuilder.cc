@@ -3,6 +3,23 @@
 #include "funcdata.hh"
 #include "printc.hh"
 
+/**
+ * BlockBasic was so close...but named their iterators beginOp/endOp.
+ * So this simply wraps BlockBasic to enable range-based for loops :)
+ */
+class getPcodeOps
+{
+public:
+    getPcodeOps(const BlockBasic* bb)
+        : _bb(bb)
+    { }
+
+    list<PcodeOp*>::const_iterator begin() const { return _bb->beginOp(); }
+    list<PcodeOp*>::const_iterator end() const { return _bb->endOp(); }
+
+    const BlockBasic* _bb;
+};
+
 class AstBuilder : public PrintC
 {
 public:
@@ -57,7 +74,7 @@ void buildFunctionParams(FuncProto& fp, json* arr)
     /** NOTE: parameters need to be IN ORDER within the list of children */
     for (int i = 0; i < fp.numParams(); i++) {
         json pvdecl;
-        pvdecl["NODE"] = "ParmVarDecl";
+        pvdecl["kind"] = "ParmVarDecl";
 
         ProtoParameter* param = fp.getParam(i);
         Symbol* sym = param->getSymbol();
@@ -103,7 +120,7 @@ bool tryCreateLocalVarDecl(const SymbolEntry* sym_entry, json& var_decl)
             return false;        // Only emit the first SymbolEntry for declaration of multi-entry Symbol
     }
 
-    var_decl["NODE"] = "VarDecl";
+    var_decl["kind"] = "VarDecl";
     var_decl["dtype"] = datatype_to_json(sym->getType());
     var_decl["name"] = sym->getName();
     return true;
@@ -115,10 +132,10 @@ void buildLocalDeclsFromScope(const Scope& scope, json& fbody)
         json var_decl;
         if (tryCreateLocalVarDecl(sym_entry, var_decl)) {
             json declstmt;
-            declstmt["NODE"] = "DeclStmt";
-            declstmt["children"] = json::array();
-            declstmt["children"].push_back(var_decl);
-            fbody["children"].push_back(declstmt);
+            declstmt["kind"] = "DeclStmt";
+            declstmt["inner"] = json::array();
+            declstmt["inner"].push_back(var_decl);
+            fbody["inner"].push_back(declstmt);
         }
     }
 
@@ -135,10 +152,10 @@ void buildLocalDeclsFromScope(const Scope& scope, json& fbody)
         json var_decl;
         if (tryCreateLocalVarDecl(sym_entry, var_decl)) {
             json declstmt;
-            declstmt["NODE"] = "DeclStmt";
-            declstmt["children"] = json::array();
-            declstmt["children"].push_back(var_decl);
-            fbody["children"].push_back(declstmt);
+            declstmt["kind"] = "DeclStmt";
+            declstmt["inner"] = json::array();
+            declstmt["inner"].push_back(var_decl);
+            fbody["inner"].push_back(declstmt);
         }
     }
 }
@@ -172,20 +189,20 @@ json buildAstForFunction(Funcdata* fd)
     // emit->endFunction(id1);
 
     // basic function node info
-    fdecl["NODE"] = "FunctionDecl";
-    fdecl["children"] = json::array();
+    fdecl["kind"] = "FunctionDecl";
+    fdecl["inner"] = json::array();
     fdecl["name"] = fd->getName();
     fdecl["address"] = to_hex(fd->getAddress().getOffset());
 
     // prototype
     FuncProto& fp = fd->getFuncProto();
     fdecl["return_dtype"] = datatype_to_json(fp.getOutputType());
-    buildFunctionParams(fp, &fdecl["children"]);
+    buildFunctionParams(fp, &fdecl["inner"]);
 
     // -------- FUNCTION BODY
     json fbody;
-    fbody["NODE"] = "CompoundStmt";
-    fbody["children"] = json::array();
+    fbody["kind"] = "CompoundStmt";
+    fbody["inner"] = json::array();
 
     // -------- LOCAL DECLS
     // locals (main scope)
@@ -203,13 +220,24 @@ json buildAstForFunction(Funcdata* fd)
     AstBuilder builder;
     builder.emitBlockGraph(&fd->getStructure());
 
-    fdecl["children"].push_back(fbody);
+    fdecl["inner"].push_back(fbody);
     return fdecl;
 }
 
 void AstBuilder::emitBlockBasic(const BlockBasic *bb)
 {
+    /** TODO: emit this! */
+    // CLS: I know this actually gets called 2x, one with no_branch
+    // and again with only_branch...but can I simply emit ALL of the
+    // basic block in one go? (just do all the ops in order!)
+        // - maybe this is problematic "structurally" with the last
+        //   op being the if conditional block?
+        // - but maybe I can make it work?
 
+    for (PcodeOp* instr : getPcodeOps(bb)) {
+        int offset = instr->getAddr().getOffset();
+        // TODO: finish this...
+    }
 }
 
 void AstBuilder::emitBlockGraph(const BlockGraph *bl)
@@ -224,7 +252,9 @@ void AstBuilder::emitBlockGraph(const BlockGraph *bl)
 
 void AstBuilder::emitBlockCopy(const BlockCopy *bl)
 {
-
+    // here
+    FlowBlock* sub = bl->subBlock(0);
+    sub->emit(this);
 }
 
 void AstBuilder::emitBlockGoto(const BlockGoto *bl)
@@ -247,7 +277,22 @@ void AstBuilder::emitBlockCondition(const BlockCondition *bl)
 
 void AstBuilder::emitBlockIf(const BlockIf *bl)
 {
+    FlowBlock* condBlock = bl->getBlock(0);
+    // setMod(no_branch);
+    condBlock->emit(this);
+    // setMod(only_branch);
+    // condBlock->emit(this);
 
+    if (bl->getGotoTarget() != nullptr) {
+        /** TODO: emit goto statement */
+    } else {
+        auto trueBlk = bl->getBlock(1);
+        trueBlk->emit(this);
+        if (bl->getSize() > 2) {
+            auto elseBlk = bl->getBlock(2);
+            elseBlk->emit(this);
+        }
+    }
 }
 
 void AstBuilder::emitBlockWhileDo(const BlockWhileDo *bl)

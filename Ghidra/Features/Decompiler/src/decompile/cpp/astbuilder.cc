@@ -20,31 +20,6 @@ public:
     const BlockBasic* _bb;
 };
 
-class AstBuilder : public PrintC
-{
-public:
-    AstBuilder()
-        : PrintC(nullptr)
-    { }
-
-    /**
-     * This is the BlockVisitor interface inside PrintLanguage, but it is not
-     * broken out into its own interface...so I have to inherit from PrintC to
-     * avoid implementing all the other pure virtual functions I don't care about
-     */
-    virtual void emitBlockBasic(const BlockBasic *bb);
-    virtual void emitBlockGraph(const BlockGraph *bl);
-    virtual void emitBlockCopy(const BlockCopy *bl);
-    virtual void emitBlockGoto(const BlockGoto *bl);
-    virtual void emitBlockLs(const BlockList *bl);
-    virtual void emitBlockCondition(const BlockCondition *bl);
-    virtual void emitBlockIf(const BlockIf *bl);
-    virtual void emitBlockWhileDo(const BlockWhileDo *bl);
-    virtual void emitBlockDoWhile(const BlockDoWhile *bl);
-    virtual void emitBlockInfLoop(const BlockInfLoop *bl);
-    virtual void emitBlockSwitch(const BlockSwitch *bl);
-};
-
 template<typename T> string to_hex(T data)
 {
     stringstream ss;
@@ -199,12 +174,11 @@ json buildAstForFunction(Funcdata* fd)
     fdecl["return_dtype"] = datatype_to_json(fp.getOutputType());
     buildFunctionParams(fp, &fdecl["inner"]);
 
-    // -------- FUNCTION BODY
+    // -------- LOCAL DECLS
     json fbody;
     fbody["kind"] = "CompoundStmt";
     fbody["inner"] = json::array();
 
-    // -------- LOCAL DECLS
     // locals (main scope)
     ScopeLocal& const scope = *fd->getScopeLocal();
     buildLocalDeclsFromScope(scope, fbody);
@@ -217,7 +191,7 @@ json buildAstForFunction(Funcdata* fd)
     }
 
     // -------- FUNCTION CODE
-    AstBuilder builder;
+    AstBuilder builder(fbody);
     builder.emitBlockGraph(&fd->getStructure());
 
     fdecl["inner"].push_back(fbody);
@@ -235,8 +209,13 @@ void AstBuilder::emitBlockBasic(const BlockBasic *bb)
         // - but maybe I can make it work?
 
     for (PcodeOp* instr : getPcodeOps(bb)) {
-        int offset = instr->getAddr().getOffset();
-        // TODO: finish this...
+        // int offset = instr->getAddr().getOffset();
+        const Varnode* vn = instr->getOut();
+        if (vn && vn->isImplied()) {
+            // skip Pcode instruction with implied result
+            continue;
+        }
+        // TODO: emit statement/expression (instr)
     }
 }
 

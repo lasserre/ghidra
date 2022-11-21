@@ -14,21 +14,63 @@ class Funcdata;
 */
 json buildAstForFunction(Funcdata* fd);
 
-// class AstBuilder
-// {
-// public:
-//     /**
-//      * Builds the AST for the given function as a JSON object
-//     */
-//     json buildAstForFunction(FuncData* fd);
+class AstBuilder : public PrintC
+{
+public:
+    /**
+     * @brief Construct a new Ast Builder object
+     *
+     * @param fbody is the CompoundStmt node (child to FunctionDecl node) that
+     * contains the function body statements
+     */
+    AstBuilder(json& fbody)
+        : _fbody(fbody), _context_stack(), PrintC(nullptr)
+    { }
 
-//     /**
-//      * Just return a json object? Or make an actual class?
-//      *
-//      * NOTE: speed is priority right now...just create a JSON object for starters,
-//      * (using strings and w/e else directly...)
-//      * if I need to turn it into an AST object or see a clear path to doing so
-//      * it will be much quicker to CONVERT it later than plan it now :)
-//     */
-//     // GhidraAst buildAstForFunction(FuncData* fd);
-// };
+    /**
+     * This is the BlockVisitor interface inside PrintLanguage, but it is not
+     * broken out into its own interface...so I have to inherit from PrintC to
+     * avoid implementing all the other pure virtual functions I don't care about
+     */
+    virtual void emitBlockBasic(const BlockBasic *bb);
+    virtual void emitBlockGraph(const BlockGraph *bl);
+    virtual void emitBlockCopy(const BlockCopy *bl);
+    virtual void emitBlockGoto(const BlockGoto *bl);
+    virtual void emitBlockLs(const BlockList *bl);
+    virtual void emitBlockCondition(const BlockCondition *bl);
+    virtual void emitBlockIf(const BlockIf *bl);
+    virtual void emitBlockWhileDo(const BlockWhileDo *bl);
+    virtual void emitBlockDoWhile(const BlockDoWhile *bl);
+    virtual void emitBlockInfLoop(const BlockInfLoop *bl);
+    virtual void emitBlockSwitch(const BlockSwitch *bl);
+
+    /**
+     * @brief Pushes the current context onto the stack, making
+     * new_context the current context
+     */
+    void pushAstContext(json& new_context);
+
+    /**
+     * @brief Pops and returns the current context
+     *
+     * @return json&
+     */
+    json& popAstContext();
+
+    /**
+     * @brief Returns a reference to the current node (at the top of
+     * the stack)
+     */
+    json& currentNode();
+
+protected:
+    json& _fbody;
+
+    /**
+     * Current context for "emitting" into the AST. This could have been passed as
+     * a parameter to each function call, but due to the Ghidra interface I'm
+     * conforming to it's easier to maintain state separately like they did
+     */
+    // json& _current_node;
+    vector<json&> _context_stack;
+};

@@ -1,4 +1,7 @@
+#include <vector>
 #include "../../../third-party/json/single_include/nlohmann/json.hpp"
+
+#include "printc.hh"
 
 using json = nlohmann::json;
 
@@ -24,8 +27,10 @@ public:
      * contains the function body statements
      */
     AstBuilder(json& fbody)
-        : _fbody(fbody), _context_stack(), PrintC(nullptr)
-    { }
+        : _fbody(fbody), _ast_node_stack({&fbody["inner"]}), PrintC(nullptr)
+    {
+        // _ast_node_stack.push_back(fbody["inner"]);
+    }
 
     /**
      * This is the BlockVisitor interface inside PrintLanguage, but it is not
@@ -44,33 +49,42 @@ public:
     virtual void emitBlockInfLoop(const BlockInfLoop *bl);
     virtual void emitBlockSwitch(const BlockSwitch *bl);
 
+    virtual void emitExpression(const PcodeOp *op);
+
     /**
      * @brief Pushes the current context onto the stack, making
      * new_context the current context
      */
-    void pushAstContext(json& new_context);
+    void pushAstNode(json* current_node);
 
     /**
-     * @brief Pops and returns the current context
+     * @brief Pops and returns the context that was at the top of
+     * the stack
      *
      * @return json&
      */
-    json& popAstContext();
+    json* popAstNode();
 
     /**
      * @brief Returns a reference to the current node (at the top of
      * the stack)
      */
-    json& currentNode();
+    json* currentNode()
+    {
+        return _ast_node_stack.back();
+    }
 
 protected:
     json& _fbody;
 
     /**
-     * Current context for "emitting" into the AST. This could have been passed as
-     * a parameter to each function call, but due to the Ghidra interface I'm
-     * conforming to it's easier to maintain state separately like they did
+     * Top of the stack holds the current node into which we will "emit" the AST.
+     * This could have been passed as a parameter to each function call, but due
+     * to the Ghidra interface I'm conforming to it's easier to maintain state
+     * separately like they did
+     *
+     * NOTE: for now, ast_node_stack holds references to the "inner" child
+     * arrays of nodes in the stack (not the nodes themselves)
      */
-    // json& _current_node;
-    vector<json&> _context_stack;
+    vector<json*> _ast_node_stack;
 };

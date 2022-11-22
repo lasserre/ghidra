@@ -198,6 +198,41 @@ json buildAstForFunction(Funcdata* fd)
     return fdecl;
 }
 
+void AstBuilder::pushAstNode(json* current_node)
+{
+    _ast_node_stack.push_back(current_node);
+}
+
+json* AstBuilder::popAstNode()
+{
+    auto back = _ast_node_stack.back();
+    _ast_node_stack.pop_back();
+    return back;
+}
+
+void AstBuilder::emitExpression(const PcodeOp *op)
+{
+    const Varnode* outvn = op->getOut();
+    if (outvn) {
+        /*
+            TODO: handle inplace ops (x += 3) if
+            PrintC::option_inplace_ops is set
+         */
+        json assignment;
+        assignment["kind"] = "BinaryOperator";
+        assignment["opcode"] = "=";
+        // basing dtype on outvn type for now
+        assignment["dtype"] = datatype_to_json(op->getOut()->getType());
+        assignment["inner"] = json::array();
+
+        /** TODO: handle LHS/RHS of assignment expression... */
+
+        // pushAstNode()/popAstNode()?
+
+        currentNode()->push_back(assignment);
+    }
+}
+
 void AstBuilder::emitBlockBasic(const BlockBasic *bb)
 {
     /** TODO: emit this! */
@@ -215,7 +250,7 @@ void AstBuilder::emitBlockBasic(const BlockBasic *bb)
             // skip Pcode instruction with implied result
             continue;
         }
-        // TODO: emit statement/expression (instr)
+        emitExpression(instr);
     }
 }
 

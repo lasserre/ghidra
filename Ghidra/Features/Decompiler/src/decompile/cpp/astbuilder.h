@@ -1,7 +1,10 @@
+#pragma once
+
 #include <vector>
 #include "../../../third-party/json/single_include/nlohmann/json.hpp"
 
 #include "printc.hh"
+#include "ast.h"
 
 using json = nlohmann::json;
 
@@ -33,6 +36,12 @@ public:
     }
 
     /**
+     * --------------------------------------------------------------
+     * PrintLanguage methods/interface
+     * --------------------------------------------------------------
+    */
+
+    /**
      * This is the BlockVisitor interface inside PrintLanguage, but it is not
      * broken out into its own interface...so I have to inherit from PrintC to
      * avoid implementing all the other pure virtual functions I don't care about
@@ -50,32 +59,49 @@ public:
     virtual void emitBlockSwitch(const BlockSwitch *bl);
 
     virtual void emitExpression(const PcodeOp *op);
+    /** -------------------------------------------------------------- */
 
     /**
-     * @brief Pushes the current context onto the stack, making
-     * new_context the current context
+     * @brief Builds an AST representation of the given function. The returned
+     * pointer must be freed by the caller.
      */
-    void pushAstNode(json* current_node);
+    ASTNode* buildAST(Funcdata* fd);
 
     /**
-     * @brief Pops and returns the context that was at the top of
+     * @brief Pushes current_node onto the top of the AST stack
+     */
+    void pushASTNode(ASTNode* current_node);
+
+    /**
+     * @brief Pops and returns the node that was at the top of
      * the stack
-     *
-     * @return json&
      */
-    json* popAstNode();
+    ASTNode* popASTNode();
 
     /**
      * @brief Returns a reference to the current node (at the top of
      * the stack)
      */
-    json* currentNode()
+    ASTNode* currentASTNode()
     {
         return _ast_node_stack.back();
     }
 
 protected:
-    json& _fbody;
+    /**
+     * The AST node stack provides our current context within the AST as we
+     * build it. The top of the stack holds the current node into which we are
+     * "emitting" the AST.
+     *
+     * This could have been passed as a parameter to each function call, but due
+     * to the Ghidra interface I'm conforming to it's easier to maintain state
+     * separately like they did
+     */
+    vector<ASTNode*> _ast_node_stack;
+
+    /** TODO: remove the JSON stuff... */
+
+    // json& _fbody;
 
     /**
      * Top of the stack holds the current node into which we will "emit" the AST.
@@ -86,5 +112,5 @@ protected:
      * NOTE: for now, ast_node_stack holds references to the "inner" child
      * arrays of nodes in the stack (not the nodes themselves)
      */
-    vector<json*> _ast_node_stack;
+    // vector<json*> _ast_node_stack;
 };

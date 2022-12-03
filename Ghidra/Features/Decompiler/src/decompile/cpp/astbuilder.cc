@@ -163,6 +163,14 @@ json buildAstForFunction(Funcdata* fd)
     // popScope();                // Exit function's scope
     // emit->endFunction(id1);
 
+
+
+    /** TODO: pick up here and replace JSON w/ FunctionDecl node
+     *
+     * NOTE: ...remember to MOVE the JSON to where we will create the
+     * JSON ASTVisitor class...we still need this, just not here!
+    */
+
     // basic function node info
     fdecl["kind"] = "FunctionDecl";
     fdecl["inner"] = json::array();
@@ -192,18 +200,28 @@ json buildAstForFunction(Funcdata* fd)
 
     // -------- FUNCTION CODE
     AstBuilder builder(fbody);
+
+    /**
+     * TODO: change this to builder.buildAST()
+     * (which can call emitBlockGraph, etc.)
+     * TODO: remove json-isms from ASTBuilder, move them to an ASTVisitor
+     * that converts the AST to JSON
+     * TODO: call the JSON ASTVisitor on the resulting AST after the builder
+     * has completed building
+     * TODO: pick up where I left off at emitExpression
+    */
     builder.emitBlockGraph(&fd->getStructure());
 
     fdecl["inner"].push_back(fbody);
     return fdecl;
 }
 
-void AstBuilder::pushAstNode(json* current_node)
+void AstBuilder::pushASTNode(ASTNode* current_node)
 {
     _ast_node_stack.push_back(current_node);
 }
 
-json* AstBuilder::popAstNode()
+ASTNode* AstBuilder::popASTNode()
 {
     auto back = _ast_node_stack.back();
     _ast_node_stack.pop_back();
@@ -225,12 +243,25 @@ void AstBuilder::emitExpression(const PcodeOp *op)
         assignment["dtype"] = datatype_to_json(op->getOut()->getType());
         assignment["inner"] = json::array();
 
+        /**
+         * BinaryOperator
+         * ----
+         * > first child => first operand, second child => second operand
+         * > for assignment, first child => LHS, second child => RHS
+         */
+
         /** TODO: handle LHS/RHS of assignment expression... */
 
         // pushAstNode()/popAstNode()?
+        // this->pushAstNode()
 
         currentNode()->push_back(assignment);
+
+    } else if (op->doesSpecialPrinting()) {
+        /** TODO: what changes here? */
     }
+
+    /** TODO: RHS if present/main expression based on opcode */
 }
 
 void AstBuilder::emitBlockBasic(const BlockBasic *bb)

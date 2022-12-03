@@ -42,12 +42,15 @@ json datatype_to_json(Datatype* dt)
  * @brief Build
  *
  * @param fp The function prototype to build parameters from
- * @param arr The json array to insert function parameters into (FuncDecl.children)
+ * @param fdecl The function to insert parameters into
  */
-void buildFunctionParams(FuncProto& fp, json* arr)
+void buildFunctionParams(FuncProto& fp, FunctionDecl* fdecl)
 {
     /** NOTE: parameters need to be IN ORDER within the list of children */
     for (int i = 0; i < fp.numParams(); i++) {
+
+        /** TODO: pick up here w/ ParmVarDecl instance */
+
         json pvdecl;
         pvdecl["kind"] = "ParmVarDecl";
 
@@ -61,6 +64,7 @@ void buildFunctionParams(FuncProto& fp, json* arr)
             pvdecl["dtype"] = datatype_to_json(param->getType());
         }
 
+        // fdecl->children()->push_back()
         arr->push_back(pvdecl);
     }
 }
@@ -151,7 +155,8 @@ json buildAstForFunction(Funcdata* fd)
         return json{ss.str()};
     }
 
-    json fdecl;
+    // json fdecl;
+
     // rough algorithm copied from PrintC::docFunction
     // emit->beginFunction(fd);
     // emitFunctionDeclaration(fd);    // Causes us to enter function's scope
@@ -171,15 +176,11 @@ json buildAstForFunction(Funcdata* fd)
      * JSON ASTVisitor class...we still need this, just not here!
     */
 
-    // basic function node info
-    fdecl["kind"] = "FunctionDecl";
-    fdecl["inner"] = json::array();
-    fdecl["name"] = fd->getName();
-    fdecl["address"] = to_hex(fd->getAddress().getOffset());
+    // parent=null since this is the head of AST
+    FunctionDecl* fdecl = new FunctionDecl(nullptr, fd);
 
-    // prototype
+    // params are child nodes
     FuncProto& fp = fd->getFuncProto();
-    fdecl["return_dtype"] = datatype_to_json(fp.getOutputType());
     buildFunctionParams(fp, &fdecl["inner"]);
 
     // -------- LOCAL DECLS
@@ -199,7 +200,9 @@ json buildAstForFunction(Funcdata* fd)
     }
 
     // -------- FUNCTION CODE
-    AstBuilder builder(fbody);
+    AstBuilder builder;     // before: builder(fbody)
+    /** NOTE: before, this was part of builder's constructor */
+    // _ast_node_stack({&fbody["inner"]})
 
     /**
      * TODO: change this to builder.buildAST()

@@ -1,6 +1,9 @@
 #pragma once
 
 #include <vector>
+#include <string>
+
+#include "funcdata.hh"
 
 class ASTVisitor;
 
@@ -16,27 +19,61 @@ public:
     inline ASTNode* parent() { return _parent; }
     inline std::vector<ASTNode*>* children() { return &_children; }
 
-    virtual void accept(ASTVisitor*) = 0;
+    void accept(ASTVisitor*);
 
 protected:
+    /**
+     * @brief This is the node-specific function to perform the accept
+     * on a particular kind of ASTNode. The general accept() handles calling
+     * both this function as well as recursing through any child nodes
+     */
+    virtual void do_accept(ASTVisitor*) = 0;
+
+    /**
+     * @brief Helper function to visit all children of this node
+     */
+    void visitChildren(ASTVisitor* v);
+
     ASTNode* _parent;       // pointer to existing parent, not our memory
     // dynamically-allocated child pointers we must free when destructed
     std::vector<ASTNode*> _children;
 };
 
+/**
+ * @brief Function declaration node
+ */
 class FunctionDecl : public ASTNode
 {
-    virtual void accept(ASTVisitor*);
+public:
+    FunctionDecl(ASTNode* parent, Funcdata* fd);
+
+    // basic function node info
+    // JSON: fdecl["kind"] = "FunctionDecl";
+    // JSON: fdecl["inner"] = json::array();
+    // fdecl["name"] = fd->getName();
+    // fdecl["address"] = to_hex(fd->getAddress().getOffset());
+    // prototype
+    // FuncProto& fp = fd->getFuncProto();
+    // fdecl["return_dtype"] = datatype_to_json(fp.getOutputType());
+
+    inline std::string name() { return _fd->getName(); }
+    inline uintb address() { return _fd->getAddress().getOffset(); }
+    inline Datatype* return_dtype() { return _fd->getFuncProto().getOutputType(); }
+
+protected:
+    virtual void do_accept(ASTVisitor* v);
+
+    Funcdata* _fd;
 };
 
 /**
- * @brief ASTVisitor interface is what should be implemented by code that
- * needs to interact with the AST. Since the base ASTVisitor does nothing by
- * default, derived classes may "opt in" to visit elements they care about
- * without having to create boilerplate for every possible type of node.
+ * @brief Function parameter declaration
  */
-class ASTVisitor
+class ParmVarDecl : public ASTNode
 {
-    /** TODO: implement all of these as "do-nothing" defaults */
-    virtual void visitFunctionDecl(FunctionDecl*);
+public:
+    ParmVarDecl(FunctionDecl* parent);
+
+protected:
+    virtual void do_accept(ASTVisitor* v);
 };

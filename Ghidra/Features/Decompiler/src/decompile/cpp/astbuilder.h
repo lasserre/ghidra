@@ -29,8 +29,8 @@ public:
      * @param fbody is the CompoundStmt node (child to FunctionDecl node) that
      * contains the function body statements
      */
-    AstBuilder(json& fbody)
-        : _fbody(fbody), _ast_node_stack({&fbody["inner"]}), PrintC(nullptr)
+    AstBuilder()
+        : PrintC(nullptr)
     {
         // _ast_node_stack.push_back(fbody["inner"]);
     }

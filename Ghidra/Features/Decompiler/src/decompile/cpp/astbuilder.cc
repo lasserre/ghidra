@@ -38,6 +38,12 @@ json datatype_to_json(Datatype* dt)
     return dt->getName();
 }
 
+ASTBuilder::ASTBuilder()
+    : PrintC(nullptr)
+{
+    // _ast_node_stack.push_back(fbody["inner"]);
+}
+
 /**
  * @brief Build
  *
@@ -48,73 +54,51 @@ void buildFunctionParams(FuncProto& fp, FunctionDecl* fdecl)
 {
     /** NOTE: parameters need to be IN ORDER within the list of children */
     for (int i = 0; i < fp.numParams(); i++) {
-
-        /** TODO: pick up here w/ ParmVarDecl instance */
-
-        json pvdecl;
-        pvdecl["kind"] = "ParmVarDecl";
-
-        ProtoParameter* param = fp.getParam(i);
-        Symbol* sym = param->getSymbol();
-
-        if (sym) {
-            pvdecl["dtype"] = datatype_to_json(sym->getType());
-            pvdecl["name"] = sym->getName();
-        } else {
-            pvdecl["dtype"] = datatype_to_json(param->getType());
-        }
-
-        // fdecl->children()->push_back()
-        arr->push_back(pvdecl);
+        fdecl->addChild(new ParmVarDecl(fp.getParam(i)));
     }
 }
 
 /**
  * @brief Check if this symbol entry is an appropriate entry for creating
- * a local variable declaration. If so, return true and create the corresponding
- * VarDecl JSON object in var_decl. If not, return false.
+ * a local variable declaration. If so, create the corresponding VarDecl object
+ * and return it. If not, return nullptr
  */
-bool tryCreateLocalVarDecl(const SymbolEntry* sym_entry, json& var_decl)
+VarDecl* tryCreateLocalVarDecl(const SymbolEntry* sym_entry)
 {
     if (sym_entry->isPiece())   // skip partial entry
-        return false;
+        return nullptr;
 
     Symbol* sym = sym_entry->getSymbol();
 
     if (sym->getCategory() != -1)
         // skip parameters and "equates" (w/e that is)
-        return false;
+        return nullptr;
 
     /** CLS: from other function, idk why we want to skip it if no name? */
     // if (sym->getName().size() == 0) continue;
 
     if (dynamic_cast<FunctionSymbol*>(sym) != nullptr)
-        return false;
+        return nullptr;
     if (dynamic_cast<LabSymbol*>(sym) != nullptr) {
-        return false;
+        return nullptr;
     }
 
     if (sym->isMultiEntry()) {
         if (sym->getFirstWholeMap() != sym_entry)
-            return false;        // Only emit the first SymbolEntry for declaration of multi-entry Symbol
+            return nullptr;        // Only emit the first SymbolEntry for declaration of multi-entry Symbol
     }
 
-    var_decl["kind"] = "VarDecl";
-    var_decl["dtype"] = datatype_to_json(sym->getType());
-    var_decl["name"] = sym->getName();
-    return true;
+    return new VarDecl(sym);
 }
 
-void buildLocalDeclsFromScope(const Scope& scope, json& fbody)
+void buildLocalDeclsFromScope(const Scope& scope, CompoundStmt* fbody)
 {
     for (auto sym_entry : scope) {
-        json var_decl;
-        if (tryCreateLocalVarDecl(sym_entry, var_decl)) {
-            json declstmt;
-            declstmt["kind"] = "DeclStmt";
-            declstmt["inner"] = json::array();
-            declstmt["inner"].push_back(var_decl);
-            fbody["inner"].push_back(declstmt);
+        VarDecl* vdecl = tryCreateLocalVarDecl(sym_entry);
+        if (vdecl) {
+            DeclStmt* ds = new DeclStmt();
+            ds->addChild(vdecl);
+            fbody->addChild(ds);
         }
     }
 
@@ -128,31 +112,36 @@ void buildLocalDeclsFromScope(const Scope& scope, json& fbody)
     list<SymbolEntry>::const_iterator enditer_d = scope.endDynamic();
     for (; iter_d!=enditer_d; ++iter_d) {
         const SymbolEntry *sym_entry = &(*iter_d);
-        json var_decl;
-        if (tryCreateLocalVarDecl(sym_entry, var_decl)) {
-            json declstmt;
-            declstmt["kind"] = "DeclStmt";
-            declstmt["inner"] = json::array();
-            declstmt["inner"].push_back(var_decl);
-            fbody["inner"].push_back(declstmt);
+        VarDecl* vdecl = tryCreateLocalVarDecl(sym_entry);
+        if (vdecl) {
+            DeclStmt* ds = new DeclStmt();
+            ds->addChild(vdecl);
+            fbody->addChild(ds);
         }
     }
 }
 
 json buildAstForFunction(Funcdata* fd)
 {
+    ASTBuilder builder;
+    ASTNode* ast = builder.buildAST(fd);
+    /** TODO: JSON AST visitor here... */
+}
+
+ASTNode* ASTBuilder::buildAST(Funcdata* fd)
+{
     if (!fd->isProcStarted()) {
         // not decompiled
         stringstream ss;
         ss << "Function at 0x" << to_hex(fd->getAddress().getOffset());
         ss << " not decompiled";
-        return json{ss.str()};
+        return new LogMsg(ss.str());
     } else if (fd->hasNoStructBlocks()) {
         // not fully decompiled, no structure present
         stringstream ss;
         ss << "Function at 0x" << to_hex(fd->getAddress().getOffset());
         ss << " not fully decompiled (no structure present)";
-        return json{ss.str()};
+        return new LogMsg(ss.str());
     }
 
     // json fdecl;
@@ -168,25 +157,15 @@ json buildAstForFunction(Funcdata* fd)
     // popScope();                // Exit function's scope
     // emit->endFunction(id1);
 
-
-
-    /** TODO: pick up here and replace JSON w/ FunctionDecl node
-     *
-     * NOTE: ...remember to MOVE the JSON to where we will create the
-     * JSON ASTVisitor class...we still need this, just not here!
-    */
-
-    // parent=null since this is the head of AST
-    FunctionDecl* fdecl = new FunctionDecl(nullptr, fd);
+    FunctionDecl* fdecl = new FunctionDecl(fd);
 
     // params are child nodes
     FuncProto& fp = fd->getFuncProto();
-    buildFunctionParams(fp, &fdecl["inner"]);
+    buildFunctionParams(fp, fdecl);
 
     // -------- LOCAL DECLS
-    json fbody;
-    fbody["kind"] = "CompoundStmt";
-    fbody["inner"] = json::array();
+    CompoundStmt* fbody = new CompoundStmt();
+    fdecl->addChild(fbody);
 
     // locals (main scope)
     ScopeLocal& const scope = *fd->getScopeLocal();
@@ -200,7 +179,7 @@ json buildAstForFunction(Funcdata* fd)
     }
 
     // -------- FUNCTION CODE
-    AstBuilder builder;     // before: builder(fbody)
+    // AstBuilder builder;     // before: builder(fbody)
     /** NOTE: before, this was part of builder's constructor */
     // _ast_node_stack({&fbody["inner"]})
 
@@ -213,25 +192,26 @@ json buildAstForFunction(Funcdata* fd)
      * has completed building
      * TODO: pick up where I left off at emitExpression
     */
-    builder.emitBlockGraph(&fd->getStructure());
+    pushASTNode(fbody);
+    emitBlockGraph(&fd->getStructure());
+    popASTNode();
 
-    fdecl["inner"].push_back(fbody);
     return fdecl;
 }
 
-void AstBuilder::pushASTNode(ASTNode* current_node)
+void ASTBuilder::pushASTNode(ASTNode* current_node)
 {
     _ast_node_stack.push_back(current_node);
 }
 
-ASTNode* AstBuilder::popASTNode()
+ASTNode* ASTBuilder::popASTNode()
 {
     auto back = _ast_node_stack.back();
     _ast_node_stack.pop_back();
     return back;
 }
 
-void AstBuilder::emitExpression(const PcodeOp *op)
+void ASTBuilder::emitExpression(const PcodeOp *op)
 {
     const Varnode* outvn = op->getOut();
     if (outvn) {
@@ -239,12 +219,8 @@ void AstBuilder::emitExpression(const PcodeOp *op)
             TODO: handle inplace ops (x += 3) if
             PrintC::option_inplace_ops is set
          */
-        json assignment;
-        assignment["kind"] = "BinaryOperator";
-        assignment["opcode"] = "=";
-        // basing dtype on outvn type for now
-        assignment["dtype"] = datatype_to_json(op->getOut()->getType());
-        assignment["inner"] = json::array();
+        BinaryOperator* assignment = new BinaryOperator("=");
+        currentASTNode()->addChild(assignment);
 
         /**
          * BinaryOperator
@@ -253,12 +229,16 @@ void AstBuilder::emitExpression(const PcodeOp *op)
          * > for assignment, first child => LHS, second child => RHS
          */
 
-        /** TODO: handle LHS/RHS of assignment expression... */
+        /** TODO: handle LHS of assignment expression... */
+
+        /** NOTE: I think we may need both a "context" stack with
+         * the current AST node as well as a "todo" stack with the
+         * list of remaining sub-expressions (like LHS, RHS) that
+         * need to be processed
+        */
 
         // pushAstNode()/popAstNode()?
         // this->pushAstNode()
-
-        currentNode()->push_back(assignment);
 
     } else if (op->doesSpecialPrinting()) {
         /** TODO: what changes here? */
@@ -267,7 +247,7 @@ void AstBuilder::emitExpression(const PcodeOp *op)
     /** TODO: RHS if present/main expression based on opcode */
 }
 
-void AstBuilder::emitBlockBasic(const BlockBasic *bb)
+void ASTBuilder::emitBlockBasic(const BlockBasic *bb)
 {
     /** TODO: emit this! */
     // CLS: I know this actually gets called 2x, one with no_branch
@@ -288,7 +268,7 @@ void AstBuilder::emitBlockBasic(const BlockBasic *bb)
     }
 }
 
-void AstBuilder::emitBlockGraph(const BlockGraph *bl)
+void ASTBuilder::emitBlockGraph(const BlockGraph *bl)
 {
     // const vector<FlowBlock *> &list(bl->getList());
     // auto list = bl->getList()
@@ -298,19 +278,19 @@ void AstBuilder::emitBlockGraph(const BlockGraph *bl)
     }
 }
 
-void AstBuilder::emitBlockCopy(const BlockCopy *bl)
+void ASTBuilder::emitBlockCopy(const BlockCopy *bl)
 {
     // here
     FlowBlock* sub = bl->subBlock(0);
     sub->emit(this);
 }
 
-void AstBuilder::emitBlockGoto(const BlockGoto *bl)
+void ASTBuilder::emitBlockGoto(const BlockGoto *bl)
 {
 
 }
 
-void AstBuilder::emitBlockLs(const BlockList *bl)
+void ASTBuilder::emitBlockLs(const BlockList *bl)
 {
     for (int i = 0; i < bl->getSize(); i++) {
         /** NOTE: maybe these need to be sibling entries in the json? */
@@ -318,12 +298,12 @@ void AstBuilder::emitBlockLs(const BlockList *bl)
     }
 }
 
-void AstBuilder::emitBlockCondition(const BlockCondition *bl)
+void ASTBuilder::emitBlockCondition(const BlockCondition *bl)
 {
 
 }
 
-void AstBuilder::emitBlockIf(const BlockIf *bl)
+void ASTBuilder::emitBlockIf(const BlockIf *bl)
 {
     FlowBlock* condBlock = bl->getBlock(0);
     // setMod(no_branch);
@@ -343,22 +323,22 @@ void AstBuilder::emitBlockIf(const BlockIf *bl)
     }
 }
 
-void AstBuilder::emitBlockWhileDo(const BlockWhileDo *bl)
+void ASTBuilder::emitBlockWhileDo(const BlockWhileDo *bl)
 {
 
 }
 
-void AstBuilder::emitBlockDoWhile(const BlockDoWhile *bl)
+void ASTBuilder::emitBlockDoWhile(const BlockDoWhile *bl)
 {
 
 }
 
-void AstBuilder::emitBlockInfLoop(const BlockInfLoop *bl)
+void ASTBuilder::emitBlockInfLoop(const BlockInfLoop *bl)
 {
 
 }
 
-void AstBuilder::emitBlockSwitch(const BlockSwitch *bl)
+void ASTBuilder::emitBlockSwitch(const BlockSwitch *bl)
 {
 
 }

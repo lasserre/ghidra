@@ -13,11 +13,17 @@ class ASTVisitor;
 class ASTNode
 {
 public:
-    ASTNode(ASTNode* parent);
+    ASTNode();
     virtual ~ASTNode();
 
     inline ASTNode* parent() { return _parent; }
     inline std::vector<ASTNode*>* children() { return &_children; }
+
+    /**
+     * @brief Adds child to this node's children, if it is not already
+     * in the list (the pointer value itself, not the object value).
+     */
+    void addChild(ASTNode* child);
 
     void accept(ASTVisitor*);
 
@@ -27,16 +33,61 @@ protected:
      * on a particular kind of ASTNode. The general accept() handles calling
      * both this function as well as recursing through any child nodes
      */
-    virtual void do_accept(ASTVisitor*) = 0;
-
-    /**
-     * @brief Helper function to visit all children of this node
-     */
-    void visitChildren(ASTVisitor* v);
+    virtual void doAccept(ASTVisitor*) = 0;
 
     ASTNode* _parent;       // pointer to existing parent, not our memory
     // dynamically-allocated child pointers we must free when destructed
     std::vector<ASTNode*> _children;
+};
+
+class BinaryOperator : public ASTNode
+{
+public:
+    BinaryOperator(std::string opcode);
+
+    // assignment["kind"] = "BinaryOperator";
+    // assignment["opcode"] = "=";
+    // // basing dtype on outvn type for now
+    // assignment["dtype"] = datatype_to_json(op->getOut()->getType());
+    // assignment["inner"] = json::array();
+
+    inline std::string opcode() { return _opcode; }
+
+protected:
+    virtual void doAccept(ASTVisitor* v);
+    std::string _opcode;
+};
+
+/**
+ * @brief A list of statements
+ */
+class CompoundStmt : public ASTNode
+{
+public:
+    CompoundStmt();
+
+    // json fbody;
+    // fbody["kind"] = "CompoundStmt";
+    // fbody["inner"] = json::array();
+
+protected:
+    virtual void doAccept(ASTVisitor* v);
+};
+
+/**
+ * @brief Adaptor to allow mixing declarations with statements and expressions.
+ */
+class DeclStmt : public ASTNode
+{
+public:
+    DeclStmt();
+
+    // declstmt["kind"] = "DeclStmt";
+    // declstmt["inner"] = json::array();
+    // declstmt["inner"].push_back(var_decl);
+
+protected:
+    virtual void doAccept(ASTVisitor* v);
 };
 
 /**
@@ -45,7 +96,7 @@ protected:
 class FunctionDecl : public ASTNode
 {
 public:
-    FunctionDecl(ASTNode* parent, Funcdata* fd);
+    FunctionDecl(Funcdata* fd);
 
     // basic function node info
     // JSON: fdecl["kind"] = "FunctionDecl";
@@ -60,10 +111,32 @@ public:
     inline uintb address() { return _fd->getAddress().getOffset(); }
     inline Datatype* return_dtype() { return _fd->getFuncProto().getOutputType(); }
 
+    /** @brief The backing Funcdata for this FunctionDecl */
+    inline Funcdata* funcdata() { return _fd; }
+
 protected:
-    virtual void do_accept(ASTVisitor* v);
+    virtual void doAccept(ASTVisitor* v);
 
     Funcdata* _fd;
+};
+
+/**
+ * @brief Not really part of the AST...
+ * I don't want to lose errors or warnings I need to be aware of,
+ * and the way the Ghidra decompiler runs in a separate process I may
+ * not readily notice silent issues. This allows me to pass through
+ * errors into the output JSON for now (later there may be a better way)
+ */
+class LogMsg : public ASTNode
+{
+public:
+    LogMsg(std::string msg);
+
+    inline std::string message() { return _msg; }
+
+protected:
+    virtual void doAccept(ASTVisitor* v);
+    std::string _msg;
 };
 
 /**
@@ -72,8 +145,48 @@ protected:
 class ParmVarDecl : public ASTNode
 {
 public:
-    ParmVarDecl(FunctionDecl* parent);
+    ParmVarDecl(ProtoParameter* param);
+
+    // json pvdecl;
+    // pvdecl["kind"] = "ParmVarDecl";
+
+    // ProtoParameter* param = fp.getParam(i);
+    // Symbol* sym = param->getSymbol();
+
+    // if (sym) {
+    //     pvdecl["dtype"] = datatype_to_json(sym->getType());
+    //     pvdecl["name"] = sym->getName();
+    // } else {
+    //     pvdecl["dtype"] = datatype_to_json(param->getType());
+    // }
+
+    /** @brief The backing ProtoParameter for this ParmVarDecl */
+    inline ProtoParameter* param() { return _param; }
 
 protected:
-    virtual void do_accept(ASTVisitor* v);
+    virtual void doAccept(ASTVisitor* v);
+
+    ProtoParameter* _param;// = fp.getParam(i);
+    // Symbol* _sym; = param->getSymbol();
+};
+
+/**
+ * @brief Variable declaration or definition
+ */
+class VarDecl : public ASTNode
+{
+public:
+    /**
+     * @param sym The symbol for this variable
+     */
+    VarDecl(Symbol* sym);
+
+    // var_decl["kind"] = "VarDecl";
+    // var_decl["dtype"] = datatype_to_json(sym->getType());
+    // var_decl["name"] = sym->getName();
+
+protected:
+    virtual void doAccept(ASTVisitor* v);
+
+    Symbol* _sym;
 };

@@ -11,6 +11,11 @@
 class ASTVisitor
 {
 public:
+    virtual void visitBinaryOperator(BinaryOperator*);
+    virtual void visitCompoundStmt(CompoundStmt*);
+    virtual void visitDeclStmt(DeclStmt*);
     virtual void visitFunctionDecl(FunctionDecl*);
+    virtual void visitLogMsg(LogMsg*);
     virtual void visitParmVarDecl(ParmVarDecl*);
+    virtual void visitVarDecl(VarDecl*);
 };

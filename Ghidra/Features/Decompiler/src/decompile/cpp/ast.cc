@@ -1,8 +1,8 @@
 #include "ast.h"
 #include "astvisitor.h"
 
-ASTNode::ASTNode(ASTNode* parent)
-    : _parent(parent), _children()
+ASTNode::ASTNode()
+    : _parent(nullptr), _children()
 {
 }
 
@@ -13,10 +13,22 @@ ASTNode::~ASTNode()
     }
 }
 
+void ASTNode::addChild(ASTNode* child)
+{
+    child->_parent = this;
+    _children.push_back(child);
+
+    // // verify this child pointer is not already in our children list
+    // auto child_in_list = std::find(_children.begin(), _children.end(), child);
+    // if (child_in_list == _children.end()) {
+    //     _children.push_back(child);
+    // }
+}
+
 void ASTNode::accept(ASTVisitor* v)
 {
     // visit this node
-    do_accept(v);
+    doAccept(v);
 
     // visit children
     for (ASTNode* node : _children) {
@@ -24,24 +36,70 @@ void ASTNode::accept(ASTVisitor* v)
     }
 }
 
-FunctionDecl::FunctionDecl(ASTNode* parent, Funcdata* fd)
-    : ASTNode(parent), _fd(fd)
+BinaryOperator::BinaryOperator(std::string opcode)
+    : _opcode(opcode)
 {
 }
 
-void FunctionDecl::do_accept(ASTVisitor* v)
+void BinaryOperator::doAccept(ASTVisitor* v)
+{
+    v->visitBinaryOperator(this);
+}
+
+CompoundStmt::CompoundStmt()
+{
+}
+
+void CompoundStmt::doAccept(ASTVisitor* v)
+{
+    v->visitCompoundStmt(this);
+}
+
+DeclStmt::DeclStmt()
+{
+}
+
+void DeclStmt::doAccept(ASTVisitor* v)
+{
+    v->visitDeclStmt(this);
+}
+
+FunctionDecl::FunctionDecl(Funcdata* fd)
+    : _fd(fd)
+{
+}
+
+void FunctionDecl::doAccept(ASTVisitor* v)
 {
     v->visitFunctionDecl(this);
-    visitChildren(v);
 }
 
-ParmVarDecl::ParmVarDecl(FunctionDecl* parent)
-    : ASTNode(parent)
+LogMsg::LogMsg(std::string msg)
+    : _msg(msg)
 {
 }
 
-void ParmVarDecl::do_accept(ASTVisitor* v)
+void LogMsg::doAccept(ASTVisitor* v)
+{
+    v->visitLogMsg(this);
+}
+
+ParmVarDecl::ParmVarDecl(ProtoParameter* param)
+    : _param(param)
+{
+}
+
+void ParmVarDecl::doAccept(ASTVisitor* v)
 {
     v->visitParmVarDecl(this);
-    visitChildren(v);
+}
+
+VarDecl::VarDecl(Symbol* sym)
+    : _sym(sym)
+{
+}
+
+void VarDecl::doAccept(ASTVisitor* v)
+{
+    v->visitVarDecl(this);
 }

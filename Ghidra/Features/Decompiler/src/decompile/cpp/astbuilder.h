@@ -20,20 +20,16 @@ class Funcdata;
 */
 json buildAstForFunction(Funcdata* fd);
 
-class AstBuilder : public PrintC
+class ASTBuilder : public PrintC
 {
 public:
     /**
-     * @brief Construct a new Ast Builder object
+     * @brief Construct a new AST Builder object
      *
      * @param fbody is the CompoundStmt node (child to FunctionDecl node) that
      * contains the function body statements
      */
-    AstBuilder()
-        : PrintC(nullptr)
-    {
-        // _ast_node_stack.push_back(fbody["inner"]);
-    }
+    ASTBuilder();
 
     /**
      * --------------------------------------------------------------

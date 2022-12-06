@@ -9,6 +9,7 @@
 using json = nlohmann::json;
 
 class Funcdata;
+struct PendingExpr;
 
 /**
  * Constructs an AST representation from Ghidra's internal representation of
@@ -84,6 +85,15 @@ public:
     }
 
 protected:
+    /**
+     * @brief Recursively process the expression stack, converting each
+     * expression into ASTNodes and adding sub-expressions to the stack
+     * as appropriate
+     */
+    void processExpressionStack();
+
+    vector<PendingExpr*> _pending_expressions;
+
     /**
      * The AST node stack provides our current context within the AST as we
      * build it. The top of the stack holds the current node into which we are

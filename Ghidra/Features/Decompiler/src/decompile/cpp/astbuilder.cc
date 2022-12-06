@@ -38,6 +38,27 @@ json datatype_to_json(Datatype* dt)
     return dt->getName();
 }
 
+struct PendingNode
+{
+    // for NodePending case:
+    Varnode* vn;    // implied varnode
+    PcodeOp* op;    // operator consuming value from implied varnode
+
+    // for LHS case:
+    Symbol* sym;    // for now, if != nullptr this is valid
+
+    PendingNode()
+        : vn(nullptr), op(nullptr), sym(nullptr)
+    {
+    }
+};
+
+struct PendingExpr
+{
+    ASTNode* ast_op;
+    vector<PendingNode> parts;
+};
+
 ASTBuilder::ASTBuilder()
     : PrintC(nullptr)
 {
@@ -211,8 +232,35 @@ ASTNode* ASTBuilder::popASTNode()
     return back;
 }
 
+/** TODO: processPendingNode() */
+
+// or processPendingExpressions()
+void ASTBuilder::processExpressionStack()
+{
+    /** TODO: implement this */
+    while (!_pending_expressions.empty()) {
+        PendingExpr* expr = _pending_expressions.back();
+        _pending_expressions.pop_back();
+
+        pushASTNode(expr->ast_op);
+
+        for (PendingNode node : expr->parts) {
+            /** TODO: process pending node */
+        }
+
+        popASTNode();
+    }
+}
+
 void ASTBuilder::emitExpression(const PcodeOp *op)
 {
+    /**
+     * TODO: now this needs to just "set up" the expression
+     * stack, sit back, and let it run...
+    */
+
+    PendingExpr* expr = nullptr;
+
     const Varnode* outvn = op->getOut();
     if (outvn) {
         /*
@@ -222,6 +270,32 @@ void ASTBuilder::emitExpression(const PcodeOp *op)
         BinaryOperator* assignment = new BinaryOperator("=");
         currentASTNode()->addChild(assignment);
 
+        expr = new PendingExpr();
+        expr->ast_op = assignment;
+        PendingNode lhs;
+
+        // TODO: all this will go to my version of pushVnLHS()
+        HighVariable* hv = outvn->getHigh();
+        Symbol* sym = hv->getSymbol();
+        if (sym) {
+            auto sym_offset = hv->getSymbolOffset();
+            if (sym_offset == -1) {
+                // perfect match
+                lhs.sym = sym;
+            } else if (sym_offset + outvn->getSize() <= sym->getType()->getSize()) {
+                // partial: STRUCT FIELDS/ARRAYS!
+                pushASTNode(nullptr);  // dummy instruction for breakpoint
+            } else {
+                // mismatch
+                pushASTNode(nullptr);  // dummy instruction for breakpoint
+            }
+        } else {
+            // pushUnnamedLocation
+            pushASTNode(nullptr);  // dummy instruction for breakpoint
+        }
+
+        expr->parts.push_back(lhs);
+
         /**
          * BinaryOperator
          * ----
@@ -229,22 +303,22 @@ void ASTBuilder::emitExpression(const PcodeOp *op)
          * > for assignment, first child => LHS, second child => RHS
          */
 
-        /** TODO: handle LHS of assignment expression... */
-
-        /** NOTE: I think we may need both a "context" stack with
-         * the current AST node as well as a "todo" stack with the
-         * list of remaining sub-expressions (like LHS, RHS) that
-         * need to be processed
-        */
-
-        // pushAstNode()/popAstNode()?
-        // this->pushAstNode()
-
     } else if (op->doesSpecialPrinting()) {
         /** TODO: what changes here? */
+        pushASTNode(nullptr);  // dummy instruction for breakpoint
     }
 
-    /** TODO: RHS if present/main expression based on opcode */
+    if (!expr) {
+        expr = new PendingExpr();
+        /** TODO: fill out the ASTNode properly here */
+        // expr->ast_op =
+        // currentNode()->addChild(ast_op)
+    }
+
+    /** TODO: fill in RHS or "single op" case here */
+    // op->getOpcode()->push(this, op, nullptr);
+
+    processExpressionStack();
 }
 
 void ASTBuilder::emitBlockBasic(const BlockBasic *bb)

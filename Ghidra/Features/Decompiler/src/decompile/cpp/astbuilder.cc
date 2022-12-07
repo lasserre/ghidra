@@ -40,23 +40,32 @@ json datatype_to_json(Datatype* dt)
 
 struct PendingNode
 {
+    PendingNode() : vn(nullptr), op(nullptr), sym(nullptr)
+    { }
+
     // for NodePending case:
     Varnode* vn;    // implied varnode
     PcodeOp* op;    // operator consuming value from implied varnode
 
     // for LHS case:
     Symbol* sym;    // for now, if != nullptr this is valid
-
-    PendingNode()
-        : vn(nullptr), op(nullptr), sym(nullptr)
-    {
-    }
 };
 
 struct PendingExpr
 {
+    PendingExpr() : ast_op(nullptr), parts()
+    { }
+
+    ~PendingExpr()
+    {
+        // don't delete ast_op - this is part of the AST
+        for (auto p : parts) {
+            delete p;
+        }
+    }
+
     ASTNode* ast_op;
-    vector<PendingNode> parts;
+    vector<PendingNode*> parts;
 };
 
 ASTBuilder::ASTBuilder()
@@ -146,7 +155,12 @@ json buildAstForFunction(Funcdata* fd)
 {
     ASTBuilder builder;
     ASTNode* ast = builder.buildAST(fd);
+
     /** TODO: JSON AST visitor here... */
+
+    delete ast;
+
+    return json();  /** TEMP: replace w/ JSON visitor! */
 }
 
 ASTNode* ASTBuilder::buildAST(Funcdata* fd)
@@ -244,12 +258,38 @@ void ASTBuilder::processExpressionStack()
 
         pushASTNode(expr->ast_op);
 
-        for (PendingNode node : expr->parts) {
+        for (PendingNode* node : expr->parts) {
             /** TODO: process pending node */
         }
 
         popASTNode();
     }
+}
+
+PendingNode* ASTBuilder::buildNodeLHS(const Varnode* vn)
+{
+    PendingNode* lhs = new PendingNode();
+
+    HighVariable* hv = vn->getHigh();
+    Symbol* sym = hv->getSymbol();
+    if (sym) {
+        auto sym_offset = hv->getSymbolOffset();
+        if (sym_offset == -1) {
+            // perfect match
+            lhs->sym = sym;
+        } else if (sym_offset + vn->getSize() <= sym->getType()->getSize()) {
+            // partial: STRUCT FIELDS/ARRAYS!
+            pushASTNode(nullptr);  // REMOVE: dummy instruction for breakpoint
+        } else {
+            // mismatch
+            pushASTNode(nullptr);  // REMOVE: dummy instruction for breakpoint
+        }
+    } else {
+        // pushUnnamedLocation
+        pushASTNode(nullptr);  // REMOVE: dummy instruction for breakpoint
+    }
+
+    return lhs;
 }
 
 void ASTBuilder::emitExpression(const PcodeOp *op)
@@ -267,34 +307,9 @@ void ASTBuilder::emitExpression(const PcodeOp *op)
             TODO: handle inplace ops (x += 3) if
             PrintC::option_inplace_ops is set
          */
+
         BinaryOperator* assignment = new BinaryOperator("=");
-        currentASTNode()->addChild(assignment);
-
-        expr = new PendingExpr();
-        expr->ast_op = assignment;
-        PendingNode lhs;
-
-        // TODO: all this will go to my version of pushVnLHS()
-        HighVariable* hv = outvn->getHigh();
-        Symbol* sym = hv->getSymbol();
-        if (sym) {
-            auto sym_offset = hv->getSymbolOffset();
-            if (sym_offset == -1) {
-                // perfect match
-                lhs.sym = sym;
-            } else if (sym_offset + outvn->getSize() <= sym->getType()->getSize()) {
-                // partial: STRUCT FIELDS/ARRAYS!
-                pushASTNode(nullptr);  // dummy instruction for breakpoint
-            } else {
-                // mismatch
-                pushASTNode(nullptr);  // dummy instruction for breakpoint
-            }
-        } else {
-            // pushUnnamedLocation
-            pushASTNode(nullptr);  // dummy instruction for breakpoint
-        }
-
-        expr->parts.push_back(lhs);
+        currentASTNode()->addChild(assignment);     // links to AST
 
         /**
          * BinaryOperator
@@ -302,21 +317,44 @@ void ASTBuilder::emitExpression(const PcodeOp *op)
          * > first child => first operand, second child => second operand
          * > for assignment, first child => LHS, second child => RHS
          */
+        expr = new PendingExpr();
+        expr->ast_op = assignment;
+        expr->parts.push_back(buildNodeLHS(outvn));
 
     } else if (op->doesSpecialPrinting()) {
         /** TODO: what changes here? */
-        pushASTNode(nullptr);  // dummy instruction for breakpoint
+        pushASTNode(nullptr);  // REMOVE: dummy instruction for breakpoint
     }
 
     if (!expr) {
+        // create a "blank" expression for the top of the expression stack, so
+        // the getOpcode->push() call (which calls our opXXX() method) can simply
+        // access the top of the expression stack (and for this case it will
+        // init expr->ast_op appropriately)
         expr = new PendingExpr();
-        /** TODO: fill out the ASTNode properly here */
-        // expr->ast_op =
-        // currentNode()->addChild(ast_op)
     }
 
-    /** TODO: fill in RHS or "single op" case here */
-    // op->getOpcode()->push(this, op, nullptr);
+    _pending_expressions.push_back(expr);
+
+    /**
+     * THOUGHT: I think what we need to do here is push expr to the stack
+     * regardless...either the initial LHS version, or a new PendingExpr()
+     * with nothing filled in.
+     *
+     * Then when push() calls opXyz(), that ASTBuilder member function can
+     * access the expression on top of the stack and ADD itself to the
+     * expression's parts list.
+     *      a) For LHS expr case: the LHS already exists, we now push the RHS
+     *      b) For "unary" case: no parts exist, we push the single PendingNode
+     */
+
+    /** PICK UP HERE:
+     * - debug this, follow the logic (and finish implementing)
+     * - look at Ghidra window w/ both decompiled C and PCode visible
+     *   so you can see which ops are implied, explicit, LHS, etc...
+    */
+
+    op->getOpcode()->push(this, op, nullptr);
 
     processExpressionStack();
 }
@@ -415,4 +453,370 @@ void ASTBuilder::emitBlockInfLoop(const BlockInfLoop *bl)
 void ASTBuilder::emitBlockSwitch(const BlockSwitch *bl)
 {
 
+}
+
+/**
+ * ----------------------------------------------------------
+ * OP implementations
+ * ----------------------------------------------------------
+*/
+
+void ASTBuilder::opCopy(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opCopy");
+}
+
+void ASTBuilder::opLoad(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opLoad");
+}
+
+void ASTBuilder::opStore(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opStore");
+}
+
+void ASTBuilder::opBranch(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opBranch");
+}
+
+void ASTBuilder::opCbranch(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opCbranch");
+}
+
+void ASTBuilder::opBranchind(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opBranchind");
+}
+
+void ASTBuilder::opCall(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opCall");
+}
+
+void ASTBuilder::opCallind(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opCallind");
+}
+
+void ASTBuilder::opCallother(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opCallother");
+}
+
+void ASTBuilder::opConstructor(const PcodeOp *op,bool withNew)
+{
+    throw new std::exception("Unimplemented OP opConstructor");
+}
+
+void ASTBuilder::opReturn(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opReturn");
+}
+
+void ASTBuilder::opIntEqual(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opIntEqual");
+}
+
+void ASTBuilder::opIntNotEqual(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opIntNotEqual");
+}
+
+void ASTBuilder::opIntSless(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opIntSless");
+}
+
+void ASTBuilder::opIntSlessEqual(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opIntSlessEqual");
+}
+
+void ASTBuilder::opIntLess(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opIntLess");
+}
+
+void ASTBuilder::opIntLessEqual(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opIntLessEqual");
+}
+
+void ASTBuilder::opIntZext(const PcodeOp *op,const PcodeOp *readOp)
+{
+    throw new std::exception("Unimplemented OP opIntZext");
+}
+
+void ASTBuilder::opIntSext(const PcodeOp *op,const PcodeOp *readOp)
+{
+    throw new std::exception("Unimplemented OP opIntSext");
+}
+
+void ASTBuilder::opIntAdd(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opIntAdd");
+}
+
+void ASTBuilder::opIntSub(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opIntSub");
+}
+
+void ASTBuilder::opIntCarry(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opIntCarry");
+}
+
+void ASTBuilder::opIntScarry(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opIntScarry");
+}
+
+void ASTBuilder::opIntSborrow(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opIntSborrow");
+}
+
+void ASTBuilder::opInt2Comp(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opInt2Comp");
+}
+
+void ASTBuilder::opIntNegate(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opIntNegate");
+}
+
+void ASTBuilder::opIntXor(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opIntXor");
+}
+
+void ASTBuilder::opIntAnd(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opIntAnd");
+}
+
+void ASTBuilder::opIntOr(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opIntOr");
+}
+
+void ASTBuilder::opIntLeft(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opIntLeft");
+}
+
+void ASTBuilder::opIntRight(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opIntRight");
+}
+
+void ASTBuilder::opIntSright(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opIntSright");
+}
+
+void ASTBuilder::opIntMult(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opIntMult");
+}
+
+void ASTBuilder::opIntDiv(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opIntDiv");
+}
+
+void ASTBuilder::opIntSdiv(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opIntSdiv");
+}
+
+void ASTBuilder::opIntRem(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opIntRem");
+}
+
+void ASTBuilder::opIntSrem(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opIntSrem");
+}
+
+void ASTBuilder::opBoolNegate(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opBoolNegate");
+}
+
+void ASTBuilder::opBoolXor(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opBoolXor");
+}
+
+void ASTBuilder::opBoolAnd(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opBoolAnd");
+}
+
+void ASTBuilder::opBoolOr(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opBoolOr");
+}
+
+void ASTBuilder::opFloatEqual(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opFloatEqual");
+}
+
+void ASTBuilder::opFloatNotEqual(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opFloatNotEqual");
+}
+
+void ASTBuilder::opFloatLess(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opFloatLess");
+}
+
+void ASTBuilder::opFloatLessEqual(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opFloatLessEqual");
+}
+
+void ASTBuilder::opFloatNan(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opFloatNan");
+}
+
+void ASTBuilder::opFloatAdd(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opFloatAdd");
+}
+
+void ASTBuilder::opFloatDiv(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opFloatDiv");
+}
+
+void ASTBuilder::opFloatMult(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opFloatMult");
+}
+
+void ASTBuilder::opFloatSub(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opFloatSub");
+}
+
+void ASTBuilder::opFloatNeg(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opFloatNeg");
+}
+
+void ASTBuilder::opFloatAbs(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opFloatAbs");
+}
+
+void ASTBuilder::opFloatSqrt(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opFloatSqrt");
+}
+
+void ASTBuilder::opFloatInt2Float(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opFloatInt2Float");
+}
+
+void ASTBuilder::opFloatFloat2Float(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opFloatFloat2Float");
+}
+
+void ASTBuilder::opFloatTrunc(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opFloatTrunc");
+}
+
+void ASTBuilder::opFloatCeil(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opFloatCeil");
+}
+
+void ASTBuilder::opFloatFloor(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opFloatFloor");
+}
+
+void ASTBuilder::opFloatRound(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opFloatRound");
+}
+
+void ASTBuilder::opMultiequal(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opMultiequal");
+}
+
+void ASTBuilder::opIndirect(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opIndirect");
+}
+
+void ASTBuilder::opPiece(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opPiece");
+}
+
+void ASTBuilder::opSubpiece(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opSubpiece");
+}
+
+void ASTBuilder::opCast(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opCast");
+}
+
+void ASTBuilder::opPtradd(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opPtradd");
+}
+
+void ASTBuilder::opPtrsub(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opPtrsub");
+}
+
+void ASTBuilder::opSegmentOp(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opSegmentOp");
+}
+
+void ASTBuilder::opCpoolRefOp(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opCpoolRefOp");
+}
+
+void ASTBuilder::opNewOp(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opNewOp");
+}
+
+void ASTBuilder::opInsertOp(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opInsertOp");
+}
+
+void ASTBuilder::opExtractOp(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opExtractOp");
+}
+
+void ASTBuilder::opPopcountOp(const PcodeOp *op)
+{
+    throw new std::exception("Unimplemented OP opPopcountOp");
 }

@@ -55,6 +55,16 @@ void CompoundStmt::doAccept(ASTVisitor* v)
     v->visitCompoundStmt(this);
 }
 
+DeclRefExpr::DeclRefExpr(ValueDecl* referencedDecl)
+    : _ref(referencedDecl)
+{
+}
+
+void DeclRefExpr::doAccept(ASTVisitor* v)
+{
+    v->visitDeclRefExpr(this);
+}
+
 DeclStmt::DeclStmt()
 {
 }
@@ -85,13 +95,22 @@ void LogMsg::doAccept(ASTVisitor* v)
 }
 
 ParmVarDecl::ParmVarDecl(ProtoParameter* param)
-    : _param(param)
+    : VarDecl(param->getSymbol()), _param(param)
 {
 }
 
 void ParmVarDecl::doAccept(ASTVisitor* v)
 {
     v->visitParmVarDecl(this);
+}
+
+ValueDecl::ValueDecl()
+{
+}
+
+void ValueDecl::doAccept(ASTVisitor* v)
+{
+    v->visitValueDecl(this);
 }
 
 VarDecl::VarDecl(Symbol* sym)

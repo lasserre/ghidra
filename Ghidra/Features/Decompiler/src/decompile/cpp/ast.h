@@ -6,6 +6,7 @@
 #include "funcdata.hh"
 
 class ASTVisitor;
+class ValueDecl;
 
 /**
  * @brief Represents a single node in the AST
@@ -75,6 +76,40 @@ protected:
 };
 
 /**
+ * @brief A reference to a declared variable, function, enum, etc.
+ */
+class DeclRefExpr : public ASTNode
+{
+public:
+    /** TODO: figure out how to do this...logically this is a pointer
+     * to the afore-declared ValueDecl
+     *
+     * - should we actually POINT? (e.g. ID or something)
+     * - or "regurgitate" the name/type/etc?
+     *
+     * NOTE: be clear about if this is a newly allocated ValueDecl we
+     * must delete or if it points to one in the tree that we MUST NOT
+     * delete!
+     *
+     * PICK UP HERE: in buildLocals() or w/e
+     * - build up a map<Sym*, VarDecl*> for locals
+     * - build up a map<Sym*, ParmVarDecl*> for parameters
+     * - maybe build one up for globals?
+     *
+     * ...then when we create the DeclRefExpr, we can simply look up
+     * the local/param/global in the map and point to the (same)
+     * ValueDecl* (which we don't own memory to, of course)
+    */
+    DeclRefExpr(ValueDecl* referencedDecl);
+
+    inline ValueDecl* ref() { return _ref; }
+
+protected:
+    virtual void doAccept(ASTVisitor* v);
+    ValueDecl* _ref;
+};
+
+/**
  * @brief Adaptor to allow mixing declarations with statements and expressions.
  */
 class DeclStmt : public ASTNode
@@ -116,7 +151,6 @@ public:
 
 protected:
     virtual void doAccept(ASTVisitor* v);
-
     Funcdata* _fd;
 };
 
@@ -140,9 +174,44 @@ protected:
 };
 
 /**
+ * @brief Declaration of a variable (in which case it is an lvalue) a function
+ * (in which case it is a function designator) or an enum constant.
+ */
+class ValueDecl : public ASTNode
+{
+public:
+    ValueDecl();
+
+protected:
+    virtual void doAccept(ASTVisitor* v);
+};
+
+/**
+ * @brief Variable declaration or definition
+ */
+class VarDecl : public ValueDecl
+{
+public:
+    /**
+     * @param sym The symbol for this variable
+     */
+    VarDecl(Symbol* sym);
+
+    // var_decl["kind"] = "VarDecl";
+    // var_decl["dtype"] = datatype_to_json(sym->getType());
+    // var_decl["name"] = sym->getName();
+
+    inline Symbol* sym() { return _sym; }
+
+protected:
+    virtual void doAccept(ASTVisitor* v);
+    Symbol* _sym;
+};
+
+/**
  * @brief Function parameter declaration
  */
-class ParmVarDecl : public ASTNode
+class ParmVarDecl : public VarDecl
 {
 public:
     ParmVarDecl(ProtoParameter* param);
@@ -165,28 +234,5 @@ public:
 
 protected:
     virtual void doAccept(ASTVisitor* v);
-
-    ProtoParameter* _param;// = fp.getParam(i);
-    // Symbol* _sym; = param->getSymbol();
-};
-
-/**
- * @brief Variable declaration or definition
- */
-class VarDecl : public ASTNode
-{
-public:
-    /**
-     * @param sym The symbol for this variable
-     */
-    VarDecl(Symbol* sym);
-
-    // var_decl["kind"] = "VarDecl";
-    // var_decl["dtype"] = datatype_to_json(sym->getType());
-    // var_decl["name"] = sym->getName();
-
-protected:
-    virtual void doAccept(ASTVisitor* v);
-
-    Symbol* _sym;
+    ProtoParameter* _param;
 };

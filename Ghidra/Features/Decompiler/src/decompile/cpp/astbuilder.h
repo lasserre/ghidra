@@ -160,10 +160,26 @@ public:
     }
 
 protected:
+
+    /**
+     * @brief Build a PendingNode for this implied varnode
+     */
+    PendingNode* buildNodeImplied(const Varnode* vn, const PcodeOp* op);
+
     /**
      * @brief Build a PendingNode for this LHS varnode
      */
-    PendingNode* buildNodeLHS(const Varnode* vn);
+    PendingNode* buildNodeLHS(const Varnode* vn, const PcodeOp* op);
+
+    /**
+     * @brief Processes a pending node from the parts of an expression
+     */
+    void processPendingNode(PendingNode* node);
+
+    /**
+     * @brief Process a pending symbol node
+     */
+    void processPendingSymbol(PendingNode* node);
 
     /**
      * @brief Recursively process the expression stack, converting each

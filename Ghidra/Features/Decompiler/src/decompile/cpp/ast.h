@@ -81,25 +81,14 @@ protected:
 class DeclRefExpr : public ASTNode
 {
 public:
-    /** TODO: figure out how to do this...logically this is a pointer
-     * to the afore-declared ValueDecl
+    /**
+     * @brief Construct a new DeclRefExpr
      *
-     * - should we actually POINT? (e.g. ID or something)
-     * - or "regurgitate" the name/type/etc?
-     *
-     * NOTE: be clear about if this is a newly allocated ValueDecl we
-     * must delete or if it points to one in the tree that we MUST NOT
-     * delete!
-     *
-     * PICK UP HERE: in buildLocals() or w/e
-     * - build up a map<Sym*, VarDecl*> for locals
-     * - build up a map<Sym*, ParmVarDecl*> for parameters
-     * - maybe build one up for globals?
-     *
-     * ...then when we create the DeclRefExpr, we can simply look up
-     * the local/param/global in the map and point to the (same)
-     * ValueDecl* (which we don't own memory to, of course)
-    */
+     * @param referencedDecl is a pointer to the existing ValueDecl* for
+     * the referenced variable (already created from its definition). This
+     * may be located using the map<>'s in ASTBuilder. Thus DeclRefExpr
+     * DOES NOT OWN this memory and must not delete it.
+     */
     DeclRefExpr(ValueDecl* referencedDecl);
 
     inline ValueDecl* ref() { return _ref; }
@@ -152,6 +141,20 @@ public:
 protected:
     virtual void doAccept(ASTVisitor* v);
     Funcdata* _fd;
+};
+
+class IntegerLiteral : public ASTNode
+{
+public:
+    IntegerLiteral(Datatype* dt, uintb value);
+
+    inline uintb value() { return _value; }
+    inline Datatype* dt() { return _dt; }
+
+protected:
+    virtual void doAccept(ASTVisitor* v);
+    Datatype* _dt;
+    uintb _value;
 };
 
 /**

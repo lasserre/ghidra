@@ -84,6 +84,16 @@ void FunctionDecl::doAccept(ASTVisitor* v)
     v->visitFunctionDecl(this);
 }
 
+IntegerLiteral::IntegerLiteral(Datatype* dt, uintb value)
+    : _dt(dt), _value(value)
+{
+}
+
+void IntegerLiteral::doAccept(ASTVisitor* v)
+{
+    v->visitIntegerLiteral(this);
+}
+
 LogMsg::LogMsg(std::string msg)
     : _msg(msg)
 {

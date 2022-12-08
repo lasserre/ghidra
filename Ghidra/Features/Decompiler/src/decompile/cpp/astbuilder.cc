@@ -69,7 +69,8 @@ json datatype_to_json(Datatype* dt)
  */
 enum ePendingNodeType {
     invalid = 0,
-    symbol_node = 1,
+    symbol = 1,
+    temporary = 2,    // implied => temporary, including non-terminal expressions
 };
 
 struct PendingNode
@@ -117,11 +118,15 @@ ASTBuilder::ASTBuilder()
  * @param fp The function prototype to build parameters from
  * @param fdecl The function to insert parameters into
  */
-void buildFunctionParams(FuncProto& fp, FunctionDecl* fdecl)
+void ASTBuilder::buildFunctionParams(FuncProto& fp, FunctionDecl* fdecl)
 {
     /** NOTE: parameters need to be IN ORDER within the list of children */
     for (int i = 0; i < fp.numParams(); i++) {
-        fdecl->addChild(new ParmVarDecl(fp.getParam(i)));
+        ParmVarDecl* pvdecl = new ParmVarDecl(fp.getParam(i));
+        fdecl->addChild(pvdecl);
+
+        // save this function parameter for future lookups
+        _parameters[pvdecl->sym()] = pvdecl;
     }
 }
 
@@ -158,7 +163,7 @@ VarDecl* tryCreateLocalVarDecl(const SymbolEntry* sym_entry)
     return new VarDecl(sym);
 }
 
-void buildLocalDeclsFromScope(const Scope& scope, CompoundStmt* fbody)
+void ASTBuilder::buildLocalDeclsFromScope(const Scope& scope, CompoundStmt* fbody)
 {
     for (auto sym_entry : scope) {
         VarDecl* vdecl = tryCreateLocalVarDecl(sym_entry);
@@ -166,6 +171,9 @@ void buildLocalDeclsFromScope(const Scope& scope, CompoundStmt* fbody)
             DeclStmt* ds = new DeclStmt();
             ds->addChild(vdecl);
             fbody->addChild(ds);
+
+            // save this local for future lookups
+            _locals[vdecl->sym()] = vdecl;
         }
     }
 
@@ -184,6 +192,9 @@ void buildLocalDeclsFromScope(const Scope& scope, CompoundStmt* fbody)
             DeclStmt* ds = new DeclStmt();
             ds->addChild(vdecl);
             fbody->addChild(ds);
+
+            // save this local for future lookups
+            _locals[vdecl->sym()] = vdecl;
         }
     }
 }
@@ -208,7 +219,8 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
         ss << "Function at 0x" << to_hex(fd->getAddress().getOffset());
         ss << " not decompiled";
         return new LogMsg(ss.str());
-    } else if (fd->hasNoStructBlocks()) {
+    }
+    else if (fd->hasNoStructBlocks()) {
         // not fully decompiled, no structure present
         stringstream ss;
         ss << "Function at 0x" << to_hex(fd->getAddress().getOffset());
@@ -249,6 +261,23 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
         Scope *l1 = (*iter).second;
         buildLocalDeclsFromScope(*l1, fbody);
     }
+
+    // -------- GLOBALS (test)
+    // find global scope
+    // Scope* curr_scope = fd->getScopeLocal();
+    // while (!curr_scope->isGlobal()) {
+    //     curr_scope = curr_scope->getParent();
+    // }
+
+    // /** TODO: try this for Data global var and see what its scope is */
+    // // sym_entry->getSymbol()->getScope()
+
+    // for (const SymbolEntry* sym_entry : *curr_scope) {
+    //     std::string sym_name = sym_entry->getSymbol()->getName();
+    //     if (sym_name == "Data") {
+    //         // found it
+    //     }
+    // }
 
     // -------- FUNCTION CODE
     // AstBuilder builder;     // before: builder(fbody)
@@ -294,9 +323,21 @@ ASTNode* ASTBuilder::popASTNode()
  */
 void ASTBuilder::processPendingNode(PendingNode* node)
 {
+    /**
+     * NOTE:
+     * I followed the pattern that PrintC/PrintLanguage already used
+     * with the RPN stack (which is how we got here)
+     *
+     * But if it turns out that all we have are "symbol" and "implied" node
+     * types, I may get rid of node_type completely and just handle all the
+     * various cases here based on if sym != nullptr, etc.
+     */
     switch (node->node_type) {
-        case ePendingNodeType::symbol_node:
+        case ePendingNodeType::symbol:
             processPendingSymbol(node);
+            break;
+        case ePendingNodeType::temporary:
+            processPendingTemporary(node);
             break;
         case ePendingNodeType::invalid:
             unimplementedCode("processPendingNode: node_type invalid");
@@ -307,11 +348,133 @@ void ASTBuilder::processPendingNode(PendingNode* node)
     }
 }
 
+void ASTBuilder::processPendingTemporary(PendingNode* node)
+{
+    if (node->vn->isImplied()) {
+        const PcodeOp* defOp = node->vn->getDef();
+
+        /** TODO: create new PendingExpression */
+        PendingExpr* expr = new PendingExpr();
+
+        /** NOTE: the opXYZ() functions will create the ASTNode
+         * for the operator (since they are the ones who know what
+         * the operation is of course)
+         *
+         * The question is, is the top-level assignment operator
+         * the outlier? Or should I figure out how to "push that down"
+         * to an opXYZ() function that can create it?
+        */
+        expr->ast_op = nullptr;     // do this here or not?
+        _pending_expressions.push_back(expr);
+        defOp->getOpcode()->push(this, defOp, node->op);
+    }
+    else {
+        processPendingTerminal(node);   // corresponds to pushVnExplicit()
+    }
+}
+
+void createIntLiteral(ASTBuilder* builder, Datatype* dt, uintb value)
+{
+    IntegerLiteral* lit = new IntegerLiteral(dt, value);
+    builder->currentASTNode()->addChild(lit);
+}
+
+void ASTBuilder::processPendingConstant(PendingNode* node)
+{
+    auto value = node->vn->getOffset();
+    HighVariable* high = node->vn->getHigh();
+    Datatype* dt = high->getType();
+
+    /**
+     * AHA:
+     * The type_metatype enum (returned by dt->getMetatype()) looks like the
+     * Ghidra version of "data type category" we want to predict (remember this
+     * isn't truth, but still of interest)
+     */
+    bool is_uint = dt->getMetatype() == TYPE_UINT;
+
+    switch (dt->getMetatype()) {
+        case TYPE_UINT:
+        case TYPE_INT:
+            if (dt->isCharPrint()) {
+                // todo: char
+                unimplementedCode("char constant");
+            }
+            else if (dt->isEnumType()) {
+                // todo: enum
+                unimplementedCode("enum constant");
+            }
+            else {
+                // int/uint
+                createIntLiteral(this, dt, value);
+            }
+            break;
+        case TYPE_UNKNOWN:
+            createIntLiteral(this, dt, value);
+            break;
+        case TYPE_BOOL:
+            unimplementedCode("bool constant");
+            break;
+        case TYPE_VOID:
+            // this is wrong...log or ignore (Ghidra throws here so just ignore)
+            break;
+        case TYPE_PTR:
+        case TYPE_PTRREL:
+            unimplementedCode("pointer constant");
+            break;
+        case TYPE_FLOAT:
+            unimplementedCode("float constant");
+            break;
+        default:
+            unimplementedCode("default 'printing' for constant");
+            // typecast, integer
+            break;
+    }
+}
+
+void ASTBuilder::processPendingTerminal(PendingNode* node)
+{
+    /**
+     * QUESTION: can we combine this with processPendingSymbol()?
+     * i.e. can this call processPendingSymbol?
+    */
+
+    if (node->vn->isAnnotation()) {
+        unimplementedCode("handle Annotations");
+        return;
+    }
+
+    HighVariable* high = node->vn->getHigh();
+
+    if (node->vn->isConstant()) {
+        processPendingConstant(node);
+        return;
+    }
+
+    /** TODO: pick up here - debug and see if latest code works */
+    unimplementedCode("finish processPendingTerminal");
+}
+
 void ASTBuilder::processPendingSymbol(PendingNode* node)
 {
-    /** TODO: create DeclRefExpr ASTNode */
+    ValueDecl* sym_decl = nullptr;
 
-    unimplementedCode("processPendingSymbol");
+    if (_locals.count(node->sym)) {
+        sym_decl = _locals.at(node->sym);
+    }
+    else if (_parameters.count(node->sym)) {
+        sym_decl = _parameters.at(node->sym);
+    }
+    else if (_globals.count(node->sym)) {
+        sym_decl = _globals.at(node->sym);
+    }
+    else {
+        // symbol not found!
+        unimplementedCode("TODO: handle symbol not found");
+    }
+
+    DeclRefExpr* refexpr = new DeclRefExpr(sym_decl);
+    currentASTNode()->addChild(refexpr);
 }
 
 // or processPendingExpressions()
@@ -328,13 +491,48 @@ void ASTBuilder::processExpressionStack()
         }
 
         popASTNode();
+
+        delete expr;
     }
 }
+
+/**
+ * CLS: buildNodeImplied gets called by getOpcode()->push()...
+ *
+ * => which means I CANNOT "go ahead" and look at vn->isImplied() and
+ * call ANOTHER getOpcode()->push()...because that would add PendingNodes
+ * TO THE WRONG EXPRESSION
+ *
+ * -> thus this function must simply create a pending node which can be
+ * added as part of the CORRECT/current pending expression.
+ * -> once we process the expression on the stack, we can then create new
+ * expressions
+ *
+ * -----------------------------------
+ * In other words:
+ *
+ * - getOpcode()->push() functions MAY USE buildNode() functions only
+ * - buildNode() functions MUST NOT result in getOpcode()->push()
+ * - processNode() functions do call getOpcode()->push()
+ *
+ * getOpcode()->push():
+ *      - build pending expressions
+ *      - build nodes using buildNode() for expressions
+ *      - place pending expressions on the stack
+ *
+ * buildNode():
+ *      - just build the PendingNode
+ *
+ * processNode():
+ *      - create ASTNodes from PendingNodes
+ *      - call getOpcode()->push() for nested expressions
+ */
 
 PendingNode* ASTBuilder::buildNodeImplied(const Varnode* vn, const PcodeOp* op)
 {
     PendingNode* node = new PendingNode();
 
+    node->node_type = ePendingNodeType::temporary;
     node->op = op;
     node->vn = vn;
     node->sym = nullptr;
@@ -352,18 +550,21 @@ PendingNode* ASTBuilder::buildNodeLHS(const Varnode* vn, const PcodeOp* op)
         auto sym_offset = hv->getSymbolOffset();
         if (sym_offset == -1) {
             // perfect match
-            lhs->node_type = ePendingNodeType::symbol_node;
+            lhs->node_type = ePendingNodeType::symbol;
             lhs->sym = sym;
             lhs->vn = vn;
             lhs->op = op;
-        } else if (sym_offset + vn->getSize() <= sym->getType()->getSize()) {
+        }
+        else if (sym_offset + vn->getSize() <= sym->getType()->getSize()) {
             // partial: STRUCT FIELDS/ARRAYS!
             unimplementedCode("buildNodeLHS: STRUCT FIELD/ARRAY");
-        } else {
+        }
+        else {
             // mismatch
             unimplementedCode("buildNodeLHS: mismatch symbol");
         }
-    } else {
+    }
+    else {
         // pushUnnamedLocation
         unimplementedCode("buildNodeLHS: unnamed location");
     }
@@ -373,74 +574,89 @@ PendingNode* ASTBuilder::buildNodeLHS(const Varnode* vn, const PcodeOp* op)
 
 void ASTBuilder::emitExpression(const PcodeOp *op)
 {
-    /**
-     * TODO: now this needs to just "set up" the expression
-     * stack, sit back, and let it run...
-    */
-
-    PendingExpr* expr = nullptr;
-
-    const Varnode* outvn = op->getOut();
-    if (outvn) {
-        /*
-            TODO: handle inplace ops (x += 3) if
-            PrintC::option_inplace_ops is set
-         */
-
-        BinaryOperator* assignment = new BinaryOperator("=");
-        currentASTNode()->addChild(assignment);     // links to AST
-
-        /**
-         * BinaryOperator
-         * ----
-         * > first child => first operand, second child => second operand
-         * > for assignment, first child => LHS, second child => RHS
-         */
-        expr = new PendingExpr();
-        expr->ast_op = assignment;
-        expr->parts.push_back(buildNodeLHS(outvn, op));
-
-    } else if (op->doesSpecialPrinting()) {
-        /** TODO: what changes here? */
-        unimplementedCode("emitExpression: doesSpecialPrinting");
-    }
-
-    if (!expr) {
-        // create a "blank" expression for the top of the expression stack, so
-        // the getOpcode->push() call (which calls our opXXX() method) can simply
-        // access the top of the expression stack (and for this case it will
-        // init expr->ast_op appropriately)
-        expr = new PendingExpr();
-    }
-
-    _pending_expressions.push_back(expr);
-
-    /**
-     * THOUGHT: I think what we need to do here is push expr to the stack
-     * regardless...either the initial LHS version, or a new PendingExpr()
-     * with nothing filled in.
-     *
-     * Then when push() calls opXyz(), that ASTBuilder member function can
-     * access the expression on top of the stack and ADD itself to the
-     * expression's parts list.
-     *      a) For LHS expr case: the LHS already exists, we now push the RHS
-     *      b) For "unary" case: no parts exist, we push the single PendingNode
-     */
-
-    /** PICK UP HERE:
-     * - debug this, follow the logic (and finish implementing)
-     * - look at Ghidra window w/ both decompiled C and PCode visible
-     *   so you can see which ops are implied, explicit, LHS, etc...
-    */
-
-    // to look at Pcode instructions:
-    // op->getOpcode()->opcode
-    // op->getAddr().getOffset(),x
-
     op->getOpcode()->push(this, op, nullptr);
-
     processExpressionStack();
 }
+
+/**
+ * OLD VERSION
+ * -----------
+ * This was patterned after the Ghidra PrintC implementation...
+ * ...but after going through, based on what I think I understand
+ * there is a much simpler/better way of doing this. So I'm preserving it
+ * for now, but trying my other idea...
+ */
+// void ASTBuilder::emitExpression(const PcodeOp *op)
+// {
+//     /**
+//      * TODO: now this needs to just "set up" the expression
+//      * stack, sit back, and let it run...
+//     */
+
+//     PendingExpr* expr = nullptr;
+
+//     const Varnode* outvn = op->getOut();
+//     if (outvn) {
+//         /*
+//             TODO: handle inplace ops (x += 3) if
+//             PrintC::option_inplace_ops is set
+//          */
+
+//         BinaryOperator* assignment = new BinaryOperator("=");
+//         currentASTNode()->addChild(assignment);     // links to AST
+
+//         /**
+//          * BinaryOperator
+//          * ----
+//          * > first child => first operand, second child => second operand
+//          * > for assignment, first child => LHS, second child => RHS
+//          */
+//         expr = new PendingExpr();
+//         expr->ast_op = assignment;
+//         expr->parts.push_back(buildNodeLHS(outvn, op));
+
+//     }
+//     else if (op->doesSpecialPrinting()) {
+//         /** TODO: what changes here? */
+//         unimplementedCode("emitExpression: doesSpecialPrinting");
+//     }
+
+//     if (!expr) {
+//         // create a "blank" expression for the top of the expression stack, so
+//         // the getOpcode->push() call (which calls our opXXX() method) can simply
+//         // access the top of the expression stack (and for this case it will
+//         // init expr->ast_op appropriately)
+//         expr = new PendingExpr();
+//     }
+
+//     _pending_expressions.push_back(expr);
+
+//     /**
+//      * THOUGHT: I think what we need to do here is push expr to the stack
+//      * regardless...either the initial LHS version, or a new PendingExpr()
+//      * with nothing filled in.
+//      *
+//      * Then when push() calls opXyz(), that ASTBuilder member function can
+//      * access the expression on top of the stack and ADD itself to the
+//      * expression's parts list.
+//      *      a) For LHS expr case: the LHS already exists, we now push the RHS
+//      *      b) For "unary" case: no parts exist, we push the single PendingNode
+//      */
+
+//     /** PICK UP HERE:
+//      * - debug this, follow the logic (and finish implementing)
+//      * - look at Ghidra window w/ both decompiled C and PCode visible
+//      *   so you can see which ops are implied, explicit, LHS, etc...
+//     */
+
+//     // to look at Pcode instructions:
+//     // op->getOpcode()->opcode
+//     // op->getAddr().getOffset(),x
+
+//     op->getOpcode()->push(this, op, nullptr);
+
+//     processExpressionStack();
+// }
 
 void ASTBuilder::emitBlockBasic(const BlockBasic *bb)
 {
@@ -509,7 +725,8 @@ void ASTBuilder::emitBlockIf(const BlockIf *bl)
 
     if (bl->getGotoTarget() != nullptr) {
         /** TODO: emit goto statement */
-    } else {
+    }
+    else {
         auto trueBlk = bl->getBlock(1);
         trueBlk->emit(this);
         if (bl->getSize() > 2) {
@@ -547,12 +764,38 @@ void ASTBuilder::emitBlockSwitch(const BlockSwitch *bl)
 
 void ASTBuilder::opCopy(const PcodeOp *op)
 {
-    PendingExpr* expr = _pending_expressions.back();
-    expr->parts.push_back(buildNodeImplied(op->getIn(0), op));
+    /**
+     * BinaryOperator
+     * ----
+     * > first child => first operand, second child => second operand
+     * > for assignment, first child => LHS, second child => RHS
+     */
+    BinaryOperator* assignment = new BinaryOperator("=");
+    currentASTNode()->addChild(assignment);     // links to AST
 
-    if (expr->ast_op == nullptr) {
-        throw new std::exception("opCopy: handle NULL ast_op");
+    const Varnode* outvn = op->getOut();
+
+    if (outvn) {
+        PendingExpr* expr = new PendingExpr();
+        expr->ast_op = assignment;
+        expr->parts.push_back(buildNodeLHS(outvn, op));
+        expr->parts.push_back(buildNodeImplied(op->getIn(0), op));
+        _pending_expressions.push_back(expr);
+    } else {
+        unimplementedCode("No outvn for opCopy");
+        //     else if (op->doesSpecialPrinting()) {
+        //         /** TODO: what changes here? */
+        //         unimplementedCode("emitExpression: doesSpecialPrinting");
+        //     }
     }
+
+    // OLD VERSION
+    // PendingExpr* expr = _pending_expressions.back();
+    // expr->parts.push_back(buildNodeImplied(op->getIn(0), op));
+
+    // if (expr->ast_op == nullptr) {
+    //     throw new std::exception("opCopy: handle NULL ast_op");
+    // }
 }
 
 void ASTBuilder::opLoad(const PcodeOp *op)

@@ -161,6 +161,9 @@ public:
 
 protected:
 
+    void buildFunctionParams(FuncProto& fp, FunctionDecl* fdecl);
+    void buildLocalDeclsFromScope(const Scope& scope, CompoundStmt* fbody);
+
     /**
      * @brief Build a PendingNode for this implied varnode
      */
@@ -175,6 +178,16 @@ protected:
      * @brief Processes a pending node from the parts of an expression
      */
     void processPendingNode(PendingNode* node);
+
+    /** @brief Process a pending implied/temporary node */
+    void processPendingTemporary(PendingNode* node);
+
+    /** @brief Process a pending constant node */
+    void processPendingConstant(PendingNode* node);
+
+    /** @brief Process a pending terminal node
+     * (corresponds to pushVnExplicit) */
+    void processPendingTerminal(PendingNode* node);
 
     /**
      * @brief Process a pending symbol node
@@ -200,4 +213,10 @@ protected:
      * separately like they did
      */
     vector<ASTNode*> _ast_node_stack;
+
+    // Maintain maps to allow looking up ValueDecl's we've already
+    // created by their Symbol (for DeclRefExpr's which point to them, etc)
+    std::map<Symbol*, VarDecl*> _locals;
+    std::map<Symbol*, ParmVarDecl*> _parameters;
+    std::map<Symbol*, VarDecl*> _globals;
 };

@@ -15,6 +15,7 @@ public:
     virtual void visitCompoundStmt(CompoundStmt*);
     virtual void visitDeclRefExpr(DeclRefExpr*);
     virtual void visitDeclStmt(DeclStmt*);
+    virtual void visitIntegerLiteral(IntegerLiteral*);
     virtual void visitFunctionDecl(FunctionDecl*);
     virtual void visitLogMsg(LogMsg*);
     virtual void visitParmVarDecl(ParmVarDecl*);

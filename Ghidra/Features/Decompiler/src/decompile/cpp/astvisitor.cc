@@ -14,6 +14,9 @@ void ASTVisitor::visitDeclRefExpr(DeclRefExpr*)
 void ASTVisitor::visitDeclStmt(DeclStmt*)
 { }
 
+void ASTVisitor::visitIntegerLiteral(IntegerLiteral*)
+{ }
+
 void ASTVisitor::visitFunctionDecl(FunctionDecl*)
 { }
 

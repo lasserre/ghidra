@@ -1,26 +1,16 @@
 #pragma once
 
 #include <vector>
-#include "../../../third-party/json/single_include/nlohmann/json.hpp"
 
 #include "printc.hh"
 #include "ast.h"
-
-using json = nlohmann::json;
 
 class Funcdata;
 struct PendingExpr;
 struct PendingNode;
 
-/**
- * Constructs an AST representation from Ghidra's internal representation of
- * the high-level code. The PrintLanguage (PrintC) class was used as a reference
- * to develop the algorithm for traversing the information in FuncData, etc
- * needed to construct an AST.
- *
- * CLS: not even sure I need the builder class yet...
-*/
-json buildAstForFunction(Funcdata* fd);
+/** helper functions I haven't moved elsewhere  yet */
+template<typename T> string to_hex(T data);
 
 class ASTBuilder : public PrintC
 {
@@ -163,6 +153,7 @@ protected:
 
     void buildFunctionParams(FuncProto& fp, FunctionDecl* fdecl);
     void buildLocalDeclsFromScope(const Scope& scope, CompoundStmt* fbody);
+    VarDecl* tryCreateLocalVarDecl(const SymbolEntry* sym_entry);
 
     /**
      * @brief Build a PendingNode for this implied varnode
@@ -219,4 +210,9 @@ protected:
     std::map<Symbol*, VarDecl*> _locals;
     std::map<Symbol*, ParmVarDecl*> _parameters;
     std::map<Symbol*, VarDecl*> _globals;
+
+    // counter to generate unique ValueDecl ids within a given context
+    // (FunctionDecl for now). This can be reset for various contexts if
+    // appropriate
+    int _next_vdecl_id;
 };

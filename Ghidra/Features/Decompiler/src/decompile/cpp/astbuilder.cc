@@ -47,17 +47,6 @@ template<typename T> string to_hex(T data)
     return ss.str();
 }
 
-json datatype_to_json(Datatype* dt)
-{
-    /** TODO: figure out how we want to handle data types */
-    /** TODO: also include the category here if possible...?
-     * - well, I guess we really want to extract the category from the debug
-     *   information since that is "truth" (and then we need to MAP true debug
-     *   info variables to Ghidra AST variables)
-    */
-    return dt->getName();
-}
-
 /**
  * @brief Describes type of pending node.
  *
@@ -78,9 +67,7 @@ class PendingNode
 public:
     PendingNode();
     ~PendingNode()
-    {
-        unimplementedCode("destructor called");
-    }
+    { }
 
     ePendingNodeType node_type;
     const Varnode* vnode;     /** JUST DON'T NAME THIS "vn" ...wow... */
@@ -114,9 +101,8 @@ struct PendingExpr
 };
 
 ASTBuilder::ASTBuilder()
-    : PrintC(nullptr)
+    : PrintC(nullptr), _next_vdecl_id(0)
 {
-    // _ast_node_stack.push_back(fbody["inner"]);
 }
 
 /**
@@ -129,7 +115,7 @@ void ASTBuilder::buildFunctionParams(FuncProto& fp, FunctionDecl* fdecl)
 {
     /** NOTE: parameters need to be IN ORDER within the list of children */
     for (int i = 0; i < fp.numParams(); i++) {
-        ParmVarDecl* pvdecl = new ParmVarDecl(fp.getParam(i));
+        ParmVarDecl* pvdecl = new ParmVarDecl(_next_vdecl_id++, fp.getParam(i));
         fdecl->addChild(pvdecl);
 
         // save this function parameter for future lookups
@@ -142,7 +128,7 @@ void ASTBuilder::buildFunctionParams(FuncProto& fp, FunctionDecl* fdecl)
  * a local variable declaration. If so, create the corresponding VarDecl object
  * and return it. If not, return nullptr
  */
-VarDecl* tryCreateLocalVarDecl(const SymbolEntry* sym_entry)
+VarDecl* ASTBuilder::tryCreateLocalVarDecl(const SymbolEntry* sym_entry)
 {
     if (sym_entry->isPiece())   // skip partial entry
         return nullptr;
@@ -167,7 +153,7 @@ VarDecl* tryCreateLocalVarDecl(const SymbolEntry* sym_entry)
             return nullptr;        // Only emit the first SymbolEntry for declaration of multi-entry Symbol
     }
 
-    return new VarDecl(sym);
+    return new VarDecl(_next_vdecl_id++, sym);
 }
 
 void ASTBuilder::buildLocalDeclsFromScope(const Scope& scope, CompoundStmt* fbody)
@@ -204,18 +190,6 @@ void ASTBuilder::buildLocalDeclsFromScope(const Scope& scope, CompoundStmt* fbod
             _locals[vdecl->sym()] = vdecl;
         }
     }
-}
-
-json buildAstForFunction(Funcdata* fd)
-{
-    ASTBuilder builder;
-    ASTNode* ast = builder.buildAST(fd);
-
-    /** TODO: JSON AST visitor here... */
-
-    delete ast;
-
-    return json();  /** TEMP: replace w/ JSON visitor! */
 }
 
 ASTNode* ASTBuilder::buildAST(Funcdata* fd)
@@ -476,8 +450,19 @@ void ASTBuilder::processPendingSymbol(PendingNode* node)
         sym_decl = _globals.at(node->sym);
     }
     else {
-        // symbol not found!
-        unimplementedCode("TODO: handle symbol not found");
+        // this is the only way I can figure out so far to "discover" globals
+        if (node->sym->getScope()->isGlobal()) {
+            // add it to globals map
+            VarDecl* global_decl = new VarDecl(_next_vdecl_id++, node->sym);
+            _globals[node->sym] = global_decl;
+            sym_decl = _globals.at(node->sym);
+
+            /** TODO: add this VarDecl to the AST in top-level TranslationUnitDecl */
+
+        } else {
+            // symbol not found!
+            unimplementedCode("TODO: handle symbol not found");
+        }
     }
 
     DeclRefExpr* refexpr = new DeclRefExpr(sym_decl);
@@ -540,8 +525,6 @@ PendingNode* ASTBuilder::buildNodeImplied(const Varnode* vn, const PcodeOp* op)
     PendingNode* node = new PendingNode();
 
     node->node_type = ePendingNodeType::node_temporary;
-    // node->op = const_cast<PcodeOp*>(op);
-    // node->vnode = const_cast<Varnode*>(vn);
     node->op = op;
     node->vnode = vn;
     node->sym = nullptr;
@@ -562,8 +545,6 @@ PendingNode* ASTBuilder::buildNodeLHS(const Varnode* vn, const PcodeOp* op)
             lhs = new PendingNode();
             lhs->node_type = ePendingNodeType::node_symbol;
             lhs->sym = sym;
-            // lhs->vnode = const_cast<Varnode*>(vn);
-            // lhs->op = const_cast<PcodeOp*>(op);
             lhs->vnode = vn;
             lhs->op = op;
         }

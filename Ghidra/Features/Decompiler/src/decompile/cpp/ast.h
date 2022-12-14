@@ -26,7 +26,7 @@ public:
      */
     void addChild(ASTNode* child);
 
-    void accept(ASTVisitor*);
+    void accept(ASTVisitor*, void* context=nullptr);
 
 protected:
     /**
@@ -34,7 +34,7 @@ protected:
      * on a particular kind of ASTNode. The general accept() handles calling
      * both this function as well as recursing through any child nodes
      */
-    virtual void doAccept(ASTVisitor*) = 0;
+    virtual void* doAccept(ASTVisitor*, void*) = 0;
 
     ASTNode* _parent;       // pointer to existing parent, not our memory
     // dynamically-allocated child pointers we must free when destructed
@@ -55,7 +55,7 @@ public:
     inline std::string opcode() { return _opcode; }
 
 protected:
-    virtual void doAccept(ASTVisitor* v);
+    virtual void* doAccept(ASTVisitor* v, void* context);
     std::string _opcode;
 };
 
@@ -67,12 +67,8 @@ class CompoundStmt : public ASTNode
 public:
     CompoundStmt();
 
-    // json fbody;
-    // fbody["kind"] = "CompoundStmt";
-    // fbody["inner"] = json::array();
-
 protected:
-    virtual void doAccept(ASTVisitor* v);
+    virtual void* doAccept(ASTVisitor* v, void* context);
 };
 
 /**
@@ -91,10 +87,13 @@ public:
      */
     DeclRefExpr(ValueDecl* referencedDecl);
 
-    inline ValueDecl* ref() { return _ref; }
+    inline ValueDecl* ref()
+    {
+        return _ref;
+    }
 
 protected:
-    virtual void doAccept(ASTVisitor* v);
+    virtual void* doAccept(ASTVisitor* v, void* context);
     ValueDecl* _ref;
 };
 
@@ -106,12 +105,8 @@ class DeclStmt : public ASTNode
 public:
     DeclStmt();
 
-    // declstmt["kind"] = "DeclStmt";
-    // declstmt["inner"] = json::array();
-    // declstmt["inner"].push_back(var_decl);
-
 protected:
-    virtual void doAccept(ASTVisitor* v);
+    virtual void* doAccept(ASTVisitor* v, void* context);
 };
 
 /**
@@ -122,15 +117,6 @@ class FunctionDecl : public ASTNode
 public:
     FunctionDecl(Funcdata* fd);
 
-    // basic function node info
-    // JSON: fdecl["kind"] = "FunctionDecl";
-    // JSON: fdecl["inner"] = json::array();
-    // fdecl["name"] = fd->getName();
-    // fdecl["address"] = to_hex(fd->getAddress().getOffset());
-    // prototype
-    // FuncProto& fp = fd->getFuncProto();
-    // fdecl["return_dtype"] = datatype_to_json(fp.getOutputType());
-
     inline std::string name() { return _fd->getName(); }
     inline uintb address() { return _fd->getAddress().getOffset(); }
     inline Datatype* return_dtype() { return _fd->getFuncProto().getOutputType(); }
@@ -139,7 +125,7 @@ public:
     inline Funcdata* funcdata() { return _fd; }
 
 protected:
-    virtual void doAccept(ASTVisitor* v);
+    virtual void* doAccept(ASTVisitor* v, void* context);
     Funcdata* _fd;
 };
 
@@ -152,7 +138,7 @@ public:
     inline Datatype* dt() { return _dt; }
 
 protected:
-    virtual void doAccept(ASTVisitor* v);
+    virtual void* doAccept(ASTVisitor* v, void* context);
     Datatype* _dt;
     uintb _value;
 };
@@ -172,7 +158,7 @@ public:
     inline std::string message() { return _msg; }
 
 protected:
-    virtual void doAccept(ASTVisitor* v);
+    virtual void* doAccept(ASTVisitor* v, void* context);
     std::string _msg;
 };
 
@@ -183,10 +169,16 @@ protected:
 class ValueDecl : public ASTNode
 {
 public:
-    ValueDecl();
+    /**
+     * @param id is a unique ID for this ValueDecl
+     */
+    ValueDecl(int id);
+
+    inline int id() { return _id; }
 
 protected:
-    virtual void doAccept(ASTVisitor* v);
+    virtual void* doAccept(ASTVisitor* v, void* context);
+    int _id;
 };
 
 /**
@@ -198,16 +190,12 @@ public:
     /**
      * @param sym The symbol for this variable
      */
-    VarDecl(Symbol* sym);
-
-    // var_decl["kind"] = "VarDecl";
-    // var_decl["dtype"] = datatype_to_json(sym->getType());
-    // var_decl["name"] = sym->getName();
+    VarDecl(int id, Symbol* sym);
 
     inline Symbol* sym() { return _sym; }
 
 protected:
-    virtual void doAccept(ASTVisitor* v);
+    virtual void* doAccept(ASTVisitor* v, void* context);
     Symbol* _sym;
 };
 
@@ -217,25 +205,12 @@ protected:
 class ParmVarDecl : public VarDecl
 {
 public:
-    ParmVarDecl(ProtoParameter* param);
-
-    // json pvdecl;
-    // pvdecl["kind"] = "ParmVarDecl";
-
-    // ProtoParameter* param = fp.getParam(i);
-    // Symbol* sym = param->getSymbol();
-
-    // if (sym) {
-    //     pvdecl["dtype"] = datatype_to_json(sym->getType());
-    //     pvdecl["name"] = sym->getName();
-    // } else {
-    //     pvdecl["dtype"] = datatype_to_json(param->getType());
-    // }
+    ParmVarDecl(int id, ProtoParameter* param);
 
     /** @brief The backing ProtoParameter for this ParmVarDecl */
     inline ProtoParameter* param() { return _param; }
 
 protected:
-    virtual void doAccept(ASTVisitor* v);
+    virtual void* doAccept(ASTVisitor* v, void* context);
     ProtoParameter* _param;
 };

@@ -17,7 +17,8 @@
 #include "flow.hh"
 #include "blockaction.hh"
 
-#include "astbuilder.h"
+// #include "astbuilder.h"
+#include "astvisitors/jsonastvisitor.h"
 
 #ifdef __REMOTE_SOCKET__
 
@@ -344,8 +345,9 @@ void DecompileAt::rawAction(void)
         ghidra->print->docFunction(fd);
         json ast_json = buildAstForFunction(fd);
 
+        /** TODO: figure out how we want to determine output file location */
         #include <fstream>
-        ofstream outfile("C:/Users/knigh/dev/ghidra/testfile.json", ios::out);
+        ofstream outfile("C:/Users/knigh/dev/ghidra_ast_testfile.json", ios::out);
         outfile << setw(4) << ast_json << endl;
         outfile.close();
     }

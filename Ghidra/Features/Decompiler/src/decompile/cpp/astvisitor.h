@@ -7,18 +7,23 @@
  * needs to interact with the AST. Since the base ASTVisitor does nothing by
  * default, derived classes may "opt in" to visit elements they care about
  * without having to create boilerplate for every possible type of node.
+ *
+ * Each visit() function accepts a void* context and returns a void* context.
+ * This may be used at the discretion of the concrete visitor, and values
+ * returned from visit() functions will be passed as parameters to the visit()
+ * calls to child nodes
  */
 class ASTVisitor
 {
 public:
-    virtual void visitBinaryOperator(BinaryOperator*);
-    virtual void visitCompoundStmt(CompoundStmt*);
-    virtual void visitDeclRefExpr(DeclRefExpr*);
-    virtual void visitDeclStmt(DeclStmt*);
-    virtual void visitIntegerLiteral(IntegerLiteral*);
-    virtual void visitFunctionDecl(FunctionDecl*);
-    virtual void visitLogMsg(LogMsg*);
-    virtual void visitParmVarDecl(ParmVarDecl*);
-    virtual void visitValueDecl(ValueDecl*);
-    virtual void visitVarDecl(VarDecl*);
+    virtual void* visitBinaryOperator(BinaryOperator*, void*);
+    virtual void* visitCompoundStmt(CompoundStmt*, void*);
+    virtual void* visitDeclRefExpr(DeclRefExpr*, void*);
+    virtual void* visitDeclStmt(DeclStmt*, void*);
+    virtual void* visitIntegerLiteral(IntegerLiteral*, void*);
+    virtual void* visitFunctionDecl(FunctionDecl*, void*);
+    virtual void* visitLogMsg(LogMsg*, void*);
+    virtual void* visitParmVarDecl(ParmVarDecl*, void*);
+    virtual void* visitValueDecl(ValueDecl*, void*);
+    virtual void* visitVarDecl(VarDecl*, void*);
 };

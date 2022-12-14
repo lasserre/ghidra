@@ -25,14 +25,14 @@ void ASTNode::addChild(ASTNode* child)
     // }
 }
 
-void ASTNode::accept(ASTVisitor* v)
+void ASTNode::accept(ASTVisitor* v, void* parent_context /*=nullptr*/)
 {
     // visit this node
-    doAccept(v);
+    void* node_context = doAccept(v, parent_context);
 
     // visit children
     for (ASTNode* node : _children) {
-        node->accept(v);
+        node->accept(v, node_context);
     }
 }
 
@@ -41,18 +41,18 @@ BinaryOperator::BinaryOperator(std::string opcode)
 {
 }
 
-void BinaryOperator::doAccept(ASTVisitor* v)
+void* BinaryOperator::doAccept(ASTVisitor* v, void* context)
 {
-    v->visitBinaryOperator(this);
+    return v->visitBinaryOperator(this, context);
 }
 
 CompoundStmt::CompoundStmt()
 {
 }
 
-void CompoundStmt::doAccept(ASTVisitor* v)
+void* CompoundStmt::doAccept(ASTVisitor* v, void* context)
 {
-    v->visitCompoundStmt(this);
+    return v->visitCompoundStmt(this, context);
 }
 
 DeclRefExpr::DeclRefExpr(ValueDecl* referencedDecl)
@@ -60,18 +60,18 @@ DeclRefExpr::DeclRefExpr(ValueDecl* referencedDecl)
 {
 }
 
-void DeclRefExpr::doAccept(ASTVisitor* v)
+void* DeclRefExpr::doAccept(ASTVisitor* v, void* context)
 {
-    v->visitDeclRefExpr(this);
+    return v->visitDeclRefExpr(this, context);
 }
 
 DeclStmt::DeclStmt()
 {
 }
 
-void DeclStmt::doAccept(ASTVisitor* v)
+void* DeclStmt::doAccept(ASTVisitor* v, void* context)
 {
-    v->visitDeclStmt(this);
+    return v->visitDeclStmt(this, context);
 }
 
 FunctionDecl::FunctionDecl(Funcdata* fd)
@@ -79,9 +79,9 @@ FunctionDecl::FunctionDecl(Funcdata* fd)
 {
 }
 
-void FunctionDecl::doAccept(ASTVisitor* v)
+void* FunctionDecl::doAccept(ASTVisitor* v, void* context)
 {
-    v->visitFunctionDecl(this);
+    return v->visitFunctionDecl(this, context);
 }
 
 IntegerLiteral::IntegerLiteral(Datatype* dt, uintb value)
@@ -89,9 +89,9 @@ IntegerLiteral::IntegerLiteral(Datatype* dt, uintb value)
 {
 }
 
-void IntegerLiteral::doAccept(ASTVisitor* v)
+void* IntegerLiteral::doAccept(ASTVisitor* v, void* context)
 {
-    v->visitIntegerLiteral(this);
+    return v->visitIntegerLiteral(this, context);
 }
 
 LogMsg::LogMsg(std::string msg)
@@ -99,36 +99,37 @@ LogMsg::LogMsg(std::string msg)
 {
 }
 
-void LogMsg::doAccept(ASTVisitor* v)
+void* LogMsg::doAccept(ASTVisitor* v, void* context)
 {
-    v->visitLogMsg(this);
+    return v->visitLogMsg(this, context);
 }
 
-ParmVarDecl::ParmVarDecl(ProtoParameter* param)
-    : VarDecl(param->getSymbol()), _param(param)
-{
-}
-
-void ParmVarDecl::doAccept(ASTVisitor* v)
-{
-    v->visitParmVarDecl(this);
-}
-
-ValueDecl::ValueDecl()
+ParmVarDecl::ParmVarDecl(int id, ProtoParameter* param)
+    : VarDecl(id, param->getSymbol()), _param(param)
 {
 }
 
-void ValueDecl::doAccept(ASTVisitor* v)
+void* ParmVarDecl::doAccept(ASTVisitor* v, void* context)
 {
-    v->visitValueDecl(this);
+    return v->visitParmVarDecl(this, context);
 }
 
-VarDecl::VarDecl(Symbol* sym)
-    : _sym(sym)
+ValueDecl::ValueDecl(int id)
+    : _id(id)
 {
 }
 
-void VarDecl::doAccept(ASTVisitor* v)
+void* ValueDecl::doAccept(ASTVisitor* v, void* context)
 {
-    v->visitVarDecl(this);
+    return v->visitValueDecl(this, context);
+}
+
+VarDecl::VarDecl(int id, Symbol* sym)
+    : ValueDecl(id), _sym(sym)
+{
+}
+
+void* VarDecl::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitVarDecl(this, context);
 }

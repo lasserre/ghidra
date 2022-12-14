@@ -1,7 +1,7 @@
 #include "astbuilder.h"
 
 #include "funcdata.hh"
-#include "printc.hh"
+#include "varnode.hh"
 
 static int _num_unimpl_ops = 0;
 void unimplementedOp(std::string opname)
@@ -67,27 +67,34 @@ json datatype_to_json(Datatype* dt)
  * by storing the type of pending node so it's available if I need to differentiate
  * when we process pending nodes
  */
-enum ePendingNodeType {
-    invalid = 0,
-    symbol = 1,
-    temporary = 2,    // implied => temporary, including non-terminal expressions
+enum class ePendingNodeType {
+    node_invalid = 0,
+    node_symbol = 1,
+    node_temporary = 2,    // implied => temporary, including non-terminal expressions
 };
 
-struct PendingNode
+class PendingNode
 {
-    PendingNode()
+public:
+    PendingNode();
+    ~PendingNode()
     {
-        node_type = ePendingNodeType::invalid;
-        vn = nullptr;
-        op = nullptr;
-        sym = nullptr;
+        unimplementedCode("destructor called");
     }
 
     ePendingNodeType node_type;
-    const Varnode* vn;
+    const Varnode* vnode;     /** JUST DON'T NAME THIS "vn" ...wow... */
     const PcodeOp* op;
     Symbol* sym;
 };
+
+PendingNode::PendingNode()
+{
+    node_type = ePendingNodeType::node_invalid;
+    vnode = nullptr;
+    op = nullptr;
+    sym = nullptr;
+}
 
 struct PendingExpr
 {
@@ -103,7 +110,7 @@ struct PendingExpr
     }
 
     ASTNode* ast_op;
-    vector<PendingNode*> parts;
+    std::vector<PendingNode*> parts;
 };
 
 ASTBuilder::ASTBuilder()
@@ -333,13 +340,13 @@ void ASTBuilder::processPendingNode(PendingNode* node)
      * various cases here based on if sym != nullptr, etc.
      */
     switch (node->node_type) {
-        case ePendingNodeType::symbol:
+        case ePendingNodeType::node_symbol:
             processPendingSymbol(node);
             break;
-        case ePendingNodeType::temporary:
+        case ePendingNodeType::node_temporary:
             processPendingTemporary(node);
             break;
-        case ePendingNodeType::invalid:
+        case ePendingNodeType::node_invalid:
             unimplementedCode("processPendingNode: node_type invalid");
             break;
         default:
@@ -350,8 +357,8 @@ void ASTBuilder::processPendingNode(PendingNode* node)
 
 void ASTBuilder::processPendingTemporary(PendingNode* node)
 {
-    if (node->vn->isImplied()) {
-        const PcodeOp* defOp = node->vn->getDef();
+    if (node->vnode->isImplied()) {
+        const PcodeOp* defOp = node->vnode->getDef();
 
         /** TODO: create new PendingExpression */
         PendingExpr* expr = new PendingExpr();
@@ -381,8 +388,8 @@ void createIntLiteral(ASTBuilder* builder, Datatype* dt, uintb value)
 
 void ASTBuilder::processPendingConstant(PendingNode* node)
 {
-    auto value = node->vn->getOffset();
-    HighVariable* high = node->vn->getHigh();
+    auto value = node->vnode->getOffset();
+    HighVariable* high = node->vnode->getHigh();
     Datatype* dt = high->getType();
 
     /**
@@ -439,14 +446,14 @@ void ASTBuilder::processPendingTerminal(PendingNode* node)
      * i.e. can this call processPendingSymbol?
     */
 
-    if (node->vn->isAnnotation()) {
+    if (node->vnode->isAnnotation()) {
         unimplementedCode("handle Annotations");
         return;
     }
 
-    HighVariable* high = node->vn->getHigh();
+    HighVariable* high = node->vnode->getHigh();
 
-    if (node->vn->isConstant()) {
+    if (node->vnode->isConstant()) {
         processPendingConstant(node);
         return;
     }
@@ -532,9 +539,11 @@ PendingNode* ASTBuilder::buildNodeImplied(const Varnode* vn, const PcodeOp* op)
 {
     PendingNode* node = new PendingNode();
 
-    node->node_type = ePendingNodeType::temporary;
+    node->node_type = ePendingNodeType::node_temporary;
+    // node->op = const_cast<PcodeOp*>(op);
+    // node->vnode = const_cast<Varnode*>(vn);
     node->op = op;
-    node->vn = vn;
+    node->vnode = vn;
     node->sym = nullptr;
 
     return node;
@@ -542,7 +551,7 @@ PendingNode* ASTBuilder::buildNodeImplied(const Varnode* vn, const PcodeOp* op)
 
 PendingNode* ASTBuilder::buildNodeLHS(const Varnode* vn, const PcodeOp* op)
 {
-    PendingNode* lhs = new PendingNode();
+    PendingNode* lhs = nullptr;
 
     HighVariable* hv = vn->getHigh();
     Symbol* sym = hv->getSymbol();
@@ -550,9 +559,12 @@ PendingNode* ASTBuilder::buildNodeLHS(const Varnode* vn, const PcodeOp* op)
         auto sym_offset = hv->getSymbolOffset();
         if (sym_offset == -1) {
             // perfect match
-            lhs->node_type = ePendingNodeType::symbol;
+            lhs = new PendingNode();
+            lhs->node_type = ePendingNodeType::node_symbol;
             lhs->sym = sym;
-            lhs->vn = vn;
+            // lhs->vnode = const_cast<Varnode*>(vn);
+            // lhs->op = const_cast<PcodeOp*>(op);
+            lhs->vnode = vn;
             lhs->op = op;
         }
         else if (sym_offset + vn->getSize() <= sym->getType()->getSize()) {
@@ -778,8 +790,10 @@ void ASTBuilder::opCopy(const PcodeOp *op)
     if (outvn) {
         PendingExpr* expr = new PendingExpr();
         expr->ast_op = assignment;
-        expr->parts.push_back(buildNodeLHS(outvn, op));
-        expr->parts.push_back(buildNodeImplied(op->getIn(0), op));
+        PendingNode* rhs_node = buildNodeImplied(op->getIn(0), op);
+        PendingNode* lhs_node = buildNodeLHS(outvn, op);
+        expr->parts.push_back(lhs_node);
+        expr->parts.push_back(rhs_node);
         _pending_expressions.push_back(expr);
     } else {
         unimplementedCode("No outvn for opCopy");

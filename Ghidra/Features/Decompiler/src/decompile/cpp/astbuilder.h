@@ -205,6 +205,11 @@ protected:
      */
     vector<ASTNode*> _ast_node_stack;
 
+    /**
+     * The translation unit that is the head of the current AST
+     */
+    TranslationUnitDecl* _head_translation_unit;
+
     // Maintain maps to allow looking up ValueDecl's we've already
     // created by their Symbol (for DeclRefExpr's which point to them, etc)
     std::map<Symbol*, VarDecl*> _locals;

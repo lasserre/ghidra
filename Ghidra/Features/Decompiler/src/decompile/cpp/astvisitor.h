@@ -24,6 +24,7 @@ public:
     virtual void* visitFunctionDecl(FunctionDecl*, void*);
     virtual void* visitLogMsg(LogMsg*, void*);
     virtual void* visitParmVarDecl(ParmVarDecl*, void*);
+    virtual void* visitTranslationUnitDecl(TranslationUnitDecl*, void*);
     virtual void* visitValueDecl(ValueDecl*, void*);
     virtual void* visitVarDecl(VarDecl*, void*);
 };

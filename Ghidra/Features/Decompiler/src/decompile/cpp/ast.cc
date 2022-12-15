@@ -13,10 +13,16 @@ ASTNode::~ASTNode()
     }
 }
 
-void ASTNode::addChild(ASTNode* child)
+void ASTNode::addChild(ASTNode* child, bool append /*= true*/)
 {
     child->_parent = this;
-    _children.push_back(child);
+
+    if (append) {
+        _children.push_back(child);
+    }
+    else {
+        _children.insert(_children.begin(), child);
+    }
 
     // // verify this child pointer is not already in our children list
     // auto child_in_list = std::find(_children.begin(), _children.end(), child);
@@ -102,6 +108,15 @@ LogMsg::LogMsg(std::string msg)
 void* LogMsg::doAccept(ASTVisitor* v, void* context)
 {
     return v->visitLogMsg(this, context);
+}
+
+TranslationUnitDecl::TranslationUnitDecl()
+{
+}
+
+void* TranslationUnitDecl::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitTranslationUnitDecl(this, context);
 }
 
 ParmVarDecl::ParmVarDecl(int id, ProtoParameter* param)

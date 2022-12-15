@@ -33,7 +33,8 @@ json* JsonASTVisitor::copy_to_parent(json& data, void* parent_context)
 
         // return pointer to copied memory inside parent
         return &parent["inner"].back();
-    } else {
+    }
+    else {
         _ast_json = data;
         return &_ast_json;
     }
@@ -110,11 +111,20 @@ void* JsonASTVisitor::visitParmVarDecl(ParmVarDecl* pv, void* context)
     if (pv->sym()) {
         pvdecl["dtype"] = datatype_to_json(pv->sym()->getType());
         pvdecl["name"] = pv->sym()->getName();
-    } else {
+    }
+    else {
         pvdecl["dtype"] = datatype_to_json(pv->param()->getType());
     }
 
     return copy_to_parent(pvdecl, context);
+}
+
+void* JsonASTVisitor::visitTranslationUnitDecl(TranslationUnitDecl* td, void* context)
+{
+    json tudecl;
+    tudecl["kind"] = "TranslationUnitDecl";
+    tudecl["inner"] = json::array();
+    return copy_to_parent(tudecl, context);
 }
 
 void* JsonASTVisitor::visitValueDecl(ValueDecl* vd, void* context)

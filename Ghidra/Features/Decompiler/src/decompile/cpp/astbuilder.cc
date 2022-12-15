@@ -101,7 +101,7 @@ struct PendingExpr
 };
 
 ASTBuilder::ASTBuilder()
-    : PrintC(nullptr), _next_vdecl_id(0)
+    : PrintC(nullptr), _head_translation_unit(nullptr), _next_vdecl_id(0)
 {
 }
 
@@ -222,7 +222,15 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
     // popScope();                // Exit function's scope
     // emit->endFunction(id1);
 
+    // translation unit is top level
+    /**
+     * NOTE: don't free this even if != nullptr...the caller of the last
+     * buildAST() call owns the memory
+     */
+    _head_translation_unit = new TranslationUnitDecl();
+
     FunctionDecl* fdecl = new FunctionDecl(fd);
+    _head_translation_unit->addChild(fdecl);
 
     // params are child nodes
     FuncProto& fp = fd->getFuncProto();
@@ -261,24 +269,11 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
     // }
 
     // -------- FUNCTION CODE
-    // AstBuilder builder;     // before: builder(fbody)
-    /** NOTE: before, this was part of builder's constructor */
-    // _ast_node_stack({&fbody["inner"]})
-
-    /**
-     * TODO: change this to builder.buildAST()
-     * (which can call emitBlockGraph, etc.)
-     * TODO: remove json-isms from ASTBuilder, move them to an ASTVisitor
-     * that converts the AST to JSON
-     * TODO: call the JSON ASTVisitor on the resulting AST after the builder
-     * has completed building
-     * TODO: pick up where I left off at emitExpression
-    */
     pushASTNode(fbody);
     emitBlockGraph(&fd->getStructure());
     popASTNode();
 
-    return fdecl;
+    return _head_translation_unit;
 }
 
 void ASTBuilder::pushASTNode(ASTNode* current_node)
@@ -457,9 +452,10 @@ void ASTBuilder::processPendingSymbol(PendingNode* node)
             _globals[node->sym] = global_decl;
             sym_decl = _globals.at(node->sym);
 
-            /** TODO: add this VarDecl to the AST in top-level TranslationUnitDecl */
-
-        } else {
+            // add global decl to the AST under top-level TranslationUnitDecl
+            _head_translation_unit->addChild(global_decl, false);
+        }
+        else {
             // symbol not found!
             unimplementedCode("TODO: handle symbol not found");
         }
@@ -776,7 +772,8 @@ void ASTBuilder::opCopy(const PcodeOp *op)
         expr->parts.push_back(lhs_node);
         expr->parts.push_back(rhs_node);
         _pending_expressions.push_back(expr);
-    } else {
+    }
+    else {
         unimplementedCode("No outvn for opCopy");
         //     else if (op->doesSpecialPrinting()) {
         //         /** TODO: what changes here? */

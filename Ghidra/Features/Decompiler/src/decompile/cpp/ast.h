@@ -23,8 +23,11 @@ public:
     /**
      * @brief Adds child to this node's children, if it is not already
      * in the list (the pointer value itself, not the object value).
+     *
+     * @param child is the child to add
+     * @param append If true, add to end of list. Otherwise add to beginning
      */
-    void addChild(ASTNode* child);
+    void addChild(ASTNode* child, bool append=true);
 
     void accept(ASTVisitor*, void* context=nullptr);
 
@@ -160,6 +163,18 @@ public:
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
     std::string _msg;
+};
+
+/**
+ * @brief Represents a top-level translation unit
+ */
+class TranslationUnitDecl : public ASTNode
+{
+public:
+    TranslationUnitDecl();
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
 };
 
 /**

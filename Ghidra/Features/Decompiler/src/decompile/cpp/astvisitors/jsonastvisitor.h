@@ -21,6 +21,7 @@ class JsonASTVisitor : public ASTVisitor
 public:
     virtual void* visitBinaryOperator(BinaryOperator*, void*);
     virtual void* visitCompoundStmt(CompoundStmt*, void*);
+    virtual void* visitCStyleCastExpr(CStyleCastExpr*, void*);
     virtual void* visitDeclRefExpr(DeclRefExpr*, void*);
     virtual void* visitDeclStmt(DeclStmt*, void*);
     virtual void* visitIntegerLiteral(IntegerLiteral*, void*);

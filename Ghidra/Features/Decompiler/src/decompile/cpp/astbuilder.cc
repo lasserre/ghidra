@@ -3,6 +3,15 @@
 #include "funcdata.hh"
 #include "varnode.hh"
 
+static int _count_unimpl_stuff = 0;
+void unimplementedCode(std::string description)
+{
+    // again purely for debugging to avoid exceptions...
+
+    // log this, set breakpoint or ignore
+    _count_unimpl_stuff++;
+}
+
 static int _num_unimpl_ops = 0;
 void unimplementedOp(std::string opname)
 {
@@ -12,15 +21,9 @@ void unimplementedOp(std::string opname)
     // either log this or set a breakpoint here to catch any unimplemented
     // ops that are involved in an expression. If I don't care, I can move on
     _num_unimpl_ops++;
-}
 
-static int _count_unimpl_stuff = 0;
-void unimplementedCode(std::string description)
-{
-    // again purely for debugging to avoid exceptions...
-
-    // log this, set breakpoint or ignore
-    _count_unimpl_stuff++;
+    // so we can catch all with unimplementedCode() breakpoint
+    unimplementedCode(opname);
 }
 
 /**
@@ -681,6 +684,7 @@ void ASTBuilder::emitExpression(const PcodeOp *op)
 
 static string getRegName(const Varnode* vn)
 {
+    // auto regdata = trans->getRegister("RAX");
     auto trans = vn->getSpace()->getTrans();
     return trans->getRegisterName(vn->getSpace(), vn->getOffset(), vn->getSize());
 }
@@ -703,11 +707,6 @@ void ASTBuilder::emitBlockBasic(const BlockBasic *bb)
             string regname = getRegName(vn);
             continue;
         }
-
-        // CLS: test
-        // const Translate* trans = vn->getSpace()->getTrans();
-        // auto regdata = trans->getRegister("RAX");
-        // trans->getRegisterName(vn->getSpace(), vn->getOffset(), vn->getSize());
 
         emitExpression(instr);
     }
@@ -893,22 +892,50 @@ void ASTBuilder::opIntZext(const PcodeOp *op,const PcodeOp *readOp)
 
 void ASTBuilder::opIntSext(const PcodeOp *op,const PcodeOp *readOp)
 {
-    unimplementedOp("opIntSext");
+    Datatype* outType = op->getOut()->getHigh()->getType();
+    Datatype* inType = op->getIn(0)->getHigh()->getType();
+    if (castStrategy->isSextCast(outType, inType)) {
+        /** QUESTION: does option_hide_exts even make sense here? */
+        if (option_hide_exts && castStrategy->isExtensionCastImplied(op, readOp)) {
+            // opHiddenFunc
+            unimplementedCode("opHiddenFunc case in opIntSext");
+        }
+        else {
+            // opTypeCast
+            Datatype* dt = op->getOut()->getHigh()->getType();
+            CStyleCastExpr* cast = new CStyleCastExpr(dt);
+            currentASTNode()->addChild(cast);
+
+            PendingExpr* expr = new PendingExpr();
+            expr->ast_op = cast;
+            PendingNode* node = buildNodeImplied(op->getIn(0), op);
+            expr->parts.push_back(node);
+            _pending_expressions.push_back(expr);
+        }
+    }
+    else {
+        // opFunc()
+        unimplementedCode("opFunc case in opIntSext");
+    }
 }
 
-void ASTBuilder::opIntAdd(const PcodeOp *op)
+void ASTBuilder::binaryOperator(string opcode, const PcodeOp* op)
 {
-    BinaryOperator* addition = new BinaryOperator("+");
-    currentASTNode()->addChild(addition);
+    BinaryOperator* operation = new BinaryOperator(opcode);
+    currentASTNode()->addChild(operation);
 
     PendingExpr* expr = new PendingExpr();
-    expr->ast_op = addition;
+    expr->ast_op = operation;
     PendingNode* lhs = buildNodeImplied(op->getIn(0), op);
     PendingNode* rhs = buildNodeImplied(op->getIn(1), op);
     expr->parts.push_back(lhs);
     expr->parts.push_back(rhs);
     _pending_expressions.push_back(expr);
-    // unimplementedOp("opIntAdd");
+}
+
+void ASTBuilder::opIntAdd(const PcodeOp *op)
+{
+    binaryOperator("+", op);
 }
 
 void ASTBuilder::opIntSub(const PcodeOp *op)
@@ -973,7 +1000,7 @@ void ASTBuilder::opIntSright(const PcodeOp *op)
 
 void ASTBuilder::opIntMult(const PcodeOp *op)
 {
-    unimplementedOp("opIntMult");
+    binaryOperator("*", op);
 }
 
 void ASTBuilder::opIntDiv(const PcodeOp *op)

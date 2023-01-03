@@ -74,6 +74,18 @@ protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
 };
 
+class CStyleCastExpr : public ASTNode
+{
+public:
+    CStyleCastExpr(Datatype* dt);
+
+    inline Datatype* dt() { return _dt; }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+    Datatype* _dt;
+};
+
 /**
  * @brief A reference to a declared variable, function, enum, etc.
  */

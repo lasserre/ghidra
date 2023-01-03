@@ -61,6 +61,16 @@ void* CompoundStmt::doAccept(ASTVisitor* v, void* context)
     return v->visitCompoundStmt(this, context);
 }
 
+CStyleCastExpr::CStyleCastExpr(Datatype* dt)
+    : _dt(dt)
+{
+}
+
+void* CStyleCastExpr::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitCStyleCastExpr(this, context);
+}
+
 DeclRefExpr::DeclRefExpr(ValueDecl* referencedDecl)
     : _ref(referencedDecl)
 {

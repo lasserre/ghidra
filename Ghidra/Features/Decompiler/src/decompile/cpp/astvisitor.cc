@@ -12,6 +12,11 @@ void* ASTVisitor::visitCompoundStmt(CompoundStmt*, void*)
     return nullptr;
 }
 
+void* ASTVisitor::visitCStyleCastExpr(CStyleCastExpr*, void*)
+{
+    return nullptr;
+}
+
 void* ASTVisitor::visitDeclRefExpr(DeclRefExpr*, void*)
 {
     return nullptr;

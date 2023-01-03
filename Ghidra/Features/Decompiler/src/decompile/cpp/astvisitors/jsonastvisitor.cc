@@ -57,6 +57,14 @@ void* JsonASTVisitor::visitCompoundStmt(CompoundStmt*, void* context)
     return copy_to_parent(cmp_stmt, context);
 }
 
+void* JsonASTVisitor::visitCStyleCastExpr(CStyleCastExpr* cast_expr, void* context)
+{
+    json cast;
+    cast["kind"] = "CStyleCastExpr";
+    cast["dtype"] = datatype_to_json(cast_expr->dt());
+    return copy_to_parent(cast, context);
+}
+
 void* JsonASTVisitor::visitDeclRefExpr(DeclRefExpr* dr, void* context)
 {
     json decl_ref;

@@ -50,6 +50,9 @@ public:
 
     virtual void emitExpression(const PcodeOp *op);
 
+    // analogous to opBinary, just wanted a different name
+    void binaryOperator(string opcode, const PcodeOp* op);
+
     virtual void opCopy(const PcodeOp *op);
     virtual void opLoad(const PcodeOp *op);
     virtual void opStore(const PcodeOp *op);

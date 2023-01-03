@@ -478,8 +478,10 @@ void ASTBuilder::processPendingSymbol(PendingNode* node)
 void ASTBuilder::processExpressionStack()
 {
     while (!_pending_expressions.empty()) {
-        PendingExpr* expr = _pending_expressions.back();
-        _pending_expressions.pop_back();
+        // need to go FIFO/front-to-back to preserve order of
+        // child nodes (e.g. LHS is processed/added before RHS)
+        PendingExpr* expr = _pending_expressions.front();
+        _pending_expressions.pop_front();
 
         pushASTNode(expr->ast_op);
 
@@ -538,18 +540,18 @@ PendingNode* ASTBuilder::buildNodeImplied(const Varnode* vn, const PcodeOp* op)
     return node;
 }
 
-PendingNode* ASTBuilder::buildNodeLHS(const Varnode* vn, const PcodeOp* op)
+PendingNode* ASTBuilder::buildNodeLHS(const Varnode* vnode, const PcodeOp* op)
 {
     PendingNode* lhs = nullptr;
 
-    HighVariable* hv = vn->getHigh();
+    HighVariable* hv = vnode->getHigh();
     Symbol* sym = hv->getSymbol();
     if (sym) {
         lhs = new PendingNode();
         lhs->node_type = ePendingNodeType::node_symbol;
         lhs->high = hv;
         lhs->sym = sym;
-        lhs->vnode = vn;
+        lhs->vnode = vnode;
         lhs->op = op;
     }
     else {
@@ -562,8 +564,39 @@ PendingNode* ASTBuilder::buildNodeLHS(const Varnode* vn, const PcodeOp* op)
 
 void ASTBuilder::emitExpression(const PcodeOp *op)
 {
+    BinaryOperator* assignment = nullptr;
+    const Varnode* outvn = op->getOut();
+
+    if (outvn) {
+        assignment = new BinaryOperator("=");
+        currentASTNode()->addChild(assignment);     // links to AST
+
+        PendingNode* lhs = buildNodeLHS(outvn, op);
+
+        // have to process this now/first before RHS or order can be wrong
+        pushASTNode(assignment);
+        processPendingNode(lhs);
+        popASTNode();
+
+        if (lhs)
+            delete lhs;
+    }
+    else if ((op->doesSpecialPrinting())) {
+        // looks like this is for constructors?
+        unimplementedCode("op->doesSpecialPrinting() in emitExpression");
+    }
+
+    // push assignment so RHS expressions are children of BinaryOperator =
+    if (assignment)
+        pushASTNode(assignment);
+
+    // process the opcode to initiate RHS expression
     op->getOpcode()->push(this, op, nullptr);
-    processExpressionStack();
+
+    if (assignment)
+        popASTNode();   // restore initial AST context
+
+    processExpressionStack();   // fill out RHS expression tree
 }
 
 /**
@@ -725,6 +758,7 @@ void ASTBuilder::emitBlockIf(const BlockIf *bl)
 
     if (bl->getGotoTarget() != nullptr) {
         /** TODO: emit goto statement */
+        unimplementedCode("goto statement in BlockIf");
     }
     else {
         auto trueBlk = bl->getBlock(1);
@@ -764,41 +798,12 @@ void ASTBuilder::emitBlockSwitch(const BlockSwitch *bl)
 
 void ASTBuilder::opCopy(const PcodeOp *op)
 {
-    /**
-     * BinaryOperator
-     * ----
-     * > first child => first operand, second child => second operand
-     * > for assignment, first child => LHS, second child => RHS
-     */
-    BinaryOperator* assignment = new BinaryOperator("=");
-    currentASTNode()->addChild(assignment);     // links to AST
-
-    const Varnode* outvn = op->getOut();
-
-    if (outvn) {
-        PendingExpr* expr = new PendingExpr();
-        expr->ast_op = assignment;
-        PendingNode* rhs_node = buildNodeImplied(op->getIn(0), op);
-        PendingNode* lhs_node = buildNodeLHS(outvn, op);
-        expr->parts.push_back(lhs_node);
-        expr->parts.push_back(rhs_node);
-        _pending_expressions.push_back(expr);
-    }
-    else {
-        unimplementedCode("No outvn for opCopy");
-        //     else if (op->doesSpecialPrinting()) {
-        //         /** TODO: what changes here? */
-        //         unimplementedCode("emitExpression: doesSpecialPrinting");
-        //     }
-    }
-
-    // OLD VERSION
-    // PendingExpr* expr = _pending_expressions.back();
-    // expr->parts.push_back(buildNodeImplied(op->getIn(0), op));
-
-    // if (expr->ast_op == nullptr) {
-    //     throw new std::exception("opCopy: handle NULL ast_op");
-    // }
+    // LHS has already been processed, create our own expression
+    // for RHS (assignment is currentASTNode)
+    PendingExpr* expr = new PendingExpr();
+    expr->ast_op = currentASTNode();
+    expr->parts.push_back(buildNodeImplied(op->getIn(0), op));
+    _pending_expressions.push_back(expr);
 }
 
 void ASTBuilder::opLoad(const PcodeOp *op)

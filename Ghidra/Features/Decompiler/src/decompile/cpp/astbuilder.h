@@ -1,5 +1,6 @@
 #pragma once
 
+#include <deque>
 #include <vector>
 
 #include "printc.hh"
@@ -192,7 +193,7 @@ protected:
      */
     void processExpressionStack();
 
-    vector<PendingExpr*> _pending_expressions;
+    deque<PendingExpr*> _pending_expressions;
 
     /**
      * The AST node stack provides our current context within the AST as we

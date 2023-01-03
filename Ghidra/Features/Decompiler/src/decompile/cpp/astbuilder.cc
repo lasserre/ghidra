@@ -73,6 +73,7 @@ public:
     const Varnode* vnode;     /** JUST DON'T NAME THIS "vn" ...wow... */
     const PcodeOp* op;
     Symbol* sym;
+    HighVariable* high;
 };
 
 PendingNode::PendingNode()
@@ -81,6 +82,7 @@ PendingNode::PendingNode()
     vnode = nullptr;
     op = nullptr;
     sym = nullptr;
+    high = nullptr;
 }
 
 struct PendingExpr
@@ -328,20 +330,7 @@ void ASTBuilder::processPendingTemporary(PendingNode* node)
 {
     if (node->vnode->isImplied()) {
         const PcodeOp* defOp = node->vnode->getDef();
-
-        /** TODO: create new PendingExpression */
-        PendingExpr* expr = new PendingExpr();
-
-        /** NOTE: the opXYZ() functions will create the ASTNode
-         * for the operator (since they are the ones who know what
-         * the operation is of course)
-         *
-         * The question is, is the top-level assignment operator
-         * the outlier? Or should I figure out how to "push that down"
-         * to an opXYZ() function that can create it?
-        */
-        expr->ast_op = nullptr;     // do this here or not?
-        _pending_expressions.push_back(expr);
+        // the push() call will add a new PendingExpression to the stack
         defOp->getOpcode()->push(this, defOp, node->op);
     }
     else {
@@ -410,29 +399,49 @@ void ASTBuilder::processPendingConstant(PendingNode* node)
 
 void ASTBuilder::processPendingTerminal(PendingNode* node)
 {
-    /**
-     * QUESTION: can we combine this with processPendingSymbol()?
-     * i.e. can this call processPendingSymbol?
-    */
-
     if (node->vnode->isAnnotation()) {
         unimplementedCode("handle Annotations");
         return;
     }
-
-    HighVariable* high = node->vnode->getHigh();
 
     if (node->vnode->isConstant()) {
         processPendingConstant(node);
         return;
     }
 
-    /** TODO: pick up here - debug and see if latest code works */
-    unimplementedCode("finish processPendingTerminal");
+    if (node->sym) {
+        processPendingSymbol(node);
+    }
+    else {
+        // pushUnnamedLocation
+        unimplementedCode("processPendingTerminal: unnamed location");
+    }
 }
 
 void ASTBuilder::processPendingSymbol(PendingNode* node)
 {
+    /**
+     * CLS: this logic corresponds to pushVnExplicit()/pushVnLHS()
+     * - when I get to structs/arrays/unnamed locations then need to debug
+     * and make sure I handle appropriately
+     */
+    auto sym_offset = node->high->getSymbolOffset();
+    if (sym_offset == -1) {
+        // perfect match - all good, process below
+        // I've just kept this to preserve structure similar to
+        // Ghidra code
+    }
+    else if (sym_offset + node->vnode->getSize() <= node->sym->getType()->getSize()) {
+        // partial: STRUCT FIELDS/ARRAYS!
+        unimplementedCode("buildNodeLHS: STRUCT FIELD/ARRAY");
+        return;
+    }
+    else {
+        // mismatch
+        unimplementedCode("buildNodeLHS: mismatch symbol");
+        return;
+    }
+
     ValueDecl* sym_decl = nullptr;
 
     if (_locals.count(node->sym)) {
@@ -523,7 +532,8 @@ PendingNode* ASTBuilder::buildNodeImplied(const Varnode* vn, const PcodeOp* op)
     node->node_type = ePendingNodeType::node_temporary;
     node->op = op;
     node->vnode = vn;
-    node->sym = nullptr;
+    node->high = vn->getHigh();
+    node->sym = node->high ? node->high->getSymbol() : nullptr;
 
     return node;
 }
@@ -535,23 +545,12 @@ PendingNode* ASTBuilder::buildNodeLHS(const Varnode* vn, const PcodeOp* op)
     HighVariable* hv = vn->getHigh();
     Symbol* sym = hv->getSymbol();
     if (sym) {
-        auto sym_offset = hv->getSymbolOffset();
-        if (sym_offset == -1) {
-            // perfect match
-            lhs = new PendingNode();
-            lhs->node_type = ePendingNodeType::node_symbol;
-            lhs->sym = sym;
-            lhs->vnode = vn;
-            lhs->op = op;
-        }
-        else if (sym_offset + vn->getSize() <= sym->getType()->getSize()) {
-            // partial: STRUCT FIELDS/ARRAYS!
-            unimplementedCode("buildNodeLHS: STRUCT FIELD/ARRAY");
-        }
-        else {
-            // mismatch
-            unimplementedCode("buildNodeLHS: mismatch symbol");
-        }
+        lhs = new PendingNode();
+        lhs->node_type = ePendingNodeType::node_symbol;
+        lhs->high = hv;
+        lhs->sym = sym;
+        lhs->vnode = vn;
+        lhs->op = op;
     }
     else {
         // pushUnnamedLocation
@@ -647,6 +646,12 @@ void ASTBuilder::emitExpression(const PcodeOp *op)
 //     processExpressionStack();
 // }
 
+static string getRegName(const Varnode* vn)
+{
+    auto trans = vn->getSpace()->getTrans();
+    return trans->getRegisterName(vn->getSpace(), vn->getOffset(), vn->getSize());
+}
+
 void ASTBuilder::emitBlockBasic(const BlockBasic *bb)
 {
     /** TODO: emit this! */
@@ -662,8 +667,14 @@ void ASTBuilder::emitBlockBasic(const BlockBasic *bb)
         const Varnode* vn = instr->getOut();
         if (vn && vn->isImplied()) {
             // skip Pcode instruction with implied result
+            string regname = getRegName(vn);
             continue;
         }
+
+        // CLS: test
+        // const Translate* trans = vn->getSpace()->getTrans();
+        // auto regdata = trans->getRegister("RAX");
+        // trans->getRegisterName(vn->getSpace(), vn->getOffset(), vn->getSize());
 
         emitExpression(instr);
     }
@@ -882,7 +893,17 @@ void ASTBuilder::opIntSext(const PcodeOp *op,const PcodeOp *readOp)
 
 void ASTBuilder::opIntAdd(const PcodeOp *op)
 {
-    unimplementedOp("opIntAdd");
+    BinaryOperator* addition = new BinaryOperator("+");
+    currentASTNode()->addChild(addition);
+
+    PendingExpr* expr = new PendingExpr();
+    expr->ast_op = addition;
+    PendingNode* lhs = buildNodeImplied(op->getIn(0), op);
+    PendingNode* rhs = buildNodeImplied(op->getIn(1), op);
+    expr->parts.push_back(lhs);
+    expr->parts.push_back(rhs);
+    _pending_expressions.push_back(expr);
+    // unimplementedOp("opIntAdd");
 }
 
 void ASTBuilder::opIntSub(const PcodeOp *op)

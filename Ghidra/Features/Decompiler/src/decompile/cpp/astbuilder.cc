@@ -602,86 +602,6 @@ void ASTBuilder::emitExpression(const PcodeOp *op)
     processExpressionStack();   // fill out RHS expression tree
 }
 
-/**
- * OLD VERSION
- * -----------
- * This was patterned after the Ghidra PrintC implementation...
- * ...but after going through, based on what I think I understand
- * there is a much simpler/better way of doing this. So I'm preserving it
- * for now, but trying my other idea...
- */
-// void ASTBuilder::emitExpression(const PcodeOp *op)
-// {
-//     /**
-//      * TODO: now this needs to just "set up" the expression
-//      * stack, sit back, and let it run...
-//     */
-
-//     PendingExpr* expr = nullptr;
-
-//     const Varnode* outvn = op->getOut();
-//     if (outvn) {
-//         /*
-//             TODO: handle inplace ops (x += 3) if
-//             PrintC::option_inplace_ops is set
-//          */
-
-//         BinaryOperator* assignment = new BinaryOperator("=");
-//         currentASTNode()->addChild(assignment);     // links to AST
-
-//         /**
-//          * BinaryOperator
-//          * ----
-//          * > first child => first operand, second child => second operand
-//          * > for assignment, first child => LHS, second child => RHS
-//          */
-//         expr = new PendingExpr();
-//         expr->ast_op = assignment;
-//         expr->parts.push_back(buildNodeLHS(outvn, op));
-
-//     }
-//     else if (op->doesSpecialPrinting()) {
-//         /** TODO: what changes here? */
-//         unimplementedCode("emitExpression: doesSpecialPrinting");
-//     }
-
-//     if (!expr) {
-//         // create a "blank" expression for the top of the expression stack, so
-//         // the getOpcode->push() call (which calls our opXXX() method) can simply
-//         // access the top of the expression stack (and for this case it will
-//         // init expr->ast_op appropriately)
-//         expr = new PendingExpr();
-//     }
-
-//     _pending_expressions.push_back(expr);
-
-//     /**
-//      * THOUGHT: I think what we need to do here is push expr to the stack
-//      * regardless...either the initial LHS version, or a new PendingExpr()
-//      * with nothing filled in.
-//      *
-//      * Then when push() calls opXyz(), that ASTBuilder member function can
-//      * access the expression on top of the stack and ADD itself to the
-//      * expression's parts list.
-//      *      a) For LHS expr case: the LHS already exists, we now push the RHS
-//      *      b) For "unary" case: no parts exist, we push the single PendingNode
-//      */
-
-//     /** PICK UP HERE:
-//      * - debug this, follow the logic (and finish implementing)
-//      * - look at Ghidra window w/ both decompiled C and PCode visible
-//      *   so you can see which ops are implied, explicit, LHS, etc...
-//     */
-
-//     // to look at Pcode instructions:
-//     // op->getOpcode()->opcode
-//     // op->getAddr().getOffset(),x
-
-//     op->getOpcode()->push(this, op, nullptr);
-
-//     processExpressionStack();
-// }
-
 static string getRegName(const Varnode* vn)
 {
     // auto regdata = trans->getRegister("RAX");
@@ -691,24 +611,42 @@ static string getRegName(const Varnode* vn)
 
 void ASTBuilder::emitBlockBasic(const BlockBasic *bb)
 {
-    /** TODO: emit this! */
-    // CLS: I know this actually gets called 2x, one with no_branch
-    // and again with only_branch...but can I simply emit ALL of the
-    // basic block in one go? (just do all the ops in order!)
-        // - maybe this is problematic "structurally" with the last
-        //   op being the if conditional block?
-        // - but maybe I can make it work?
+    if (isSet(only_branch)) {
+        const PcodeOp* instr = bb->lastOp();
+        if (instr->isBranch()) {
+            emitExpression(instr);
+        }
+    }
+    else {
+        for (PcodeOp* instr : getPcodeOps(bb)) {
 
-    for (PcodeOp* instr : getPcodeOps(bb)) {
-        // int offset = instr->getAddr().getOffset();
-        const Varnode* vn = instr->getOut();
-        if (vn && vn->isImplied()) {
-            // skip Pcode instruction with implied result
-            string regname = getRegName(vn);
-            continue;
+            if (instr->notPrinted()) {
+                continue;
+            }
+            if (instr->isBranch()) {
+                if (isSet(no_branch)) {
+                    continue;
+                }
+                if (instr->code() == CPUI_BRANCH) {
+                    // apparently, a straight branch should be processed
+                    // by the block classes
+                    continue;
+                }
+            }
+
+            const Varnode* vnode = instr->getOut();
+            if (vnode && vnode->isImplied()) {
+                // skip Pcode instruction with implied result
+                string regname = getRegName(vnode);
+                continue;
+            }
+
+            emitExpression(instr);
         }
 
-        emitExpression(instr);
+        // CLS: note we don't need to worry about if flat is set, since that
+        // is an option to not print structured code, just using gotos and
+        // labels for everything (not applicable for our AST)
     }
 }
 
@@ -724,69 +662,135 @@ void ASTBuilder::emitBlockGraph(const BlockGraph *bl)
 
 void ASTBuilder::emitBlockCopy(const BlockCopy *bl)
 {
-    // here
     FlowBlock* sub = bl->subBlock(0);
     sub->emit(this);
 }
 
 void ASTBuilder::emitBlockGoto(const BlockGoto *bl)
 {
-
+    unimplementedCode("emitBlockGoto");
 }
 
 void ASTBuilder::emitBlockLs(const BlockList *bl)
 {
-    for (int i = 0; i < bl->getSize(); i++) {
-        /** NOTE: maybe these need to be sibling entries in the json? */
+    /**
+     * NOTE: nofallthru appears to only be used for the flat layout case,
+     * which we don't care about here in the AST
+     */
+
+    // not fully sure what case BlockList with only_branch
+    // handles, but following the pattern for now...
+    if (isSet(only_branch)) {
+        FlowBlock* subbl = bl->getBlock(bl->getSize()-1);
+        subbl->emit(this);
+        return;
+    }
+
+    // I think the special handling other than the first only_branch check
+    // is all about flat layout...
+    // => so for us, if it's not only_branch just emit them all
+
+    // not sure if it matters, but no_branch mod is only used for all but
+    // the final block
+    if (bl->getSize() == 1) {
+        bl->getBlock(0)->emit(this);
+        return;
+    }
+
+    pushMod();
+    setMod(no_branch);
+    for (int i = 0; i < bl->getSize()-1; i++) {
         bl->getBlock(i)->emit(this);
     }
+    popMod();
+
+    // final block: use original state of no_branch flag
+    bl->getBlock(bl->getSize()-1)->emit(this);
 }
 
 void ASTBuilder::emitBlockCondition(const BlockCondition *bl)
 {
-
+    unimplementedCode("emitBlockCondition");
 }
 
 void ASTBuilder::emitBlockIf(const BlockIf *bl)
 {
     FlowBlock* condBlock = bl->getBlock(0);
-    // setMod(no_branch);
+
+    pushMod();
+    // clear relevant flags ahead of processing
+    unsetMod(no_branch|only_branch|pending_brace);
+
+    // --- 1x through:
+    // emit any "straightline" instructions preceding the branch
+    pushMod();
+    setMod(no_branch);
     condBlock->emit(this);
-    // setMod(only_branch);
-    // condBlock->emit(this);
+    popMod();
+
+    IfStmt* if_stmt = new IfStmt();
+    currentASTNode()->addChild(if_stmt);
+    pushASTNode(if_stmt);
+
+    // --- 2x through:
+    // emit only the branch (if statement)
+    pushMod();
+    setMod(only_branch);
+    condBlock->emit(this);
+    popMod();
 
     if (bl->getGotoTarget() != nullptr) {
         /** TODO: emit goto statement */
         unimplementedCode("goto statement in BlockIf");
     }
     else {
-        auto trueBlk = bl->getBlock(1);
+        // don't emit the branches at end of if/else blocks (these are
+        // implicit at AST level from structure)
+        setMod(no_branch);
+
+        // THEN BLOCK
+        CompoundStmt* then_block_ast = new CompoundStmt();
+        if_stmt->addChild(then_block_ast);
+
+        pushASTNode(then_block_ast);
+        FlowBlock* trueBlk = bl->getBlock(1);
         trueBlk->emit(this);
+        popASTNode();   // then block
+
+        // ELSE BLOCK
         if (bl->getSize() > 2) {
-            auto elseBlk = bl->getBlock(2);
+            CompoundStmt* else_block_ast = new CompoundStmt();
+            if_stmt->addChild(else_block_ast);
+
+            pushASTNode(else_block_ast);
+            FlowBlock* elseBlk = bl->getBlock(2);
             elseBlk->emit(this);
+            popASTNode();   // else block
         }
     }
+
+    popASTNode();   // pop IfStmt
+    popMod();
 }
 
 void ASTBuilder::emitBlockWhileDo(const BlockWhileDo *bl)
 {
-
+    unimplementedCode("emitBlockWhileDo");
 }
 
 void ASTBuilder::emitBlockDoWhile(const BlockDoWhile *bl)
 {
-
+    unimplementedCode("emitBlockDoWhile");
 }
 
 void ASTBuilder::emitBlockInfLoop(const BlockInfLoop *bl)
 {
-
+    unimplementedCode("emitBlockInfLoop");
 }
 
 void ASTBuilder::emitBlockSwitch(const BlockSwitch *bl)
 {
-
+    unimplementedCode("emitBlockSwitch");
 }
 
 /**
@@ -822,7 +826,37 @@ void ASTBuilder::opBranch(const PcodeOp *op)
 
 void ASTBuilder::opCbranch(const PcodeOp *op)
 {
-    unimplementedOp("opCbranch");
+    // flipped => we take branch if condition is NOT true
+    bool booleanflip = op->isBooleanFlip();
+    bool do_negate_token = false;
+
+    // do some magic checking for how to handle negation case
+    if (booleanflip) {
+        if (checkPrintNegation(op->getIn(1))) {
+            do_negate_token = true;
+            booleanflip = false;
+        }
+    }
+
+    if (booleanflip) {
+        /** TODO: prepend/insert boolean NOT operator (!) */
+    }
+
+    /**
+     * TODO: if do_negate_token is set, do that negation here
+     * somehow...
+    */
+    PendingNode* node = buildNodeImplied(op->getIn(1), op);
+    /** CLS: where do I need to push this node?
+     * - create new expression? I think so...then as it gets processed
+     * the sub-expression parts get added onto the AST
+     */
+
+    /** TODO: pick up here... */
+    // instead of calling processExpressionStack() here, I think we are
+    // being called by emitExpression() so it will happen automatically
+    // before we move on with if block?
+    /** CLS: verify this */
 }
 
 void ASTBuilder::opBranchind(const PcodeOp *op)

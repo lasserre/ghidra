@@ -144,6 +144,21 @@ protected:
     Funcdata* _fd;
 };
 
+/**
+ * IfStmt children are:
+ * - Conditional
+ * - Then block
+ * - Else block (if present)
+ */
+class IfStmt : public ASTNode
+{
+public:
+    IfStmt();
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+};
+
 class IntegerLiteral : public ASTNode
 {
 public:

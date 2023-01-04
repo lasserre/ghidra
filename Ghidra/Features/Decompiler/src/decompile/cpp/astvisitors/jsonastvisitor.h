@@ -24,8 +24,9 @@ public:
     virtual void* visitCStyleCastExpr(CStyleCastExpr*, void*);
     virtual void* visitDeclRefExpr(DeclRefExpr*, void*);
     virtual void* visitDeclStmt(DeclStmt*, void*);
-    virtual void* visitIntegerLiteral(IntegerLiteral*, void*);
     virtual void* visitFunctionDecl(FunctionDecl*, void*);
+    virtual void* visitIfStmt(IfStmt*, void*);
+    virtual void* visitIntegerLiteral(IntegerLiteral*, void*);
     virtual void* visitLogMsg(LogMsg*, void*);
     virtual void* visitParmVarDecl(ParmVarDecl*, void*);
     virtual void* visitTranslationUnitDecl(TranslationUnitDecl*, void*);

@@ -100,6 +100,15 @@ void* FunctionDecl::doAccept(ASTVisitor* v, void* context)
     return v->visitFunctionDecl(this, context);
 }
 
+IfStmt::IfStmt()
+{
+}
+
+void* IfStmt::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitIfStmt(this, context);
+}
+
 IntegerLiteral::IntegerLiteral(Datatype* dt, uintb value)
     : _dt(dt), _value(value)
 {

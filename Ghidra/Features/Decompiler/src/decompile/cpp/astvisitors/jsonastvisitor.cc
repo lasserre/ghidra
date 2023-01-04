@@ -81,15 +81,6 @@ void* JsonASTVisitor::visitDeclStmt(DeclStmt*, void* context)
     return copy_to_parent(declstmt, context);
 }
 
-void* JsonASTVisitor::visitIntegerLiteral(IntegerLiteral* lit, void* context)
-{
-    json int_lit;
-    int_lit["kind"] = "IntegerLiteral";
-    int_lit["value"] = lit->value();
-    int_lit["dtype"] = datatype_to_json(lit->dt());
-    return copy_to_parent(int_lit, context);
-}
-
 void* JsonASTVisitor::visitFunctionDecl(FunctionDecl* fd, void* context)
 {
     // basic function node info
@@ -100,6 +91,22 @@ void* JsonASTVisitor::visitFunctionDecl(FunctionDecl* fd, void* context)
     fdecl["address"] = to_hex(fd->address());
     fdecl["return_dtype"] = datatype_to_json(fd->return_dtype());
     return copy_to_parent(fdecl, context);
+}
+
+void* JsonASTVisitor::visitIntegerLiteral(IntegerLiteral* lit, void* context)
+{
+    json int_lit;
+    int_lit["kind"] = "IntegerLiteral";
+    int_lit["value"] = lit->value();
+    int_lit["dtype"] = datatype_to_json(lit->dt());
+    return copy_to_parent(int_lit, context);
+}
+
+void* JsonASTVisitor::visitIfStmt(IfStmt* stmt, void* context)
+{
+    json ifstmt;
+    ifstmt["kind"] = "IfStmt";
+    return copy_to_parent(ifstmt, context);
 }
 
 void* JsonASTVisitor::visitLogMsg(LogMsg* logmsg, void* context)

@@ -27,12 +27,17 @@ void* ASTVisitor::visitDeclStmt(DeclStmt*, void*)
     return nullptr;
 }
 
-void* ASTVisitor::visitIntegerLiteral(IntegerLiteral*, void*)
+void* ASTVisitor::visitFunctionDecl(FunctionDecl*, void*)
 {
     return nullptr;
 }
 
-void* ASTVisitor::visitFunctionDecl(FunctionDecl*, void*)
+void* ASTVisitor::visitIfStmt(IfStmt*, void*)
+{
+    return nullptr;
+}
+
+void* ASTVisitor::visitIntegerLiteral(IntegerLiteral*, void*)
 {
     return nullptr;
 }

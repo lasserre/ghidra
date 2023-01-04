@@ -77,6 +77,7 @@ public:
     const PcodeOp* op;
     Symbol* sym;
     HighVariable* high;
+    uint4 mods;     // save current mod flags like PrintLanguage::recurse()
 };
 
 PendingNode::PendingNode()
@@ -86,6 +87,7 @@ PendingNode::PendingNode()
     op = nullptr;
     sym = nullptr;
     high = nullptr;
+    mods = 0;
 }
 
 struct PendingExpr
@@ -313,6 +315,10 @@ void ASTBuilder::processPendingNode(PendingNode* node)
      * types, I may get rid of node_type completely and just handle all the
      * various cases here based on if sym != nullptr, etc.
      */
+
+    uint4 modsave = mods;
+    mods = node->mods;
+
     switch (node->node_type) {
         case ePendingNodeType::node_symbol:
             processPendingSymbol(node);
@@ -327,6 +333,8 @@ void ASTBuilder::processPendingNode(PendingNode* node)
             unimplementedCode("processPendingNode: UNHANDLED node_type");
             break;
     }
+
+    mods = modsave;
 }
 
 void ASTBuilder::processPendingTemporary(PendingNode* node)
@@ -436,12 +444,12 @@ void ASTBuilder::processPendingSymbol(PendingNode* node)
     }
     else if (sym_offset + node->vnode->getSize() <= node->sym->getType()->getSize()) {
         // partial: STRUCT FIELDS/ARRAYS!
-        unimplementedCode("buildNodeLHS: STRUCT FIELD/ARRAY");
+        unimplementedCode("processPendingSymbol: STRUCT FIELD/ARRAY");
         return;
     }
     else {
         // mismatch
-        unimplementedCode("buildNodeLHS: mismatch symbol");
+        unimplementedCode("processPendingSymbol: mismatch symbol");
         return;
     }
 
@@ -530,7 +538,7 @@ void ASTBuilder::processExpressionStack()
  *      - call getOpcode()->push() for nested expressions
  */
 
-PendingNode* ASTBuilder::buildNodeImplied(const Varnode* vn, const PcodeOp* op)
+PendingNode* ASTBuilder::buildNodeImplied(const Varnode* vn, const PcodeOp* op, uint4 modflags)
 {
     PendingNode* node = new PendingNode();
 
@@ -539,6 +547,7 @@ PendingNode* ASTBuilder::buildNodeImplied(const Varnode* vn, const PcodeOp* op)
     node->vnode = vn;
     node->high = vn->getHigh();
     node->sym = node->high ? node->high->getSymbol() : nullptr;
+    node->mods = modflags;
 
     return node;
 }
@@ -556,6 +565,7 @@ PendingNode* ASTBuilder::buildNodeLHS(const Varnode* vnode, const PcodeOp* op)
         lhs->sym = sym;
         lhs->vnode = vnode;
         lhs->op = op;
+        lhs->mods = mods;   // I don't think this matters here, but just in case
     }
     else {
         // pushUnnamedLocation
@@ -805,7 +815,7 @@ void ASTBuilder::opCopy(const PcodeOp *op)
     // for RHS (assignment is currentASTNode)
     PendingExpr* expr = new PendingExpr();
     expr->ast_op = currentASTNode();
-    expr->parts.push_back(buildNodeImplied(op->getIn(0), op));
+    expr->parts.push_back(buildNodeImplied(op->getIn(0), op, mods));
     _pending_expressions.push_back(expr);
 }
 
@@ -828,35 +838,25 @@ void ASTBuilder::opCbranch(const PcodeOp *op)
 {
     // flipped => we take branch if condition is NOT true
     bool booleanflip = op->isBooleanFlip();
-    bool do_negate_token = false;
+    uint4 m = mods;
 
     // do some magic checking for how to handle negation case
     if (booleanflip) {
         if (checkPrintNegation(op->getIn(1))) {
-            do_negate_token = true;
+            m |= PrintLanguage::negatetoken;
             booleanflip = false;
         }
     }
 
     if (booleanflip) {
         /** TODO: prepend/insert boolean NOT operator (!) */
+        unimplementedCode("insert boolean NOT operator (!) in opCbranch");
     }
 
-    /**
-     * TODO: if do_negate_token is set, do that negation here
-     * somehow...
-    */
-    PendingNode* node = buildNodeImplied(op->getIn(1), op);
-    /** CLS: where do I need to push this node?
-     * - create new expression? I think so...then as it gets processed
-     * the sub-expression parts get added onto the AST
-     */
-
-    /** TODO: pick up here... */
-    // instead of calling processExpressionStack() here, I think we are
-    // being called by emitExpression() so it will happen automatically
-    // before we move on with if block?
-    /** CLS: verify this */
+    PendingExpr* expr = new PendingExpr();
+    expr->ast_op = currentASTNode();    // should be the IfStmt node
+    expr->parts.push_back(buildNodeImplied(op->getIn(1), op, m));
+    _pending_expressions.push_back(expr);
 }
 
 void ASTBuilder::opBranchind(const PcodeOp *op)
@@ -891,6 +891,12 @@ void ASTBuilder::opReturn(const PcodeOp *op)
 
 void ASTBuilder::opIntEqual(const PcodeOp *op)
 {
+    /**
+     * TODO: first add a log file to log the unimplementedCode messages
+     * (for when I don't want to set breakpoints) and monitor that
+     * by just having it open in vscode
+    */
+    /** TODO: pick up here and implement opIntEqual... */
     unimplementedOp("opIntEqual");
 }
 
@@ -942,7 +948,7 @@ void ASTBuilder::opIntSext(const PcodeOp *op,const PcodeOp *readOp)
 
             PendingExpr* expr = new PendingExpr();
             expr->ast_op = cast;
-            PendingNode* node = buildNodeImplied(op->getIn(0), op);
+            PendingNode* node = buildNodeImplied(op->getIn(0), op, mods);
             expr->parts.push_back(node);
             _pending_expressions.push_back(expr);
         }
@@ -953,15 +959,27 @@ void ASTBuilder::opIntSext(const PcodeOp *op,const PcodeOp *readOp)
     }
 }
 
-void ASTBuilder::binaryOperator(string opcode, const PcodeOp* op)
+void ASTBuilder::binaryOperator(string opcode, const PcodeOp* op, string negateOpcode/*=""*/)
 {
-    BinaryOperator* operation = new BinaryOperator(opcode);
+    string opcode_used = opcode;
+
+    if (isSet(negatetoken)) {
+        // remember, this is only used for these 6:
+        // <, <=, >, >=, ==, !=
+        opcode_used = negateOpcode;
+        unsetMod(negatetoken);
+        if (negateOpcode == "") {
+            throw LowlevelError("No negateOpcode supplied! (corresponds to fliptoken)");
+        }
+    }
+
+    BinaryOperator* operation = new BinaryOperator(opcode_used);
     currentASTNode()->addChild(operation);
 
     PendingExpr* expr = new PendingExpr();
     expr->ast_op = operation;
-    PendingNode* lhs = buildNodeImplied(op->getIn(0), op);
-    PendingNode* rhs = buildNodeImplied(op->getIn(1), op);
+    PendingNode* lhs = buildNodeImplied(op->getIn(0), op, mods);
+    PendingNode* rhs = buildNodeImplied(op->getIn(1), op, mods);
     expr->parts.push_back(lhs);
     expr->parts.push_back(rhs);
     _pending_expressions.push_back(expr);

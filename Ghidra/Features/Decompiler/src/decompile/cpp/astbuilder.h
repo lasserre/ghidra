@@ -51,7 +51,7 @@ public:
     virtual void emitExpression(const PcodeOp *op);
 
     // analogous to opBinary, just wanted a different name
-    void binaryOperator(string opcode, const PcodeOp* op);
+    void binaryOperator(string opcode, const PcodeOp* op, string negateOpcode="");
 
     virtual void opCopy(const PcodeOp *op);
     virtual void opLoad(const PcodeOp *op);
@@ -162,12 +162,12 @@ protected:
     /**
      * @brief Build a PendingNode for this implied varnode
      */
-    PendingNode* buildNodeImplied(const Varnode* vn, const PcodeOp* op);
+    PendingNode* buildNodeImplied(const Varnode* vn, const PcodeOp* op, uint4 modflags);
 
     /**
      * @brief Build a PendingNode for this LHS varnode
      */
-    PendingNode* buildNodeLHS(const Varnode* vn, const PcodeOp* op);
+    PendingNode* buildNodeLHS(const Varnode* vnode, const PcodeOp* op);
 
     /**
      * @brief Processes a pending node from the parts of an expression

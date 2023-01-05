@@ -1,19 +1,22 @@
 #include "astbuilder.h"
 
+#include <string>
+
 #include "funcdata.hh"
 #include "varnode.hh"
 
 static int _count_unimpl_stuff = 0;
-void unimplementedCode(std::string description)
+void ASTBuilder::unimplementedCode(std::string description)
 {
     // again purely for debugging to avoid exceptions...
 
     // log this, set breakpoint or ignore
     _count_unimpl_stuff++;
+    _logfile << "[todo] " << description << "\n";
 }
 
 static int _num_unimpl_ops = 0;
-void unimplementedOp(std::string opname)
+void ASTBuilder::unimplementedOp(std::string opname)
 {
     // this is purely for debugging so I don't have to throw exceptions
     // and kill my debug session right now :)
@@ -23,7 +26,7 @@ void unimplementedOp(std::string opname)
     _num_unimpl_ops++;
 
     // so we can catch all with unimplementedCode() breakpoint
-    unimplementedCode(opname);
+    unimplementedCode("OP: " + opname);
 }
 
 /**
@@ -201,11 +204,15 @@ void ASTBuilder::buildLocalDeclsFromScope(const Scope& scope, CompoundStmt* fbod
 
 ASTNode* ASTBuilder::buildAST(Funcdata* fd)
 {
+    _logfile.open("C:/Users/knigh/dev/ast_unimplemented_code.txt", ios::out);
+
     if (!fd->isProcStarted()) {
         // not decompiled
         stringstream ss;
         ss << "Function at 0x" << to_hex(fd->getAddress().getOffset());
         ss << " not decompiled";
+        _logfile << ss.str();
+        _logfile.close();
         return new LogMsg(ss.str());
     }
     else if (fd->hasNoStructBlocks()) {
@@ -213,8 +220,12 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
         stringstream ss;
         ss << "Function at 0x" << to_hex(fd->getAddress().getOffset());
         ss << " not fully decompiled (no structure present)";
+        _logfile << ss.str();
+        _logfile.close();
         return new LogMsg(ss.str());
     }
+
+    _logfile << "Building AST for " << fd->getName() << "\n";
 
     // json fdecl;
 
@@ -279,6 +290,8 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
     pushASTNode(fbody);
     emitBlockGraph(&fd->getStructure());
     popASTNode();
+
+    _logfile.close();
 
     return _head_translation_unit;
 }
@@ -355,6 +368,19 @@ void createIntLiteral(ASTBuilder* builder, Datatype* dt, uintb value)
     builder->currentASTNode()->addChild(lit);
 }
 
+void ASTBuilder::createCharConstant(Datatype* dt, uintb value, const Varnode* vn)
+{
+    CharacterLiteral* chr = new CharacterLiteral(dt, value);
+    currentASTNode()->addChild(chr);
+    // CLS: is this sufficient? or do we need to go handle all the cases
+    // and print formats like Ghidra does?
+    // -> for now let's try this, I think it might be sufficient since the
+    //    Ghidra code is primarily display-oriented. If we need to we can
+    //    come back and add some logic back in if it e.g. changes data types
+    //    to int in some cases (also the EquateSymbol case)
+    //    If so, just reuse their functions and convert the stringstream
+}
+
 void ASTBuilder::processPendingConstant(PendingNode* node)
 {
     auto value = node->vnode->getOffset();
@@ -373,16 +399,13 @@ void ASTBuilder::processPendingConstant(PendingNode* node)
         case TYPE_UINT:
         case TYPE_INT:
             if (dt->isCharPrint()) {
-                // todo: char
-                unimplementedCode("char constant");
+                createCharConstant((TypeChar*)dt, value, node->vnode);
             }
             else if (dt->isEnumType()) {
-                // todo: enum
                 unimplementedCode("enum constant");
             }
             else {
-                // int/uint
-                createIntLiteral(this, dt, value);
+                createIntLiteral(this, dt, value);  // int/uint
             }
             break;
         case TYPE_UNKNOWN:
@@ -821,7 +844,22 @@ void ASTBuilder::opCopy(const PcodeOp *op)
 
 void ASTBuilder::opLoad(const PcodeOp *op)
 {
-    unimplementedOp("opLoad");
+    bool usearray = checkArrayDeref(op->getIn(1));
+    uint4 m = mods;
+    PendingExpr* expr = new PendingExpr();
+
+    if (usearray && (!isSet(force_pointer))) {
+        m |= print_load_value;
+        expr->ast_op = currentASTNode();
+    }
+    else {
+        UnaryOperator* deref = new UnaryOperator("*", op->getOut()->getType());
+        currentASTNode()->addChild(deref);
+        expr->ast_op = deref;
+    }
+
+    expr->parts.push_back(buildNodeImplied(op->getIn(1), op, m));
+    _pending_expressions.push_back(expr);
 }
 
 void ASTBuilder::opStore(const PcodeOp *op)
@@ -891,43 +929,160 @@ void ASTBuilder::opReturn(const PcodeOp *op)
 
 void ASTBuilder::opIntEqual(const PcodeOp *op)
 {
-    /**
-     * TODO: first add a log file to log the unimplementedCode messages
-     * (for when I don't want to set breakpoints) and monitor that
-     * by just having it open in vscode
-    */
-    /** TODO: pick up here and implement opIntEqual... */
-    unimplementedOp("opIntEqual");
+    binaryOperator("==", op, "!=");
 }
 
 void ASTBuilder::opIntNotEqual(const PcodeOp *op)
 {
-    unimplementedOp("opIntNotEqual");
+    binaryOperator("!=", op, "==");
 }
 
 void ASTBuilder::opIntSless(const PcodeOp *op)
 {
-    unimplementedOp("opIntSless");
+    binaryOperator("<", op, ">=");
 }
 
 void ASTBuilder::opIntSlessEqual(const PcodeOp *op)
 {
-    unimplementedOp("opIntSlessEqual");
+    binaryOperator("<=", op, ">");
 }
 
 void ASTBuilder::opIntLess(const PcodeOp *op)
 {
-    unimplementedOp("opIntLess");
+    binaryOperator("<", op, ">=");
 }
 
 void ASTBuilder::opIntLessEqual(const PcodeOp *op)
 {
-    unimplementedOp("opIntLessEqual");
+    binaryOperator("<=", op, ">");
 }
 
 void ASTBuilder::opIntZext(const PcodeOp *op,const PcodeOp *readOp)
 {
     unimplementedOp("opIntZext");
+}
+
+// corresponds to pushType()...just working out how we want to
+// process complex datatypes
+std::string ASTBuilder::getFullTypeString(const Datatype* dt)
+{
+    string type_str = getTypeStringStart(dt);
+    type_str += getTypeStringEnd(dt);
+    return type_str;
+}
+
+std::string ASTBuilder::getTypeStringStart(const Datatype* dt)
+{
+    vector<const Datatype*> typestack;
+    buildTypeStack(dt, typestack);
+
+    const Datatype* dtype = typestack.back();     // the base type
+
+    string type_str = "";
+
+    if (dtype->getName().size() == 0) {
+        // anonymous type
+        type_str += genericTypeName(dtype);
+    }
+    else {
+        type_str += dtype->getName();
+    }
+
+    for (int i = typestack.size()-2; i >= 0; i--) {
+        dtype = typestack[i];
+        if (dtype->getMetatype() == TYPE_PTR) {
+            type_str += "*";
+        }
+        else if (dtype->getMetatype() == TYPE_ARRAY) {
+            type_str += "[]";
+        }
+        else if (dtype->getMetatype() == TYPE_CODE) {
+            type_str += "()";
+        }
+        else {
+            _logfile << "Bad type expression (so far we had '" << type_str << "')\n";
+            return "BAD_TYPE_EXPR";
+        }
+    }
+
+    return type_str;
+}
+
+std::string ASTBuilder::getProtoInputString(const FuncProto* proto)
+{
+    string proto_string = "";
+    // proto inputs
+    int sz = proto->numParams();
+    if (sz == 0 && !proto->isDotdotdot()) {
+        proto_string  += "void";
+    }
+    else {
+        if (sz > 0) {
+            for (int i = 0; i < sz-1; i++) {
+                ProtoParameter* param = proto->getParam(i);
+                proto_string  += getFullTypeString(param->getType());
+                proto_string  += ",";
+            }
+            // last one, no comma
+            ProtoParameter* param = proto->getParam(sz-1);
+            proto_string  += getFullTypeString(param->getType());
+
+            if (proto->isDotdotdot()) {
+                proto_string  += "...";
+            }
+        }
+    }
+    // CLS: need to test this...
+    return "(" + proto_string + ")";
+}
+
+std::string ASTBuilder::getTypeStringEnd(const Datatype* dt)
+{
+    const Datatype* dtype = dt;
+    string type_str = "";
+
+    while (true) {
+        if (dtype->getName().size() != 0) {
+            break;  // base type
+        }
+        if (dtype->getMetatype() == TYPE_PTR) {
+            dtype = ((const TypePointer*)dtype)->getPtrTo();
+        }
+        else if (dtype->getMetatype() == TYPE_ARRAY) {
+            const TypeArray* dtarray = (const TypeArray*)dtype;
+            dtype = dtarray->getBase();     // array element dtype
+            type_str += std::to_string(dtarray->numElements());
+        }
+        else if (dtype->getMetatype() == TYPE_CODE) {
+            const TypeCode* dtcode = (const TypeCode*)dtype;
+            const FuncProto* proto = dtcode->getPrototype();
+            if (proto) {
+                type_str += getProtoInputString(proto);
+                dtype = proto->getOutputType();
+            }
+            else {
+                type_str += "()";   // empty list of params
+            }
+        }
+        else {
+            break;  // other anonymous type
+        }
+    }
+
+    return type_str;
+}
+
+void ASTBuilder::createTypeCast(const PcodeOp* op)
+{
+    Datatype* dt = op->getOut()->getHigh()->getType();
+    CStyleCastExpr* cast = new CStyleCastExpr(dt);
+    currentASTNode()->addChild(cast);
+
+    PendingExpr* expr = new PendingExpr();
+    expr->ast_op = cast;
+    PendingNode* node = buildNodeImplied(op->getIn(0), op, mods);
+    expr->parts.push_back(node);
+    _pending_expressions.push_back(expr);
 }
 
 void ASTBuilder::opIntSext(const PcodeOp *op,const PcodeOp *readOp)
@@ -941,16 +1096,7 @@ void ASTBuilder::opIntSext(const PcodeOp *op,const PcodeOp *readOp)
             unimplementedCode("opHiddenFunc case in opIntSext");
         }
         else {
-            // opTypeCast
-            Datatype* dt = op->getOut()->getHigh()->getType();
-            CStyleCastExpr* cast = new CStyleCastExpr(dt);
-            currentASTNode()->addChild(cast);
-
-            PendingExpr* expr = new PendingExpr();
-            expr->ast_op = cast;
-            PendingNode* node = buildNodeImplied(op->getIn(0), op, mods);
-            expr->parts.push_back(node);
-            _pending_expressions.push_back(expr);
+            createTypeCast(op);
         }
     }
     else {
@@ -1207,7 +1353,7 @@ void ASTBuilder::opSubpiece(const PcodeOp *op)
 
 void ASTBuilder::opCast(const PcodeOp *op)
 {
-    unimplementedOp("opCast");
+    createTypeCast(op);
 }
 
 void ASTBuilder::opPtradd(const PcodeOp *op)

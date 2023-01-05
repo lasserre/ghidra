@@ -17,6 +17,7 @@ class ASTVisitor
 {
 public:
     virtual void* visitBinaryOperator(BinaryOperator*, void*);
+    virtual void* visitCharacterLiteral(CharacterLiteral*, void*);
     virtual void* visitCompoundStmt(CompoundStmt*, void*);
     virtual void* visitCStyleCastExpr(CStyleCastExpr*, void*);
     virtual void* visitDeclRefExpr(DeclRefExpr*, void*);
@@ -27,6 +28,7 @@ public:
     virtual void* visitLogMsg(LogMsg*, void*);
     virtual void* visitParmVarDecl(ParmVarDecl*, void*);
     virtual void* visitTranslationUnitDecl(TranslationUnitDecl*, void*);
+    virtual void* visitUnaryOperator(UnaryOperator*, void*);
     virtual void* visitValueDecl(ValueDecl*, void*);
     virtual void* visitVarDecl(VarDecl*, void*);
 };

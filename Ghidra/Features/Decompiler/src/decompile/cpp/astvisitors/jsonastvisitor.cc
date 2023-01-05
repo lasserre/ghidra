@@ -1,7 +1,7 @@
 #include "jsonastvisitor.h"
 #include "astbuilder.h"
 
-json datatype_to_json(Datatype* dt)
+json JsonASTVisitor::datatype_to_json(Datatype* dt)
 {
     /** TODO: figure out how we want to handle data types */
     /** TODO: also include the category here if possible...?
@@ -9,7 +9,8 @@ json datatype_to_json(Datatype* dt)
      *   information since that is "truth" (and then we need to MAP true debug
      *   info variables to Ghidra AST variables)
     */
-    return dt->getName();
+    // return dt->getName();
+    return _builder->getFullTypeString(dt);
 }
 
 json buildAstForFunction(Funcdata* fd)
@@ -17,11 +18,16 @@ json buildAstForFunction(Funcdata* fd)
     ASTBuilder builder;
     ASTNode* ast = builder.buildAST(fd);
 
-    JsonASTVisitor visitor;
+    JsonASTVisitor visitor(&builder);
     ast->accept(&visitor);
     delete ast;
 
     return visitor.get_json();
+}
+
+JsonASTVisitor::JsonASTVisitor(ASTBuilder* builder)
+    : _builder(builder)
+{
 }
 
 json* JsonASTVisitor::copy_to_parent(json& data, void* parent_context)
@@ -47,6 +53,15 @@ void* JsonASTVisitor::visitBinaryOperator(BinaryOperator* b, void* context)
     binop["inner"] = json::array();
     binop["opcode"] = b->opcode();
     return copy_to_parent(binop, context);
+}
+
+void* JsonASTVisitor::visitCharacterLiteral(CharacterLiteral* cl, void* context)
+{
+    json cl_json;
+    cl_json["kind"] = "CharacterLiteral";
+    cl_json["dtype"] = datatype_to_json(cl->dt());
+    cl_json["value"] = cl->value();
+    return copy_to_parent(cl_json, context);
 }
 
 void* JsonASTVisitor::visitCompoundStmt(CompoundStmt*, void* context)
@@ -140,6 +155,16 @@ void* JsonASTVisitor::visitTranslationUnitDecl(TranslationUnitDecl* td, void* co
     tudecl["kind"] = "TranslationUnitDecl";
     tudecl["inner"] = json::array();
     return copy_to_parent(tudecl, context);
+}
+
+void* JsonASTVisitor::visitUnaryOperator(UnaryOperator* uo, void* context)
+{
+    json uo_json;
+    uo_json["kind"] = "UnaryOperator";
+    uo_json["inner"] = json::array();
+    uo_json["opcode"] = uo->opcode();
+    uo_json["dtype"] = datatype_to_json(uo->dt());
+    return copy_to_parent(uo_json, context);
 }
 
 void* JsonASTVisitor::visitValueDecl(ValueDecl* vd, void* context)

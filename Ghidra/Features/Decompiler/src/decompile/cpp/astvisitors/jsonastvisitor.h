@@ -16,10 +16,19 @@ using json = nlohmann::json;
 */
 json buildAstForFunction(Funcdata* fd);
 
+class ASTBuilder;
+
 class JsonASTVisitor : public ASTVisitor
 {
 public:
+    /**
+     * @param builder is needed for reuse of some PrintC member
+     * functions, otherwise I don't need it
+     */
+    JsonASTVisitor(ASTBuilder* builder);
+
     virtual void* visitBinaryOperator(BinaryOperator*, void*);
+    virtual void* visitCharacterLiteral(CharacterLiteral*, void*);
     virtual void* visitCompoundStmt(CompoundStmt*, void*);
     virtual void* visitCStyleCastExpr(CStyleCastExpr*, void*);
     virtual void* visitDeclRefExpr(DeclRefExpr*, void*);
@@ -30,6 +39,7 @@ public:
     virtual void* visitLogMsg(LogMsg*, void*);
     virtual void* visitParmVarDecl(ParmVarDecl*, void*);
     virtual void* visitTranslationUnitDecl(TranslationUnitDecl*, void*);
+    virtual void* visitUnaryOperator(UnaryOperator*, void*);
     virtual void* visitValueDecl(ValueDecl*, void*);
     virtual void* visitVarDecl(VarDecl*, void*);
 
@@ -46,5 +56,8 @@ protected:
      */
     json* copy_to_parent(json& data, void* parent_context);
 
+    json datatype_to_json(Datatype* dt);
+
     json _ast_json;
+    ASTBuilder* _builder;
 };

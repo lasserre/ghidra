@@ -52,6 +52,16 @@ void* BinaryOperator::doAccept(ASTVisitor* v, void* context)
     return v->visitBinaryOperator(this, context);
 }
 
+CharacterLiteral::CharacterLiteral(Datatype* dt, uintb value)
+    : _dt(dt), _value(value)
+{
+}
+
+void* CharacterLiteral::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitCharacterLiteral(this, context);
+}
+
 CompoundStmt::CompoundStmt()
 {
 }
@@ -136,6 +146,16 @@ TranslationUnitDecl::TranslationUnitDecl()
 void* TranslationUnitDecl::doAccept(ASTVisitor* v, void* context)
 {
     return v->visitTranslationUnitDecl(this, context);
+}
+
+UnaryOperator::UnaryOperator(std::string opcode, Datatype* dt)
+    : _opcode(opcode), _dt(dt)
+{
+}
+
+void* UnaryOperator::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitUnaryOperator(this, context);
 }
 
 ParmVarDecl::ParmVarDecl(int id, ProtoParameter* param)

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <deque>
+#include <fstream>
 #include <vector>
 
 #include "printc.hh"
@@ -153,6 +154,11 @@ public:
         return _ast_node_stack.back();
     }
 
+    std::string getFullTypeString(const Datatype* dt);
+    std::string getTypeStringStart(const Datatype* dt);
+    std::string getTypeStringEnd(const Datatype* dt);
+    std::string getProtoInputString(const FuncProto* proto);
+
 protected:
 
     void buildFunctionParams(FuncProto& fp, FunctionDecl* fdecl);
@@ -196,6 +202,13 @@ protected:
      */
     void processExpressionStack();
 
+    void createCharConstant(Datatype* dt, uintb value, const Varnode* vn);
+    void createTypeCast(const PcodeOp* op);
+
+    /** temp functions for logging spots I need to implement */
+    void unimplementedCode(std::string description);
+    void unimplementedOp(std::string opname);
+
     deque<PendingExpr*> _pending_expressions;
 
     /**
@@ -224,4 +237,6 @@ protected:
     // (FunctionDecl for now). This can be reset for various contexts if
     // appropriate
     int _next_vdecl_id;
+
+    ofstream _logfile;  // log unimplemented code for review
 };

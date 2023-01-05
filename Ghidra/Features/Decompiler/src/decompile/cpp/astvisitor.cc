@@ -7,6 +7,11 @@ void* ASTVisitor::visitBinaryOperator(BinaryOperator*, void*)
     return nullptr;
 }
 
+void* ASTVisitor::visitCharacterLiteral(CharacterLiteral*, void*)
+{
+    return nullptr;
+}
+
 void* ASTVisitor::visitCompoundStmt(CompoundStmt*, void*)
 {
     return nullptr;
@@ -53,6 +58,11 @@ void* ASTVisitor::visitParmVarDecl(ParmVarDecl*, void*)
 }
 
 void* ASTVisitor::visitTranslationUnitDecl(TranslationUnitDecl*, void*)
+{
+    return nullptr;
+}
+
+void* ASTVisitor::visitUnaryOperator(UnaryOperator*, void*)
 {
     return nullptr;
 }

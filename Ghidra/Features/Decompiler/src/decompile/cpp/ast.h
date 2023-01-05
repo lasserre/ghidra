@@ -49,17 +49,25 @@ class BinaryOperator : public ASTNode
 public:
     BinaryOperator(std::string opcode);
 
-    // assignment["kind"] = "BinaryOperator";
-    // assignment["opcode"] = "=";
-    // // basing dtype on outvn type for now
-    // assignment["dtype"] = datatype_to_json(op->getOut()->getType());
-    // assignment["inner"] = json::array();
-
     inline std::string opcode() { return _opcode; }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
     std::string _opcode;
+};
+
+class CharacterLiteral : public ASTNode
+{
+public:
+    CharacterLiteral(Datatype* dt, uintb value);
+
+    inline uintb value() { return _value; }
+    inline Datatype* dt() { return _dt; }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+    Datatype* _dt;
+    uintb _value;
 };
 
 /**
@@ -202,6 +210,20 @@ public:
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
+};
+
+class UnaryOperator : public ASTNode
+{
+public:
+    UnaryOperator(std::string opcode, Datatype* dt);
+
+    inline std::string opcode() { return _opcode; }
+    inline Datatype* dt() { return _dt; }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+    std::string _opcode;
+    Datatype* _dt;  // output datatype of operator
 };
 
 /**

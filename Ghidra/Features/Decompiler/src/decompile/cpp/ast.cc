@@ -2,7 +2,7 @@
 #include "astvisitor.h"
 
 ASTNode::ASTNode()
-    : _parent(nullptr), _children()
+    : _parent(nullptr), _children(), _messages()
 {
 }
 
@@ -13,8 +13,61 @@ ASTNode::~ASTNode()
     }
 }
 
-void ASTNode::addChild(ASTNode* child, bool append /*= true*/)
+bool needsParens(ASTNode* parent, ASTNode* child)
 {
+    if (parent->hasPrecedence() && child->hasPrecedence()) {
+        if (child->precedence() == parent->precedence()) {
+            // determine by associativity
+            bool child_on_first_eval_side =
+                child->isLRAssociative() == parent->wouldNextChildBeLeftOfOp();
+
+            // needs parens if not on side that's eval'd first
+            return !child_on_first_eval_side;
+
+            // CHILD == first evaluated subexpr...
+
+            // parent->isNextChildOnLeft(child, append)
+            // parent->wouldChildBeLeftmost(child, append)
+            // -- return if child would be on the left
+
+            // if CHILD on side of first eval -> no parens
+            // ---
+            // if CHILD on LEFT and L2R -> no parens
+            // if CHILD on RIGHT and R2L -> no parens
+            // if CHILD on LEFT and R2L -> PARENS around child
+            // if CHILD on RIGHT and L2R -> PARENS around child
+
+            // -----------
+            // FOR UNARY: (sole) CHILD will always be to RIGHT of the parent
+            // (parent->wouldChildBeLeftmost)  << bad name
+            // ...we really want to say child would be left of parent op
+            // parent->wouldNextChildBeLeftOfOp()
+            // for unary, always false
+        } else {
+            // lower CHILD precedence -> need parens!
+            // (remember, highest is 1, lowest is 17...)
+            return child->precedence() > parent->precedence();
+        }
+    }
+    return false;
+}
+
+void ASTNode::addChild(ASTNode* child, bool append /*= true*/, bool check_parens /*= true*/)
+{
+    if (check_parens) {
+        if (!append && _children.size() > 0) {
+            // ERROR: this won't work if we mess with the order of children!
+            _messages.push_back("ERROR: Prepending child will mess up paren calculations!");
+        }
+
+        if (needsParens(this, child)) {
+            ParenExpr* parens = new ParenExpr();
+            this->addChild(parens, append, false);
+            parens->addChild(child, append, false);
+            return;
+        }
+    }
+
     child->_parent = this;
 
     if (append) {
@@ -50,6 +103,66 @@ BinaryOperator::BinaryOperator(std::string opcode)
 void* BinaryOperator::doAccept(ASTVisitor* v, void* context)
 {
     return v->visitBinaryOperator(this, context);
+}
+
+int BinaryOperator::precedence()
+{
+    if (_opcode == "*" || _opcode == "/" || _opcode == "%") {
+        return 5;
+    }
+    else if (_opcode == "+" || _opcode == "-") {
+        return 6;
+    }
+    else if (_opcode == "<" || _opcode == ">" || _opcode == "<=" || _opcode == ">=") {
+        return 9;
+    }
+    else if (_opcode == "==" || _opcode == "!=") {
+        return 10;
+    }
+    else if (_opcode == "=") {
+        return 16;
+    }
+    else {
+        _messages.push_back("No precedence mapped for binary operator '" + _opcode + "'");
+        return -1;
+    }
+}
+
+// we just check for presence of the key, so don't care about bool
+std::map<string,bool> rl_assoc_binops = {
+    {"=", true},
+    {"*=", true},
+    {"/=", true},
+    {"%=", true},
+    {"+=", true},
+    {"-=", true},
+    {"<<=", true},
+    {">>=", true},
+    {"&=", true},
+    {"|=", true},
+    {"^=", true},
+};
+
+std::map<string,bool> rl_assoc_unops = {
+    {"+", true},
+    {"-", true},
+    // NOTE: would need to add logic to support pre/post-increment/decrement
+    {"!", true},
+    {"~", true},
+    {"&", true},
+    {"*", true},
+};
+
+bool BinaryOperator::isLRAssociative()
+{
+    // if not in BINARY RL assoc map then its LR assoc
+    return rl_assoc_binops.count(_opcode) == 0;
+}
+
+bool BinaryOperator::wouldNextChildBeLeftOfOp()
+{
+    // first child will be on left, second on right
+    return _children.size() == 0;
 }
 
 CharacterLiteral::CharacterLiteral(Datatype* dt, uintb value)
@@ -139,6 +252,15 @@ void* LogMsg::doAccept(ASTVisitor* v, void* context)
     return v->visitLogMsg(this, context);
 }
 
+ParenExpr::ParenExpr()
+{
+}
+
+void* ParenExpr::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitParenExpr(this, context);
+}
+
 TranslationUnitDecl::TranslationUnitDecl()
 {
 }
@@ -151,6 +273,23 @@ void* TranslationUnitDecl::doAccept(ASTVisitor* v, void* context)
 UnaryOperator::UnaryOperator(std::string opcode, Datatype* dt)
     : _opcode(opcode), _dt(dt)
 {
+}
+
+int UnaryOperator::precedence()
+{
+    if (_opcode == "*") {
+        return 3;
+    }
+    else {
+        _messages.push_back("TODO - map UnaryOperator precedence for '" + _opcode + "'");
+        return -1;
+    }
+}
+
+bool UnaryOperator::isLRAssociative()
+{
+    // if not in UNARY RL assoc map then it's LR assoc
+    return rl_assoc_unops.count(_opcode) == 0;
 }
 
 void* UnaryOperator::doAccept(ASTVisitor* v, void* context)

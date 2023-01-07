@@ -46,12 +46,27 @@ json* JsonASTVisitor::copy_to_parent(json& data, void* parent_context)
     }
 }
 
+/**
+ * @brief Add messages key to dict if this node has any diagnostic or
+ * error messages
+ */
+void addMessages(ASTNode* node, json& jnode)
+{
+    if (node->messages()->size() > 0) {
+        jnode["messages"] = json::array();
+        for (auto msg : *node->messages()) {
+            jnode["messages"].push_back(msg);
+        }
+    }
+}
+
 void* JsonASTVisitor::visitBinaryOperator(BinaryOperator* b, void* context)
 {
     json binop;
     binop["kind"] = "BinaryOperator";
     binop["inner"] = json::array();
     binop["opcode"] = b->opcode();
+    addMessages(b, binop);
     return copy_to_parent(binop, context);
 }
 
@@ -61,14 +76,16 @@ void* JsonASTVisitor::visitCharacterLiteral(CharacterLiteral* cl, void* context)
     cl_json["kind"] = "CharacterLiteral";
     cl_json["dtype"] = datatype_to_json(cl->dt());
     cl_json["value"] = cl->value();
+    addMessages(cl, cl_json);
     return copy_to_parent(cl_json, context);
 }
 
-void* JsonASTVisitor::visitCompoundStmt(CompoundStmt*, void* context)
+void* JsonASTVisitor::visitCompoundStmt(CompoundStmt* cs, void* context)
 {
     json cmp_stmt;
     cmp_stmt["kind"] = "CompoundStmt";
     cmp_stmt["inner"] = json::array();
+    addMessages(cs, cmp_stmt);
     return copy_to_parent(cmp_stmt, context);
 }
 
@@ -77,6 +94,7 @@ void* JsonASTVisitor::visitCStyleCastExpr(CStyleCastExpr* cast_expr, void* conte
     json cast;
     cast["kind"] = "CStyleCastExpr";
     cast["dtype"] = datatype_to_json(cast_expr->dt());
+    addMessages(cast_expr, cast);
     return copy_to_parent(cast, context);
 }
 
@@ -85,14 +103,16 @@ void* JsonASTVisitor::visitDeclRefExpr(DeclRefExpr* dr, void* context)
     json decl_ref;
     decl_ref["kind"] = "DeclRefExpr";
     decl_ref["referencedDecl_id"] = dr->ref()->id();
+    addMessages(dr, decl_ref);
     return copy_to_parent(decl_ref, context);
 }
 
-void* JsonASTVisitor::visitDeclStmt(DeclStmt*, void* context)
+void* JsonASTVisitor::visitDeclStmt(DeclStmt* ds, void* context)
 {
     json declstmt;
     declstmt["kind"] = "DeclStmt";
     declstmt["inner"] = json::array();
+    addMessages(ds, declstmt);
     return copy_to_parent(declstmt, context);
 }
 
@@ -105,6 +125,7 @@ void* JsonASTVisitor::visitFunctionDecl(FunctionDecl* fd, void* context)
     fdecl["name"] = fd->name();
     fdecl["address"] = to_hex(fd->address());
     fdecl["return_dtype"] = datatype_to_json(fd->return_dtype());
+    addMessages(fd, fdecl);
     return copy_to_parent(fdecl, context);
 }
 
@@ -114,6 +135,7 @@ void* JsonASTVisitor::visitIntegerLiteral(IntegerLiteral* lit, void* context)
     int_lit["kind"] = "IntegerLiteral";
     int_lit["value"] = lit->value();
     int_lit["dtype"] = datatype_to_json(lit->dt());
+    addMessages(lit, int_lit);
     return copy_to_parent(int_lit, context);
 }
 
@@ -121,6 +143,8 @@ void* JsonASTVisitor::visitIfStmt(IfStmt* stmt, void* context)
 {
     json ifstmt;
     ifstmt["kind"] = "IfStmt";
+    ifstmt["inner"] = json::array();
+    addMessages(stmt, ifstmt);
     return copy_to_parent(ifstmt, context);
 }
 
@@ -130,6 +154,15 @@ void* JsonASTVisitor::visitLogMsg(LogMsg* logmsg, void* context)
     msg["kind"] = "LogMsg";
     msg["message"] = logmsg->message();
     return copy_to_parent(msg, context);
+}
+
+void* JsonASTVisitor::visitParenExpr(ParenExpr* pe, void* context)
+{
+    json paren;
+    paren["kind"] = "ParenExpr";
+    paren["inner"] = json::array();
+    addMessages(pe, paren);
+    return copy_to_parent(paren, context);
 }
 
 void* JsonASTVisitor::visitParmVarDecl(ParmVarDecl* pv, void* context)
@@ -146,6 +179,7 @@ void* JsonASTVisitor::visitParmVarDecl(ParmVarDecl* pv, void* context)
         pvdecl["dtype"] = datatype_to_json(pv->param()->getType());
     }
 
+    addMessages(pv, pvdecl);
     return copy_to_parent(pvdecl, context);
 }
 
@@ -154,6 +188,7 @@ void* JsonASTVisitor::visitTranslationUnitDecl(TranslationUnitDecl* td, void* co
     json tudecl;
     tudecl["kind"] = "TranslationUnitDecl";
     tudecl["inner"] = json::array();
+    addMessages(td, tudecl);
     return copy_to_parent(tudecl, context);
 }
 
@@ -164,6 +199,7 @@ void* JsonASTVisitor::visitUnaryOperator(UnaryOperator* uo, void* context)
     uo_json["inner"] = json::array();
     uo_json["opcode"] = uo->opcode();
     uo_json["dtype"] = datatype_to_json(uo->dt());
+    addMessages(uo, uo_json);
     return copy_to_parent(uo_json, context);
 }
 
@@ -171,6 +207,7 @@ void* JsonASTVisitor::visitValueDecl(ValueDecl* vd, void* context)
 {
     json value_decl;
     value_decl["id"] = vd->id();
+    addMessages(vd, value_decl);
     return copy_to_parent(value_decl, context);
 }
 
@@ -181,5 +218,6 @@ void* JsonASTVisitor::visitVarDecl(VarDecl* vd, void* context)
     var_decl["id"] = vd->id();
     var_decl["dtype"] = datatype_to_json(vd->sym()->getType());
     var_decl["name"] = vd->sym()->getName();
+    addMessages(vd, var_decl);
     return copy_to_parent(var_decl, context);
 }

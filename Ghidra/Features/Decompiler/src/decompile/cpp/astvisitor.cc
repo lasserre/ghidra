@@ -52,6 +52,11 @@ void* ASTVisitor::visitLogMsg(LogMsg*, void*)
     return nullptr;
 }
 
+void* ASTVisitor::visitParenExpr(ParenExpr*, void*)
+{
+    return nullptr;
+}
+
 void* ASTVisitor::visitParmVarDecl(ParmVarDecl*, void*)
 {
     return nullptr;

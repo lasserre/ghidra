@@ -183,6 +183,15 @@ void* JsonASTVisitor::visitParmVarDecl(ParmVarDecl* pv, void* context)
     return copy_to_parent(pvdecl, context);
 }
 
+void* JsonASTVisitor::visitSwitchStmt(SwitchStmt* ss, void* context)
+{
+    json ss_j;
+    ss_j["kind"] = "SwitchStmt";
+    ss_j["inner"] = json::array();
+    addMessages(ss, ss_j);
+    return copy_to_parent(ss_j, context);
+}
+
 void* JsonASTVisitor::visitTranslationUnitDecl(TranslationUnitDecl* td, void* context)
 {
     json tudecl;

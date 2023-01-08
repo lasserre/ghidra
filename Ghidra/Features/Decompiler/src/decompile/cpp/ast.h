@@ -298,6 +298,19 @@ protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
 };
 
+class SwitchStmt : public ASTNode
+{
+public:
+    SwitchStmt();
+
+    int precedence() { return -1; }
+    bool isLRAssociative() { return false; }
+    bool wouldNextChildBeLeftOfOp() { return false; }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+};
+
 /**
  * @brief Represents a top-level translation unit
  */

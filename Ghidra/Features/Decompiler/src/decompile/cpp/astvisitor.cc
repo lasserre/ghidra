@@ -62,6 +62,11 @@ void* ASTVisitor::visitParmVarDecl(ParmVarDecl*, void*)
     return nullptr;
 }
 
+void* ASTVisitor::visitSwitchStmt(SwitchStmt*, void*)
+{
+    return nullptr;
+}
+
 void* ASTVisitor::visitTranslationUnitDecl(TranslationUnitDecl*, void*)
 {
     return nullptr;

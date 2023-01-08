@@ -823,7 +823,79 @@ void ASTBuilder::emitBlockInfLoop(const BlockInfLoop *bl)
 
 void ASTBuilder::emitBlockSwitch(const BlockSwitch *bl)
 {
-    unimplementedCode("emitBlockSwitch");
+    pushMod();
+    unsetMod(no_branch|only_branch);
+
+    // haven't seen an occurrence yet, but assume no_branch gets any
+    // "preceding" straight-line code in the block before the branching
+    // instruction that corresponds to the switch conditional
+    pushMod();
+    setMod(no_branch);
+    bl->getSwitchBlock()->emit(this);
+    popMod();
+
+    pushMod();
+    setMod(only_branch|comma_separate);
+    bl->getSwitchBlock()->emit(this);
+    popMod();
+
+    /** NOTE: this will push the SwitchStmt as currentASTNode */
+
+    //switch
+        // - conditional
+        // - compoundstmt
+            // - casestmt
+                // - constantexpr <case value>
+                // - code...
+            // - breakstmt
+            // - caststmt
+            // - breakstmt
+            // ...
+            //
+
+    // cases go under CompoundStmt
+    CompoundStmt* cs = new CompoundStmt();
+    currentASTNode()->addChild(cs);
+    pushASTNode(cs);
+
+    for (int i = 0; i < bl->getNumCaseBlocks(); i++) {
+        // emit case statement
+        if (bl->isDefaultCase(i)) {
+            unimplementedCode("emit default case statement");
+        }
+        else {
+            int nlabels = bl->getNumLabels(i);
+            for (int l = 0; l < nlabels; l++) {
+                uintb val = bl->getLabel(i, l);
+                /** TODO: directly create/add CaseStmt to AST
+                 * using val (e.g. case <val>) by making
+                 * ConstantExpr(val) first child of CastStmt
+                 *
+                 * ...then push CastStmt to stack since case block
+                 * emitted below is a child of CastStmt
+                */
+                unimplementedCode("emit case statement");
+            }
+        }
+
+        if (bl->getGotoType(i)) {
+            /** TODO: emit goto statement */
+            unimplementedCode("emit goto statement");
+        }
+        else {
+            FlowBlock* caseblk = bl->getCaseBlock(i);
+            caseblk->emit(this);
+
+            if (bl->isExit(i) && (i != bl->getNumCaseBlocks()-1)) {
+                /** TODO: emit break */
+                unimplementedCode("emit break statement");
+            }
+        }
+    }
+
+    popASTNode();   // pop compound statement
+    popASTNode();   // pop switch statement pushed above
+    popMod();
 }
 
 /**
@@ -899,7 +971,15 @@ void ASTBuilder::opCbranch(const PcodeOp *op)
 
 void ASTBuilder::opBranchind(const PcodeOp *op)
 {
-    unimplementedOp("opBranchind");
+    SwitchStmt* ss = new SwitchStmt();
+    currentASTNode()->addChild(ss);
+    pushASTNode(ss);    // need to push so it's ready for case stmts
+
+    // build switch conditional expression
+    PendingExpr* expr = new PendingExpr();
+    expr->ast_op = ss;
+    expr->parts.push_back(buildNodeImplied(op->getIn(0), op, mods));
+    _pending_expressions.push_back(expr);
 }
 
 void ASTBuilder::opCall(const PcodeOp *op)

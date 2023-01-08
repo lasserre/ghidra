@@ -28,6 +28,7 @@ public:
     virtual void* visitLogMsg(LogMsg*, void*);
     virtual void* visitParenExpr(ParenExpr*, void*);
     virtual void* visitParmVarDecl(ParmVarDecl*, void*);
+    virtual void* visitSwitchStmt(SwitchStmt*, void*);
     virtual void* visitTranslationUnitDecl(TranslationUnitDecl*, void*);
     virtual void* visitUnaryOperator(UnaryOperator*, void*);
     virtual void* visitValueDecl(ValueDecl*, void*);

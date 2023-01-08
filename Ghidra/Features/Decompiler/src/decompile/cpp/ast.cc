@@ -13,6 +13,21 @@ ASTNode::~ASTNode()
     }
 }
 
+/**
+ * @brief True if the child expression needs parentheses around it
+ *
+ * CHILD == first evaluated subexpr...
+ *
+ * if CHILD on side of first eval -> no parens
+ * ---
+ * if CHILD on LEFT and L2R -> no parens
+ * if CHILD on RIGHT and R2L -> no parens
+ * if CHILD on LEFT and R2L -> PARENS around child
+ * if CHILD on RIGHT and L2R -> PARENS around child
+ * -----------
+ * FOR UNARY: (sole) CHILD will always be to RIGHT of the parent
+ * wouldNextChildBeLeftOfOp() for unary, always false
+ */
 bool needsParens(ASTNode* parent, ASTNode* child)
 {
     if (parent->hasPrecedence() && child->hasPrecedence()) {
@@ -23,26 +38,6 @@ bool needsParens(ASTNode* parent, ASTNode* child)
 
             // needs parens if not on side that's eval'd first
             return !child_on_first_eval_side;
-
-            // CHILD == first evaluated subexpr...
-
-            // parent->isNextChildOnLeft(child, append)
-            // parent->wouldChildBeLeftmost(child, append)
-            // -- return if child would be on the left
-
-            // if CHILD on side of first eval -> no parens
-            // ---
-            // if CHILD on LEFT and L2R -> no parens
-            // if CHILD on RIGHT and R2L -> no parens
-            // if CHILD on LEFT and R2L -> PARENS around child
-            // if CHILD on RIGHT and L2R -> PARENS around child
-
-            // -----------
-            // FOR UNARY: (sole) CHILD will always be to RIGHT of the parent
-            // (parent->wouldChildBeLeftmost)  << bad name
-            // ...we really want to say child would be left of parent op
-            // parent->wouldNextChildBeLeftOfOp()
-            // for unary, always false
         } else {
             // lower CHILD precedence -> need parens!
             // (remember, highest is 1, lowest is 17...)
@@ -259,6 +254,15 @@ ParenExpr::ParenExpr()
 void* ParenExpr::doAccept(ASTVisitor* v, void* context)
 {
     return v->visitParenExpr(this, context);
+}
+
+SwitchStmt::SwitchStmt()
+{
+}
+
+void* SwitchStmt::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitSwitchStmt(this, context);
 }
 
 TranslationUnitDecl::TranslationUnitDecl()

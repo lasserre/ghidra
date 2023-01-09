@@ -105,6 +105,36 @@ protected:
     std::string _opcode;
 };
 
+class BreakStmt : public ASTNode
+{
+public:
+    BreakStmt();
+
+    int precedence() { return -1; }
+    bool isLRAssociative() { return false; }
+    bool wouldNextChildBeLeftOfOp() { return false; }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+};
+
+/**
+ * First child: ConstantExpr case value
+ * Second child: code for switch case
+ */
+class CaseStmt : public ASTNode
+{
+public:
+    CaseStmt();
+
+    int precedence() { return -1; }
+    bool isLRAssociative() { return false; }
+    bool wouldNextChildBeLeftOfOp() { return false; }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+};
+
 class CharacterLiteral : public ASTNode
 {
 public:
@@ -130,6 +160,19 @@ class CompoundStmt : public ASTNode
 {
 public:
     CompoundStmt();
+
+    int precedence() { return -1; }
+    bool isLRAssociative() { return false; }
+    bool wouldNextChildBeLeftOfOp() { return false; }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+};
+
+class ConstantExpr : public ASTNode
+{
+public:
+    ConstantExpr();
 
     int precedence() { return -1; }
     bool isLRAssociative() { return false; }
@@ -245,10 +288,10 @@ protected:
 class IntegerLiteral : public ASTNode
 {
 public:
-    IntegerLiteral(Datatype* dt, uintb value);
+    IntegerLiteral(const Datatype* dt, uintb value);
 
     inline uintb value() { return _value; }
-    inline Datatype* dt() { return _dt; }
+    inline const Datatype* dt() { return _dt; }
 
     int precedence() { return -1; }
     bool isLRAssociative() { return false; }
@@ -256,7 +299,7 @@ public:
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
-    Datatype* _dt;
+    const Datatype* _dt;
     uintb _value;
 };
 

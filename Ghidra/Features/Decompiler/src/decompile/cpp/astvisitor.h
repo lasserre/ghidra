@@ -17,8 +17,11 @@ class ASTVisitor
 {
 public:
     virtual void* visitBinaryOperator(BinaryOperator*, void*);
+    virtual void* visitBreakStmt(BreakStmt*, void*);
+    virtual void* visitCaseStmt(CaseStmt*, void*);
     virtual void* visitCharacterLiteral(CharacterLiteral*, void*);
     virtual void* visitCompoundStmt(CompoundStmt*, void*);
+    virtual void* visitConstantExpr(ConstantExpr*, void*);
     virtual void* visitCStyleCastExpr(CStyleCastExpr*, void*);
     virtual void* visitDeclRefExpr(DeclRefExpr*, void*);
     virtual void* visitDeclStmt(DeclStmt*, void*);

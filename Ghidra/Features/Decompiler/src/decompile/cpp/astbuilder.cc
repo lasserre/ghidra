@@ -841,22 +841,12 @@ void ASTBuilder::emitBlockSwitch(const BlockSwitch *bl)
 
     /** NOTE: this will push the SwitchStmt as currentASTNode */
 
-    //switch
-        // - conditional
-        // - compoundstmt
-            // - casestmt
-                // - constantexpr <case value>
-                // - code...
-            // - breakstmt
-            // - caststmt
-            // - breakstmt
-            // ...
-            //
-
     // cases go under CompoundStmt
-    CompoundStmt* cs = new CompoundStmt();
-    currentASTNode()->addChild(cs);
-    pushASTNode(cs);
+    CompoundStmt* cmpstmt = new CompoundStmt();
+    currentASTNode()->addChild(cmpstmt);
+    pushASTNode(cmpstmt);
+
+    const Datatype* dt = bl->getSwitchType();
 
     for (int i = 0; i < bl->getNumCaseBlocks(); i++) {
         // emit case statement
@@ -867,14 +857,19 @@ void ASTBuilder::emitBlockSwitch(const BlockSwitch *bl)
             int nlabels = bl->getNumLabels(i);
             for (int l = 0; l < nlabels; l++) {
                 uintb val = bl->getLabel(i, l);
-                /** TODO: directly create/add CaseStmt to AST
-                 * using val (e.g. case <val>) by making
-                 * ConstantExpr(val) first child of CastStmt
-                 *
-                 * ...then push CastStmt to stack since case block
-                 * emitted below is a child of CastStmt
-                */
-                unimplementedCode("emit case statement");
+                CaseStmt* case_stmt = new CaseStmt();
+                ConstantExpr* cexpr = new ConstantExpr();
+                IntegerLiteral* literal = new IntegerLiteral(dt, val);
+
+                cmpstmt->addChild(case_stmt);
+                case_stmt->addChild(cexpr);
+                cexpr->addChild(literal);
+
+                if (l > 0) {
+                    popASTNode();   // pop last case statement we pushed
+                }
+                // needs to be parent of code in case
+                pushASTNode(case_stmt);
             }
         }
 
@@ -885,10 +880,11 @@ void ASTBuilder::emitBlockSwitch(const BlockSwitch *bl)
         else {
             FlowBlock* caseblk = bl->getCaseBlock(i);
             caseblk->emit(this);
+            popASTNode();   // pop case statement
 
             if (bl->isExit(i) && (i != bl->getNumCaseBlocks()-1)) {
-                /** TODO: emit break */
-                unimplementedCode("emit break statement");
+                BreakStmt* brk = new BreakStmt();
+                cmpstmt->addChild(brk);
             }
         }
     }

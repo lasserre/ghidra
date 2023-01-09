@@ -348,7 +348,7 @@ void DecompileAt::rawAction(void)
         /** TODO: figure out how we want to determine output file location */
         #include <fstream>
         ofstream outfile("C:/Users/knigh/dev/ghidra_ast_testfile.json", ios::out);
-        outfile << setw(4) << ast_json << endl;
+        outfile << setw(2) << ast_json << endl;
         outfile.close();
     }
     sout << "</doc>\n";

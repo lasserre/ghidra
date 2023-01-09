@@ -160,6 +160,24 @@ bool BinaryOperator::wouldNextChildBeLeftOfOp()
     return _children.size() == 0;
 }
 
+BreakStmt::BreakStmt()
+{
+}
+
+void* BreakStmt::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitBreakStmt(this, context);
+}
+
+CaseStmt::CaseStmt()
+{
+}
+
+void* CaseStmt::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitCaseStmt(this, context);
+}
+
 CharacterLiteral::CharacterLiteral(Datatype* dt, uintb value)
     : _dt(dt), _value(value)
 {
@@ -177,6 +195,15 @@ CompoundStmt::CompoundStmt()
 void* CompoundStmt::doAccept(ASTVisitor* v, void* context)
 {
     return v->visitCompoundStmt(this, context);
+}
+
+ConstantExpr::ConstantExpr()
+{
+}
+
+void* ConstantExpr::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitConstantExpr(this, context);
 }
 
 CStyleCastExpr::CStyleCastExpr(Datatype* dt)
@@ -227,7 +254,7 @@ void* IfStmt::doAccept(ASTVisitor* v, void* context)
     return v->visitIfStmt(this, context);
 }
 
-IntegerLiteral::IntegerLiteral(Datatype* dt, uintb value)
+IntegerLiteral::IntegerLiteral(const Datatype* dt, uintb value)
     : _dt(dt), _value(value)
 {
 }

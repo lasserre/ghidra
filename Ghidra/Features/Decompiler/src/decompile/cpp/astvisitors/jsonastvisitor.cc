@@ -1,7 +1,7 @@
 #include "jsonastvisitor.h"
 #include "astbuilder.h"
 
-json JsonASTVisitor::datatype_to_json(Datatype* dt)
+json JsonASTVisitor::datatype_to_json(const Datatype* dt)
 {
     /** TODO: figure out how we want to handle data types */
     /** TODO: also include the category here if possible...?
@@ -70,6 +70,23 @@ void* JsonASTVisitor::visitBinaryOperator(BinaryOperator* b, void* context)
     return copy_to_parent(binop, context);
 }
 
+void* JsonASTVisitor::visitBreakStmt(BreakStmt* bs, void* context)
+{
+    json bs_j;
+    bs_j["kind"] = "BreakStmt";
+    addMessages(bs, bs_j);
+    return copy_to_parent(bs_j, context);
+}
+
+void* JsonASTVisitor::visitCaseStmt(CaseStmt* cs, void* context)
+{
+    json cs_j;
+    cs_j["kind"] = "CaseStmt";
+    cs_j["inner"] = json::array();
+    addMessages(cs, cs_j);
+    return copy_to_parent(cs_j, context);
+}
+
 void* JsonASTVisitor::visitCharacterLiteral(CharacterLiteral* cl, void* context)
 {
     json cl_json;
@@ -87,6 +104,15 @@ void* JsonASTVisitor::visitCompoundStmt(CompoundStmt* cs, void* context)
     cmp_stmt["inner"] = json::array();
     addMessages(cs, cmp_stmt);
     return copy_to_parent(cmp_stmt, context);
+}
+
+void* JsonASTVisitor::visitConstantExpr(ConstantExpr* cexpr, void* context)
+{
+    json cexpr_j;
+    cexpr_j["kind"] = "ConstantExpr";
+    cexpr_j["inner"] = json::array();
+    addMessages(cexpr, cexpr_j);
+    return copy_to_parent(cexpr_j, context);
 }
 
 void* JsonASTVisitor::visitCStyleCastExpr(CStyleCastExpr* cast_expr, void* context)

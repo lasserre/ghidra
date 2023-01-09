@@ -7,12 +7,27 @@ void* ASTVisitor::visitBinaryOperator(BinaryOperator*, void*)
     return nullptr;
 }
 
+void* ASTVisitor::visitBreakStmt(BreakStmt*, void*)
+{
+    return nullptr;
+}
+
+void* ASTVisitor::visitCaseStmt(CaseStmt*, void*)
+{
+    return nullptr;
+}
+
 void* ASTVisitor::visitCharacterLiteral(CharacterLiteral*, void*)
 {
     return nullptr;
 }
 
 void* ASTVisitor::visitCompoundStmt(CompoundStmt*, void*)
+{
+    return nullptr;
+}
+
+void* ASTVisitor::visitConstantExpr(ConstantExpr*, void*)
 {
     return nullptr;
 }

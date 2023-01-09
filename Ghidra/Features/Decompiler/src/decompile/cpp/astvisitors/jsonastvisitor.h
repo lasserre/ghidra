@@ -28,8 +28,11 @@ public:
     JsonASTVisitor(ASTBuilder* builder);
 
     virtual void* visitBinaryOperator(BinaryOperator*, void*);
+    virtual void* visitBreakStmt(BreakStmt*, void*);
+    virtual void* visitCaseStmt(CaseStmt*, void*);
     virtual void* visitCharacterLiteral(CharacterLiteral*, void*);
     virtual void* visitCompoundStmt(CompoundStmt*, void*);
+    virtual void* visitConstantExpr(ConstantExpr*, void*);
     virtual void* visitCStyleCastExpr(CStyleCastExpr*, void*);
     virtual void* visitDeclRefExpr(DeclRefExpr*, void*);
     virtual void* visitDeclStmt(DeclStmt*, void*);
@@ -58,7 +61,7 @@ protected:
      */
     json* copy_to_parent(json& data, void* parent_context);
 
-    json datatype_to_json(Datatype* dt);
+    json datatype_to_json(const Datatype* dt);
 
     json _ast_json;
     ASTBuilder* _builder;

@@ -1,5 +1,6 @@
 #include "astbuilder.h"
 
+#include <ctime>
 #include <string>
 
 #include "funcdata.hh"
@@ -110,8 +111,9 @@ struct PendingExpr
     std::vector<PendingNode*> parts;
 };
 
-ASTBuilder::ASTBuilder()
-    : PrintC(nullptr), _head_translation_unit(nullptr), _next_vdecl_id(0)
+ASTBuilder::ASTBuilder(string logfolder)
+    : PrintC(nullptr), _logfolder(logfolder),
+    _head_translation_unit(nullptr), _next_vdecl_id(0)
 {
 }
 
@@ -202,13 +204,35 @@ void ASTBuilder::buildLocalDeclsFromScope(const Scope& scope, CompoundStmt* fbod
     }
 }
 
+string getTimestamp()
+{
+    time_t t = time(0);   // get time now
+    struct tm * now = localtime( & t );
+
+    char buffer [180];
+    strftime(buffer, 180, "%y-%m-%d_%H.%M.%S", now);
+    return string(buffer);
+}
+
 ASTNode* ASTBuilder::buildAST(Funcdata* fd)
 {
-    _logfile.open("C:/Users/knigh/dev/ast_unimplemented_code.txt", ios::out);
+    // let's use one logfile for an execution of the decompiler
+    // (this may still happen >1 time since Ghidra kicks us off...)
+
+    // use timestamp when ready for "production"
+    // static string logfile = _logfolder + "/" + getTimestamp() + "-astbuilder.log";
+
+    // use hardcoded log file for debugging for now
+    static string logfile = _logfolder + "/astbuilder.log";
+    // CLS: add this mode when ready for timestampted files
+    //| ios::app);
+    _logfile.open(logfile, ios::out);
 
     if (!fd->isProcStarted()) {
         // not decompiled
         stringstream ss;
+        _logfile << "Function at 0x" << to_hex(fd->getAddress().getOffset());
+        _logfile << " not decompiled\n";
         ss << "Function at 0x" << to_hex(fd->getAddress().getOffset());
         ss << " not decompiled";
         _logfile << ss.str();
@@ -291,6 +315,7 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
     emitBlockGraph(&fd->getStructure());
     popASTNode();
 
+    _logfile.flush();
     _logfile.close();
 
     return _head_translation_unit;

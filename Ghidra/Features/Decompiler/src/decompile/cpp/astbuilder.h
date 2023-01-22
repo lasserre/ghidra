@@ -23,7 +23,7 @@ public:
      * @param fbody is the CompoundStmt node (child to FunctionDecl node) that
      * contains the function body statements
      */
-    ASTBuilder();
+    ASTBuilder(string logfolder);
 
     /**
      * --------------------------------------------------------------
@@ -238,5 +238,6 @@ protected:
     // appropriate
     int _next_vdecl_id;
 
+    string _logfolder;
     ofstream _logfile;  // log unimplemented code for review
 };

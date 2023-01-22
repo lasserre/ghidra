@@ -17,7 +17,9 @@
 #include "flow.hh"
 #include "blockaction.hh"
 
-// #include "astbuilder.h"
+#include <cstdlib>
+#include <fstream>
+
 #include "astvisitors/jsonastvisitor.h"
 
 #ifdef __REMOTE_SOCKET__
@@ -328,28 +330,15 @@ void DecompileAt::rawAction(void)
       }
       fd->saveXml(sout,0,ghidra->getSendSyntaxTree());
 
-      // #include <fstream>
-      // ofstream outfile("C:/Users/knigh/dev/ghidra/function.xml", ios::out);
-      // outfile << "getSendSyntaxTree = " << ghidra->getSendSyntaxTree() << endl;
-      // fd->saveXml(outfile, 0, ghidra->getSendSyntaxTree());
-      // outfile.close();
-
-      // ofstream astfile("C:/Users/knigh/dev/ghidra/ast.xml", ios::out);
-      // auto outstream = ghidra->print->getOutputStream();
-      // ghidra->print->setOutputStream(&astfile);
-      // ghidra->print->docFunction(fd);
-      // ghidra->print->setOutputStream(outstream);
-
       if (ghidra->getSendCCode()&&
 	  (ghidra->allacts.getCurrentName() == "decompile"))
         ghidra->print->docFunction(fd);
-        json ast_json = buildAstForFunction(fd);
 
-        /** TODO: figure out how we want to determine output file location */
-        #include <fstream>
-        ofstream outfile("C:/Users/knigh/dev/ghidra_ast_testfile.json", ios::out);
-        outfile << setw(2) << ast_json << endl;
-        outfile.close();
+        // export AST if requested
+        static char* config_file_path = getenv("GHIDRA_AST_CONFIG_FILE");
+        if (config_file_path) {
+            exportFunctionAst(fd, config_file_path);
+        }
     }
     sout << "</doc>\n";
   }

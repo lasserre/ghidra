@@ -6,6 +6,9 @@
 
 using json = nlohmann::json;
 
+struct ExportAstConfig;
+class ASTBuilder;
+
 /**
  * Constructs an AST representation from Ghidra's internal representation of
  * the high-level code. The PrintLanguage (PrintC) class was used as a reference
@@ -14,9 +17,13 @@ using json = nlohmann::json;
  *
  * CLS: not even sure I need the builder class yet...
 */
-json buildAstForFunction(Funcdata* fd);
+json buildAstForFunction(Funcdata* fd, ExportAstConfig* config);
 
-class ASTBuilder;
+/**
+ * @brief Exports the AST for the given function as a JSON file
+ * per the parameters defined in the config file.
+ */
+void exportFunctionAst(Funcdata* fd, char* config_file_path);
 
 class JsonASTVisitor : public ASTVisitor
 {

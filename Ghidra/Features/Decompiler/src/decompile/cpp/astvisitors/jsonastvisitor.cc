@@ -1,6 +1,14 @@
 #include "jsonastvisitor.h"
 #include "astbuilder.h"
 
+struct ExportAstConfig
+{
+    std::string output_folder;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ExportAstConfig,
+    output_folder
+)
+
 json JsonASTVisitor::datatype_to_json(const Datatype* dt)
 {
     /** TODO: figure out how we want to handle data types */
@@ -13,9 +21,9 @@ json JsonASTVisitor::datatype_to_json(const Datatype* dt)
     return _builder->getFullTypeString(dt);
 }
 
-json buildAstForFunction(Funcdata* fd)
+json buildAstForFunction(Funcdata* fd, ExportAstConfig* config)
 {
-    ASTBuilder builder;
+    ASTBuilder builder(config->output_folder);
     ASTNode* ast = builder.buildAST(fd);
 
     JsonASTVisitor visitor(&builder);
@@ -23,6 +31,31 @@ json buildAstForFunction(Funcdata* fd)
     delete ast;
 
     return visitor.get_json();
+}
+
+// making this its own function so it only gets called 1x just
+// by using static on the config variable :)
+ExportAstConfig readConfig(char* config_file_path)
+{
+    std::ifstream f(config_file_path);
+    if (f.fail()) {
+        throw LowlevelError("AST export config file " +
+            string(config_file_path) + " does not exist");
+    }
+
+    json data = json::parse(f);
+    return data.get<ExportAstConfig>();
+}
+
+void exportFunctionAst(Funcdata* fd, char* config_file_path)
+{
+    static ExportAstConfig config = readConfig(config_file_path);
+    json ast_json = buildAstForFunction(fd, &config);
+
+    string filename = config.output_folder + "/" + fd->getName() + ".json";
+    ofstream outfile(filename, ios::out);
+    outfile << setw(2) << ast_json << endl;
+    outfile.close();
 }
 
 JsonASTVisitor::JsonASTVisitor(ASTBuilder* builder)

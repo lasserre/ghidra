@@ -536,7 +536,9 @@ void wait_for_debugger()
 int main(int argc,char **argv)
 
 {
-  wait_for_debugger();
+    if (getenv("DEBUG_GHIDRA_DECOMPILER")) {
+        wait_for_debugger();
+    }
 
   signal(SIGSEGV, &ArchitectureGhidra::segvHandler);  // Exit on SEGV errors
   CapabilityPoint::initializeAll();

@@ -224,9 +224,20 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
 
     // use hardcoded log file for debugging for now
     static string logfile = _logfolder + "/astbuilder.log";
-    // CLS: add this mode when ready for timestampted files
+    // CLS: add this mode when ready for timestamped files
     //| ios::app);
     _logfile.open(logfile, ios::out);
+
+    /**
+     * TODO: should I create a logfile for each function? (fun1.json/fun1.log)
+     *      - then I could write a python script to report status that greps all .log
+     *        files and reports back a table of files with "[todo]" tags or other
+     *        errors (eventually can use this to verify successful export too)
+     *      QUESTION: any way to automate validation of AST export also?
+     * TODO: clean output filename (some functions have bad filename characters)
+     * TODO: only decompile non-external functions (check this in python script)
+     * TODO: then continue exporting AST
+    */
 
     if (!fd->isProcStarted()) {
         // not decompiled

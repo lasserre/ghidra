@@ -52,7 +52,7 @@ void exportFunctionAst(Funcdata* fd, char* config_file_path)
     static ExportAstConfig config = readConfig(config_file_path);
     json ast_json = buildAstForFunction(fd, &config);
 
-    string filename = config.output_folder + "/" + fd->getName() + ".json";
+    string filename = config.output_folder + "/" + ensureValidFilename(fd->getName()) + ".json";
     ofstream outfile(filename, ios::out);
     outfile << setw(2) << ast_json << endl;
     outfile.close();

@@ -14,6 +14,12 @@ struct PendingNode;
 /** helper functions I haven't moved elsewhere  yet */
 template<typename T> string to_hex(T data);
 
+/**
+ * @brief Returns a version of filename that is valid on Windows and Linux
+ * by removing/replacing bad characters
+ */
+string ensureValidFilename(string filename);
+
 class ASTBuilder : public PrintC
 {
 public:

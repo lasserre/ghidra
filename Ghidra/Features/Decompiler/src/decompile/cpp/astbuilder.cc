@@ -30,6 +30,21 @@ void ASTBuilder::unimplementedOp(std::string opname)
     unimplementedCode("OP: " + opname);
 }
 
+string ensureValidFilename(string filename)
+{
+    // CLS: I'm sure this isn't optimal - don't care, just rushing to get it done ;)
+    string invalidChars = "<>:\"/\\|?*";
+    for (int i = 0; i < invalidChars.size(); i++) {
+        auto charpos = filename.find(invalidChars[i]);
+        if (charpos != string::npos) {
+            // invalid character - replace it
+            filename[charpos] = '_';
+            i--;    // check this character again to make sure we catch all occurrences
+        }
+    }
+    return filename;
+}
+
 /**
  * BlockBasic was so close...but named their iterators beginOp/endOp.
  * So this simply wraps BlockBasic to enable range-based for loops :)
@@ -223,21 +238,12 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
     // static string logfile = _logfolder + "/" + getTimestamp() + "-astbuilder.log";
 
     // use hardcoded log file for debugging for now
-    static string logfile = _logfolder + "/astbuilder.log";
+
+    // static string logfile = _logfolder + "/astbuilder.log";
+    string logfile = _logfolder + "/" + ensureValidFilename(fd->getName()) + ".log";
     // CLS: add this mode when ready for timestamped files
     //| ios::app);
     _logfile.open(logfile, ios::out);
-
-    /**
-     * TODO: should I create a logfile for each function? (fun1.json/fun1.log)
-     *      - then I could write a python script to report status that greps all .log
-     *        files and reports back a table of files with "[todo]" tags or other
-     *        errors (eventually can use this to verify successful export too)
-     *      QUESTION: any way to automate validation of AST export also?
-     * TODO: clean output filename (some functions have bad filename characters)
-     * TODO: only decompile non-external functions (check this in python script)
-     * TODO: then continue exporting AST
-    */
 
     if (!fd->isProcStarted()) {
         // not decompiled

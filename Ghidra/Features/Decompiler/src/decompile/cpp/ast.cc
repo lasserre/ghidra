@@ -169,6 +169,15 @@ void* BreakStmt::doAccept(ASTVisitor* v, void* context)
     return v->visitBreakStmt(this, context);
 }
 
+CallExpr::CallExpr()
+{
+}
+
+void* CallExpr::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitCallExpr(this, context);
+}
+
 CaseStmt::CaseStmt()
 {
 }

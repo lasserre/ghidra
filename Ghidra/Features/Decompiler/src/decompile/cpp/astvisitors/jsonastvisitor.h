@@ -36,6 +36,7 @@ public:
 
     virtual void* visitBinaryOperator(BinaryOperator*, void*);
     virtual void* visitBreakStmt(BreakStmt*, void*);
+    virtual void* visitCallExpr(CallExpr*, void*);
     virtual void* visitCaseStmt(CaseStmt*, void*);
     virtual void* visitCharacterLiteral(CharacterLiteral*, void*);
     virtual void* visitCompoundStmt(CompoundStmt*, void*);

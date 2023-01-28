@@ -119,6 +119,25 @@ protected:
 };
 
 /**
+ * First child: reference to callee
+ * Second child: param 1
+ * Third child: param 2
+ * ...
+ */
+class CallExpr : public ASTNode
+{
+public:
+    CallExpr();
+
+    int precedence() { return 2; }
+    bool isLRAssociative() { return true; }
+    bool wouldNextChildBeLeftOfOp() { return false; }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+};
+
+/**
  * First child: ConstantExpr case value
  * Second child: code for switch case
  */

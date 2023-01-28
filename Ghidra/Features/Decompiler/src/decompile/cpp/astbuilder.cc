@@ -1022,6 +1022,77 @@ void ASTBuilder::opBranchind(const PcodeOp *op)
 
 void ASTBuilder::opCall(const PcodeOp *op)
 {
+    // CallExpr here
+    CallExpr* callexpr = new CallExpr();
+    currentASTNode()->addChild(callexpr);
+
+    PendingExpr* expr = new PendingExpr();
+    expr->ast_op = callexpr;
+
+    const Varnode* callpoint = op->getIn(0);
+    if (callpoint->getSpace()->getType() == IPTR_FSPEC) {
+        FuncCallSpecs* fspec = FuncCallSpecs::getFspecFromConst(callpoint->getAddr());
+        if (fspec->getName().size() == 0) {
+            unimplementedCode("handle empty func name @ 0x" + to_hex(op->getAddr().getOffset()));
+        }
+        else {
+            Funcdata* fd = fspec->getFuncdata();
+            if (fd) {
+                FunctionSymbol* sym = fd->getSymbol();
+                // TODO: lookup symbol in _fwd_decl_funcs
+
+                // this is the fdecl we need to refer to in our
+                // DeclRefExpr (which is the first child of CallExpr)
+                FunctionDecl* fdecl = nullptr;
+
+                if (_fwd_decl_funcs.count(sym)) {
+                    fdecl = _fwd_decl_funcs.at(sym);
+                }
+                else {
+                    // TODO: refactor code in buildAST() to call
+                    // buildFunctionDecl(Funcdata* fd)
+                    // -> add a parameter to ONLY gen foward declaration
+                    //    of the function (with no body)
+                    // -> call that from here to gen forward decl
+
+                    // ---
+                    // fdecl = buildFunctionDecl(fd);
+                    // _fwd_decl_funcs[sym] = fdecl;
+                }
+
+                // else if (_globals.count(node->sym)) {
+                //     sym_decl = _globals.at(node->sym);
+                // }
+                // else {
+                //     // this is the only way I can figure out so far to "discover" globals
+                //     if (node->sym->getScope()->isGlobal()) {
+                //         // add it to globals map
+                //         VarDecl* global_decl = new VarDecl(_next_vdecl_id++, node->sym);
+                //         _globals[node->sym] = global_decl;
+                //         sym_decl = _globals.at(node->sym);
+
+                //         // add global decl to the AST under top-level TranslationUnitDecl
+                //         _head_translation_unit->addChild(global_decl, false);
+
+
+                /** TODO: first child is a reference to callee function */
+                // DeclRefExpr to function decl
+                // TODO: if forward decl doesn't exist, add it here
+            }
+        }
+    }
+    else {
+        throw LowlevelError("Missing function callspec");
+    }
+
+    // params
+    for (int i = 1; i < op->numInput(); i++) {
+        // pushVnImplied op->getIn(i),op,mods
+        expr->parts.push_back(buildNodeImplied(op->getIn(i),op,mods));
+    }
+
+    _pending_expressions.push_back(expr);
+
     unimplementedOp("opCall");
 }
 

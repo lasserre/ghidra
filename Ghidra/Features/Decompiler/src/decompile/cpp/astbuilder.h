@@ -238,6 +238,7 @@ protected:
     std::map<Symbol*, VarDecl*> _locals;
     std::map<Symbol*, ParmVarDecl*> _parameters;
     std::map<Symbol*, VarDecl*> _globals;
+    std::map<Symbol*, FunctionDecl*> _fwd_decl_funcs;
 
     // counter to generate unique ValueDecl ids within a given context
     // (FunctionDecl for now). This can be reset for various contexts if

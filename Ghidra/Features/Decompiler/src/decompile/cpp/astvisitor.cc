@@ -12,6 +12,11 @@ void* ASTVisitor::visitBreakStmt(BreakStmt*, void*)
     return nullptr;
 }
 
+void* ASTVisitor::visitCallExpr(CallExpr*, void*)
+{
+    return nullptr;
+}
+
 void* ASTVisitor::visitCaseStmt(CaseStmt*, void*)
 {
     return nullptr;

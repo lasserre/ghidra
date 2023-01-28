@@ -111,6 +111,13 @@ void* JsonASTVisitor::visitBreakStmt(BreakStmt* bs, void* context)
     return copy_to_parent(bs_j, context);
 }
 
+void* JsonASTVisitor::visitCallExpr(CallExpr* ce, void* context)
+{
+    json ce_j;
+    ce_j["kind"] = "CallExpr";
+    return copy_to_parent(ce_j, context);
+}
+
 void* JsonASTVisitor::visitCaseStmt(CaseStmt* cs, void* context)
 {
     json cs_j;

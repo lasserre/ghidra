@@ -244,8 +244,8 @@ void* DeclStmt::doAccept(ASTVisitor* v, void* context)
     return v->visitDeclStmt(this, context);
 }
 
-FunctionDecl::FunctionDecl(Funcdata* fd)
-    : _fd(fd)
+FunctionDecl::FunctionDecl(int id, Funcdata* fd)
+    : ValueDecl(id), _fd(fd)
 {
 }
 

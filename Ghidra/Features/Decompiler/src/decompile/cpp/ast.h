@@ -262,30 +262,6 @@ protected:
 };
 
 /**
- * @brief Function declaration node
- */
-class FunctionDecl : public ASTNode
-{
-public:
-    FunctionDecl(Funcdata* fd);
-
-    inline std::string name() { return _fd->getName(); }
-    inline uintb address() { return _fd->getAddress().getOffset(); }
-    inline Datatype* return_dtype() { return _fd->getFuncProto().getOutputType(); }
-
-    /** @brief The backing Funcdata for this FunctionDecl */
-    inline Funcdata* funcdata() { return _fd; }
-
-    int precedence() { return -1; }
-    bool isLRAssociative() { return false; }
-    bool wouldNextChildBeLeftOfOp() { return false; }
-
-protected:
-    virtual void* doAccept(ASTVisitor* v, void* context);
-    Funcdata* _fd;
-};
-
-/**
  * IfStmt children are:
  * - Conditional
  * - Then block
@@ -429,6 +405,30 @@ public:
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
     int _id;
+};
+
+/**
+ * @brief Function declaration node
+ */
+class FunctionDecl : public ValueDecl
+{
+public:
+    FunctionDecl(int id, Funcdata* fd);
+
+    inline std::string name() { return _fd->getName(); }
+    inline uintb address() { return _fd->getAddress().getOffset(); }
+    inline Datatype* return_dtype() { return _fd->getFuncProto().getOutputType(); }
+
+    /** @brief The backing Funcdata for this FunctionDecl */
+    inline Funcdata* funcdata() { return _fd; }
+
+    int precedence() { return -1; }
+    bool isLRAssociative() { return false; }
+    bool wouldNextChildBeLeftOfOp() { return false; }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+    Funcdata* _fd;
 };
 
 /**

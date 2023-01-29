@@ -229,71 +229,17 @@ string getTimestamp()
     return string(buffer);
 }
 
-ASTNode* ASTBuilder::buildAST(Funcdata* fd)
+FunctionDecl* ASTBuilder::buildFunctionDecl(Funcdata* fd, bool fwd_decl)
 {
-    // let's use one logfile for an execution of the decompiler
-    // (this may still happen >1 time since Ghidra kicks us off...)
-
-    // use timestamp when ready for "production"
-    // static string logfile = _logfolder + "/" + getTimestamp() + "-astbuilder.log";
-
-    // use hardcoded log file for debugging for now
-
-    // static string logfile = _logfolder + "/astbuilder.log";
-    string logfile = _logfolder + "/" + ensureValidFilename(fd->getName()) + ".log";
-    // CLS: add this mode when ready for timestamped files
-    //| ios::app);
-    _logfile.open(logfile, ios::out);
-
-    if (!fd->isProcStarted()) {
-        // not decompiled
-        stringstream ss;
-        _logfile << "Function at 0x" << to_hex(fd->getAddress().getOffset());
-        _logfile << " not decompiled\n";
-        ss << "Function at 0x" << to_hex(fd->getAddress().getOffset());
-        ss << " not decompiled";
-        _logfile << ss.str();
-        _logfile.close();
-        return new LogMsg(ss.str());
-    }
-    else if (fd->hasNoStructBlocks()) {
-        // not fully decompiled, no structure present
-        stringstream ss;
-        ss << "Function at 0x" << to_hex(fd->getAddress().getOffset());
-        ss << " not fully decompiled (no structure present)";
-        _logfile << ss.str();
-        _logfile.close();
-        return new LogMsg(ss.str());
-    }
-
-    _logfile << "Building AST for " << fd->getName() << "\n";
-
-    // json fdecl;
-
-    // rough algorithm copied from PrintC::docFunction
-    // emit->beginFunction(fd);
-    // emitFunctionDeclaration(fd);    // Causes us to enter function's scope
-    // emitLocalVarDecls(fd);
-    // if (isSet(flat))
-    //   emitBlockGraph(&fd->getBasicBlocks());
-    // else
-    //   emitBlockGraph(&fd->getStructure());
-    // popScope();                // Exit function's scope
-    // emit->endFunction(id1);
-
-    // translation unit is top level
-    /**
-     * NOTE: don't free this even if != nullptr...the caller of the last
-     * buildAST() call owns the memory
-     */
-    _head_translation_unit = new TranslationUnitDecl();
-
-    FunctionDecl* fdecl = new FunctionDecl(fd);
-    _head_translation_unit->addChild(fdecl);
+    FunctionDecl* fdecl = new FunctionDecl(_next_vdecl_id++, fd);
 
     // params are child nodes
     FuncProto& fp = fd->getFuncProto();
     buildFunctionParams(fp, fdecl);
+
+    if (fwd_decl) {
+        return fdecl;   // don't construct function body
+    }
 
     // -------- LOCAL DECLS
     CompoundStmt* fbody = new CompoundStmt();
@@ -331,6 +277,66 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
     pushASTNode(fbody);
     emitBlockGraph(&fd->getStructure());
     popASTNode();
+    return fdecl;
+}
+
+ASTNode* ASTBuilder::buildAST(Funcdata* fd)
+{
+    // if I decide to use timestamps, convert to something like this:
+    // static string logfile = _logfolder + "/" + getTimestamp() + "-astbuilder.log";
+    string logfile = _logfolder + "/" + ensureValidFilename(fd->getName()) + ".log";
+    // CLS: add this mode when ready for timestamped files
+    //| ios::app);
+    _logfile.open(logfile, ios::out);
+
+    if (!fd->isProcStarted()) {
+        // not decompiled
+        stringstream ss;
+        _logfile << "Function at 0x" << to_hex(fd->getAddress().getOffset());
+        _logfile << " not decompiled\n";
+        ss << "Function at 0x" << to_hex(fd->getAddress().getOffset());
+        ss << " not decompiled";
+        _logfile << ss.str();
+        _logfile.close();
+        return new LogMsg(ss.str());
+    }
+    else if (fd->hasNoStructBlocks()) {
+        // not fully decompiled, no structure present
+        stringstream ss;
+        ss << "Function at 0x" << to_hex(fd->getAddress().getOffset());
+        ss << " not fully decompiled (no structure present)";
+        _logfile << ss.str();
+        _logfile.close();
+        return new LogMsg(ss.str());
+    }
+
+    _logfile << "Building AST for " << fd->getName() << "\n";
+
+    // translation unit is top level
+    /**
+     * NOTE: don't free this even if != nullptr...the caller of the last
+     * buildAST() call owns the memory
+     */
+    _head_translation_unit = new TranslationUnitDecl();
+
+    FunctionDecl* fdecl = buildFunctionDecl(fd, false);
+
+    /** TODO: remove other places in code that manually add forward decls
+     * to head_translation_unit and add them all HERE in a (hopefully)
+     * deterministic ordering...
+     *
+     * [types/typedefs]
+     * [globals]
+     * [functions]
+     *
+     * >>> maybe sort each one by name to help automate any validation later <<<
+     *
+     * (I could even ONLY output the forward decls for a function, convert
+     * this to C snippet, and copy/paste at top of Ghidra decompiled code
+     * in order to automate validation process)
+    */
+
+    _head_translation_unit->addChild(fdecl);
 
     _logfile.flush();
     _logfile.close();
@@ -1039,7 +1045,6 @@ void ASTBuilder::opCall(const PcodeOp *op)
             Funcdata* fd = fspec->getFuncdata();
             if (fd) {
                 FunctionSymbol* sym = fd->getSymbol();
-                // TODO: lookup symbol in _fwd_decl_funcs
 
                 // this is the fdecl we need to refer to in our
                 // DeclRefExpr (which is the first child of CallExpr)
@@ -1049,35 +1054,19 @@ void ASTBuilder::opCall(const PcodeOp *op)
                     fdecl = _fwd_decl_funcs.at(sym);
                 }
                 else {
-                    // TODO: refactor code in buildAST() to call
-                    // buildFunctionDecl(Funcdata* fd)
-                    // -> add a parameter to ONLY gen foward declaration
-                    //    of the function (with no body)
-                    // -> call that from here to gen forward decl
+                    fdecl = buildFunctionDecl(fd, true);
+                    _fwd_decl_funcs[sym] = fdecl;
 
-                    // ---
-                    // fdecl = buildFunctionDecl(fd);
-                    // _fwd_decl_funcs[sym] = fdecl;
+                    // add to top-level translation unit
+                    _head_translation_unit->addChild(fdecl, false);
                 }
 
-                // else if (_globals.count(node->sym)) {
-                //     sym_decl = _globals.at(node->sym);
-                // }
-                // else {
-                //     // this is the only way I can figure out so far to "discover" globals
-                //     if (node->sym->getScope()->isGlobal()) {
-                //         // add it to globals map
-                //         VarDecl* global_decl = new VarDecl(_next_vdecl_id++, node->sym);
-                //         _globals[node->sym] = global_decl;
-                //         sym_decl = _globals.at(node->sym);
-
-                //         // add global decl to the AST under top-level TranslationUnitDecl
-                //         _head_translation_unit->addChild(global_decl, false);
-
-
-                /** TODO: first child is a reference to callee function */
-                // DeclRefExpr to function decl
-                // TODO: if forward decl doesn't exist, add it here
+                // first child is a reference to callee function
+                DeclRefExpr* callee_ref = new DeclRefExpr(fdecl);
+                callexpr->addChild(callee_ref);
+            }
+            else {
+                unimplementedCode("No symbol for function @ 0x" + to_hex(fd->getAddress().getOffset()));
             }
         }
     }
@@ -1085,15 +1074,13 @@ void ASTBuilder::opCall(const PcodeOp *op)
         throw LowlevelError("Missing function callspec");
     }
 
-    // params
+    // arguments
     for (int i = 1; i < op->numInput(); i++) {
         // pushVnImplied op->getIn(i),op,mods
         expr->parts.push_back(buildNodeImplied(op->getIn(i),op,mods));
     }
 
     _pending_expressions.push_back(expr);
-
-    unimplementedOp("opCall");
 }
 
 void ASTBuilder::opCallind(const PcodeOp *op)

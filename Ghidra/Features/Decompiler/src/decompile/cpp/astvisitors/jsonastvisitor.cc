@@ -187,6 +187,7 @@ void* JsonASTVisitor::visitFunctionDecl(FunctionDecl* fd, void* context)
     // basic function node info
     json fdecl;
     fdecl["kind"] = "FunctionDecl";
+    fdecl["id"] = fd->id();
     fdecl["inner"] = json::array();
     fdecl["name"] = fd->name();
     fdecl["address"] = to_hex(fd->address());

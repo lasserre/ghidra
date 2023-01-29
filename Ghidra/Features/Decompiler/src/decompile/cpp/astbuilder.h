@@ -167,6 +167,14 @@ public:
 
 protected:
 
+    /**
+     * @brief Build a FunctionDecl for the given function.
+     *
+     * @param fd The function
+     * @param fwd_decl only build the prototype info for a forward declaration,
+     * don't include the function body in a CompoundStmt child of this node
+     */
+    FunctionDecl* buildFunctionDecl(Funcdata* fd, bool fwd_decl);
     void buildFunctionParams(FuncProto& fp, FunctionDecl* fdecl);
     void buildLocalDeclsFromScope(const Scope& scope, CompoundStmt* fbody);
     VarDecl* tryCreateLocalVarDecl(const SymbolEntry* sym_entry);
@@ -241,8 +249,9 @@ protected:
     std::map<Symbol*, FunctionDecl*> _fwd_decl_funcs;
 
     // counter to generate unique ValueDecl ids within a given context
-    // (FunctionDecl for now). This can be reset for various contexts if
-    // appropriate
+    // ** This includes globals, locals, and function decls **
+    // (TranslationUnitDecl for now). This can be reset for various contexts if
+    // appropriate.
     int _next_vdecl_id;
 
     string _logfolder;

@@ -336,6 +336,21 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
      * in order to automate validation process)
     */
 
+    // TODO: forward declarations/typedefs?
+
+    // add global decls to the AST under top-level translation unit
+    for (auto const& entry : _globals)
+    {
+        _head_translation_unit->addChild(entry.second);
+    }
+
+    // add function forward-declarations to top-level translation unit
+    for (auto const& entry : _fwd_decl_funcs)
+    {
+        _head_translation_unit->addChild(entry.second);
+    }
+
+    // add the function itself last
     _head_translation_unit->addChild(fdecl);
 
     _logfile.flush();
@@ -542,9 +557,6 @@ void ASTBuilder::processPendingSymbol(PendingNode* node)
             VarDecl* global_decl = new VarDecl(_next_vdecl_id++, node->sym);
             _globals[node->sym] = global_decl;
             sym_decl = _globals.at(node->sym);
-
-            // add global decl to the AST under top-level TranslationUnitDecl
-            _head_translation_unit->addChild(global_decl, false);
         }
         else {
             // symbol not found!
@@ -1056,9 +1068,6 @@ void ASTBuilder::opCall(const PcodeOp *op)
                 else {
                     fdecl = buildFunctionDecl(fd, true);
                     _fwd_decl_funcs[sym] = fdecl;
-
-                    // add to top-level translation unit
-                    _head_translation_unit->addChild(fdecl, false);
                 }
 
                 // first child is a reference to callee function

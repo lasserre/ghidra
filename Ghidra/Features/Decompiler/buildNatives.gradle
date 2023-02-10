@@ -54,7 +54,7 @@ model {
 						include "ast.cc"
 		                include "astbuilder.cc"
 						include "astvisitor.cc"
-                        include "astvisitors/forwarddeclvisitor.cc"
+                        include "astvisitors/datatypeforwarddeclvisitor.cc"
                         include "astvisitors/jsonastvisitor.cc"
 						include "space.cc"
 		                include "float.cc"

@@ -7,17 +7,14 @@
  * data type referenced within an AST snippet
  *
  */
-class ForwardDeclVisitor : public ASTVisitor
+class DataTypeForwardDeclVisitor : public ASTVisitor
 {
 public:
     /**
      * @param builder is needed for reuse of some PrintC member
      * functions, otherwise I don't need it
      */
-    ForwardDeclVisitor();
-
-    // deposit/generate/build/emit/insert
-    // void generate
+    DataTypeForwardDeclVisitor();
 
     /**
      * @brief Inserts statements as children of the given parent node that
@@ -25,18 +22,7 @@ public:
      * This only inserts data if it is run after the target AST is processed
      * (i.e. node->accept(visitor) has executed on the node of interest).
      *
-     * TODO: just do data types here? or should we defer all forward declarations
-     * by temporarily inserting PendingVar() ASTNodes and letting this (separate)
-     * visitor do all the work of 1) generating ids, 2) replacing PendingVar with
-     * proper DeclRefExpr's and 3) generating appropriate forward declarations?
-     *
-     * - seems simpler for ASTBuilder to just do it - it knows what each type of
-     * variable is already
-     * - avoids the replacing hassle
-     * - where do you draw the line? e.g. what about ParamVars? it is weird to
-     * not actually have these yet when you could just be done. Or local vars...
-     *
-     * only things that need to be forward declared are:
+     * NOTE: the only things that need to be forward declared are:
      * 1. user data types
      * 2. functions called
      * 3. global variables referenced

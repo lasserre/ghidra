@@ -34,27 +34,23 @@ public:
      */
     void insertForwardDecls(ASTNode* parent);
 
-    virtual void* visitBinaryOperator(BinaryOperator*, void*);
-    virtual void* visitBreakStmt(BreakStmt*, void*);
-    virtual void* visitCallExpr(CallExpr*, void*);
-    virtual void* visitCaseStmt(CaseStmt*, void*);
-    virtual void* visitCharacterLiteral(CharacterLiteral*, void*);
-    virtual void* visitCompoundStmt(CompoundStmt*, void*);
-    virtual void* visitConstantExpr(ConstantExpr*, void*);
     virtual void* visitCStyleCastExpr(CStyleCastExpr*, void*);
     virtual void* visitDeclRefExpr(DeclRefExpr*, void*);
     virtual void* visitDeclStmt(DeclStmt*, void*);
-    virtual void* visitFunctionDecl(FunctionDecl*, void*);
-    virtual void* visitIfStmt(IfStmt*, void*);
-    virtual void* visitIntegerLiteral(IntegerLiteral*, void*);
-    virtual void* visitLogMsg(LogMsg*, void*);
-    virtual void* visitParenExpr(ParenExpr*, void*);
     virtual void* visitParmVarDecl(ParmVarDecl*, void*);
-    virtual void* visitSwitchStmt(SwitchStmt*, void*);
-    virtual void* visitTranslationUnitDecl(TranslationUnitDecl*, void*);
-    virtual void* visitUnaryOperator(UnaryOperator*, void*);
-    virtual void* visitValueDecl(ValueDecl*, void*);
     virtual void* visitVarDecl(VarDecl*, void*);
 
 protected:
+    /**
+     * @brief Checks the given data type to see if it should
+     * be forward-declared. If so, inserts it as a child of the
+     * parent node supplied at insertForwardDecls()
+     *
+     * @param dt
+     */
+    void checkDataType(Datatype* dt);
+
+    // forward-decl nodes to add when finished traversing
+    // the AST (so we don't modify _parent's children while traversing)
+    map<string, ASTNode*> _children_to_add;
 };

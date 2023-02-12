@@ -365,6 +365,98 @@ protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
 };
 
+/**
+ * CLS: this is where I might end up deviating from Clang a bit...
+ * not only in how "Type" is used but whether or not I use BuiltinType,
+ * RecordType, etc...
+ *
+ * OR - if the model is architected such that it is trying to predict the
+ * "ASTNode type" for category (e.g. BuiltinType vs. PointerType vs. ArrayType)
+ * instead of the first element of the triple, it might be natural to follow
+ * the clang pattern here
+ *
+ * C structs:
+ * RecordDecl (name [, size?])
+ * |- FieldDecl (name, type, offset)
+ * |- FieldDecl (name, type, offset)
+ *
+ * NOTE:
+ * Ok, just because I'm getting confused now on where we are and what I even
+ * want for types...I'm going to just MAKE A DECISION to move forward.
+ * Then once we get to look at the dataset and evaluate, we can DEFINITELY
+ * come back and change/tweak/adjust it to whatever unified solution make sense!
+ *
+ * BUT FOR NOW...
+ *
+ * - We have various ASTNode's that have a Datatype* dt() property associated with them
+ *      > currently we are just printing the name in JSON
+ * >> TODO: go back through and convert all these Datatype* instances in the
+ *   AST to Type (ASTNode) instances
+ * >> TODO: add a Datatype* ghidra_dtype() member to the Type (ASTNode) class
+ *   so that for the entire time we are running within Ghidra we have an exact
+ *   link back to the original Datatype* instance
+ *   ...BUT - the Datatype* will not be emitted in the JSON, just the Type
+ *   representation
+ * >>
+ *
+ * DIFFICULT TO DECIDE...
+ * - Should we have a "type database" that each variable just points to (via type_id?)
+ *      - This avoids making the file overly large I guess?
+ *      - For structures it definitely does not make sense to splat the definition
+ *        all over the place
+ *          > SOLUTION: the use of different ASTNodes for different types actually
+ *            helps this issue
+ *              - BuiltinType: this is just the name - we know how to convert it to a triple
+ *              - PointerType: represents a pointer, holds another Type instance for pointed-to type
+ *              - ArrayType: probably just like pointer...but with a size
+ *              - RecordType: use the "database" concept for structures, and RecordType
+ *                just contains their id
+ *              - TypedefType: clang AST may not use this everywhere I will (since they
+ *                love qualType) but this would easily make it explicit if it make sense
+ *                >> maybe Typedef's are primarily a VALIDATION issue (since I need clang to
+ *                   understand undefined8...but a model needs to just know its a long!)
+ *
+ * SO THAT ALSO MEANS...
+ * >> TODO: create BuiltinType for now (we'll add the rest as needed...) and use
+ * this for the immediate problem (class BuiltinType : public Type)
+ */
+class Type : public ASTNode
+{
+public:
+    Type(Datatype* dt);
+
+    /**
+     * TODO: this is probably where the triple <core, size, sign>
+     * representation will be...plus more for pointers, structs, arrays
+     */
+
+    int precedence() { return -1; }
+    bool isLRAssociative() { return false; }
+    bool wouldNextChildBeLeftOfOp() { return false; }
+
+    inline string name() { return _name; }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+    string _name;
+};
+
+class TypedefDecl : public ASTNode
+{
+public:
+    TypedefDecl(string name);
+
+    inline string name() { return _name; }
+
+    int precedence() { return -1; }
+    bool isLRAssociative() { return false; }
+    bool wouldNextChildBeLeftOfOp() { return false; }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+    string _name;
+};
+
 class UnaryOperator : public ASTNode
 {
 public:

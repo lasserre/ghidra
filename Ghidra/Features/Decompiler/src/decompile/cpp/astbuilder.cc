@@ -1,4 +1,5 @@
 #include "astbuilder.h"
+#include "astvisitors/datatypeforwarddeclvisitor.h"
 
 #include <ctime>
 #include <string>
@@ -336,7 +337,13 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
      * in order to automate validation process)
     */
 
-    // TODO: forward declarations/typedefs?
+    /** CLS: I'm thinking this is the best way to get word size? could be wrong */
+    int4 arch_wordsize = glb->getDefaultSize();
+    // glb->getDefaultCodeSpace()->getAddrSize()
+
+    // forward declare types/typedefs
+    DataTypeForwardDeclVisitor fwd_decl_visitor;
+    fwd_decl_visitor.insertForwardDecls(_head_translation_unit);
 
     // add global decls to the AST under top-level translation unit
     for (auto const& entry : _globals)

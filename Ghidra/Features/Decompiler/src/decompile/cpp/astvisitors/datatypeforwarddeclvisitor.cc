@@ -73,25 +73,31 @@ void DataTypeForwardDeclVisitor::checkDataType(Datatype* dt)
 
 void* DataTypeForwardDeclVisitor::visitCStyleCastExpr(CStyleCastExpr* castexpr, void* context)
 {
-    checkDataType(castexpr->dt());
+    // TODO: checkDataType can go away...
+    // checkDataType(castexpr->dt());
+
+    // TODO: add methods to visit various concrete data types!
+    // ...then here we simply call
+    castexpr->type()->accept(this);
+    return nullptr;
 }
 
 void* DataTypeForwardDeclVisitor::visitDeclRefExpr(DeclRefExpr*, void* context)
 {
-
+    return nullptr;
 }
 
 void* DataTypeForwardDeclVisitor::visitDeclStmt(DeclStmt*, void* context)
 {
-
+    return nullptr;
 }
 
 void* DataTypeForwardDeclVisitor::visitParmVarDecl(ParmVarDecl*, void* context)
 {
-
+    return nullptr;
 }
 
 void* DataTypeForwardDeclVisitor::visitVarDecl(VarDecl*, void* context)
 {
-
+    return nullptr;
 }

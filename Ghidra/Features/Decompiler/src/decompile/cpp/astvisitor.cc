@@ -12,6 +12,11 @@ void* ASTVisitor::visitBreakStmt(BreakStmt*, void*)
     return nullptr;
 }
 
+void* ASTVisitor::visitBuiltinType(BuiltinType*, void*)
+{
+    return nullptr;
+}
+
 void* ASTVisitor::visitCallExpr(CallExpr*, void*)
 {
     return nullptr;
@@ -91,6 +96,22 @@ void* ASTVisitor::visitTranslationUnitDecl(TranslationUnitDecl*, void*)
 {
     return nullptr;
 }
+
+void* ASTVisitor::visitType(Type*, void*)
+{
+    return nullptr;
+}
+
+void* ASTVisitor::visitTypedefDecl(TypedefDecl*, void*)
+{
+    return nullptr;
+}
+
+void* ASTVisitor::visitTypedefType(TypedefType*, void*)
+{
+    return nullptr;
+}
+
 
 void* ASTVisitor::visitUnaryOperator(UnaryOperator*, void*)
 {

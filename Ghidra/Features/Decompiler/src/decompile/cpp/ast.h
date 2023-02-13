@@ -8,6 +8,9 @@
 class ASTVisitor;
 class ValueDecl;
 
+class BuiltinType;
+class Type;
+
 /**
  * @brief Represents a single node in the AST
  */
@@ -157,10 +160,11 @@ protected:
 class CharacterLiteral : public ASTNode
 {
 public:
-    CharacterLiteral(Datatype* dt, uintb value);
+    CharacterLiteral(BuiltinType* type, uintb value);
+    virtual ~CharacterLiteral() { delete _type; }
 
     inline uintb value() { return _value; }
-    inline Datatype* dt() { return _dt; }
+    inline BuiltinType* type() { return _type; }
 
     int precedence() { return -1; }
     bool isLRAssociative() { return false; }
@@ -168,7 +172,7 @@ public:
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
-    Datatype* _dt;
+    BuiltinType* _type;
     uintb _value;
 };
 
@@ -204,9 +208,9 @@ protected:
 class CStyleCastExpr : public ASTNode
 {
 public:
-    CStyleCastExpr(Datatype* dt);
+    CStyleCastExpr(Type* type);
 
-    inline Datatype* dt() { return _dt; }
+    inline Type* type() { return _type; }
 
     int precedence() { return 3; }
     // c-style cast actually is R->L
@@ -216,7 +220,7 @@ public:
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
-    Datatype* _dt;
+    Type* _type;
 };
 
 /**
@@ -283,10 +287,10 @@ protected:
 class IntegerLiteral : public ASTNode
 {
 public:
-    IntegerLiteral(const Datatype* dt, uintb value);
+    IntegerLiteral(Type* type, uintb value);
 
     inline uintb value() { return _value; }
-    inline const Datatype* dt() { return _dt; }
+    inline Type* type() { return _type; }
 
     int precedence() { return -1; }
     bool isLRAssociative() { return false; }
@@ -294,8 +298,8 @@ public:
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
-    const Datatype* _dt;
     uintb _value;
+    Type* _type;
 };
 
 /**
@@ -392,12 +396,6 @@ protected:
  *      > currently we are just printing the name in JSON
  * >> TODO: go back through and convert all these Datatype* instances in the
  *   AST to Type (ASTNode) instances
- * >> TODO: add a Datatype* ghidra_dtype() member to the Type (ASTNode) class
- *   so that for the entire time we are running within Ghidra we have an exact
- *   link back to the original Datatype* instance
- *   ...BUT - the Datatype* will not be emitted in the JSON, just the Type
- *   representation
- * >>
  *
  * DIFFICULT TO DECIDE...
  * - Should we have a "type database" that each variable just points to (via type_id?)
@@ -411,24 +409,21 @@ protected:
  *              - ArrayType: probably just like pointer...but with a size
  *              - RecordType: use the "database" concept for structures, and RecordType
  *                just contains their id
- *              - TypedefType: clang AST may not use this everywhere I will (since they
- *                love qualType) but this would easily make it explicit if it make sense
- *                >> maybe Typedef's are primarily a VALIDATION issue (since I need clang to
- *                   understand undefined8...but a model needs to just know its a long!)
  *
- * SO THAT ALSO MEANS...
- * >> TODO: create BuiltinType for now (we'll add the rest as needed...) and use
- * this for the immediate problem (class BuiltinType : public Type)
+ * TODO - PointerType, ArrayType, RecordType
  */
+
 class Type : public ASTNode
 {
 public:
-    Type(Datatype* dt);
+    Type(const Datatype* dt);
+    Type(string name);
 
     /**
-     * TODO: this is probably where the triple <core, size, sign>
-     * representation will be...plus more for pointers, structs, arrays
+     * @brief The Ghidra Datatype associated with this Type if one exists,
+     * otherwise nullptr.
      */
+    inline const Datatype* ghidra_dtype() { return _ghidra_dt; }
 
     int precedence() { return -1; }
     bool isLRAssociative() { return false; }
@@ -439,8 +434,38 @@ public:
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
     string _name;
+    const Datatype* _ghidra_dt;
 };
 
+/**
+ * @brief Integers, floats
+ */
+class BuiltinType : public Type
+{
+public:
+    BuiltinType(const Datatype* dt);
+    BuiltinType(string name, int size, bool isFloatingPoint, bool sign);
+
+    /** @brief Size of type in bytes */
+    int size();
+
+    /** @brief True if floating point type, false if integral type */
+    bool isFloatingPoint();
+
+    /** @brief True if signed, false if unsigned */
+    bool isSigned();
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+    bool _is_floating;
+    bool _is_signed;
+    int _size;
+};
+
+/**
+ * @brief This declares the typedef
+ * (e.g. typedef int foo; )
+ */
 class TypedefDecl : public ASTNode
 {
 public:
@@ -457,13 +482,30 @@ protected:
     string _name;
 };
 
+/**
+ * @brief This is a "use" of a typedef'd type
+ * (e.g. foo myvar; -> foo has a TypedefType type in the AST) *
+ */
+class TypedefType: public Type
+{
+public:
+    TypedefType(TypedefDecl* decl);
+
+    /** @brief Returns a pointer to the declaration of this typedef */
+    inline TypedefDecl* getDecl() { return _decl; }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+    TypedefDecl* _decl;
+};
+
 class UnaryOperator : public ASTNode
 {
 public:
-    UnaryOperator(std::string opcode, Datatype* dt);
+    UnaryOperator(std::string opcode, Type* type);
 
     inline std::string opcode() { return _opcode; }
-    inline Datatype* dt() { return _dt; }
+    inline Type* type() { return _type; }
 
     int precedence();
     bool isLRAssociative();
@@ -473,7 +515,7 @@ public:
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
     std::string _opcode;
-    Datatype* _dt;  // output datatype of operator
+    Type* _type;    // output datatype of operator
 };
 
 /**
@@ -509,7 +551,8 @@ public:
 
     inline std::string name() { return _fd->getName(); }
     inline uintb address() { return _fd->getAddress().getOffset(); }
-    inline Datatype* return_dtype() { return _fd->getFuncProto().getOutputType(); }
+    inline Type* return_type() { return _return_type; }
+
 
     /** @brief The backing Funcdata for this FunctionDecl */
     inline Funcdata* funcdata() { return _fd; }
@@ -521,6 +564,7 @@ public:
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
     Funcdata* _fd;
+    Type* _return_type;
 };
 
 /**
@@ -534,7 +578,9 @@ public:
      */
     VarDecl(int id, Symbol* sym);
 
-    inline Symbol* sym() { return _sym; }
+    inline Symbol* ghidra_sym() { return _sym; }
+    inline string name() { return _name; }
+    inline Type* type() { return _type; }
 
     int precedence() { return -1; }
     bool isLRAssociative() { return false; }
@@ -543,6 +589,8 @@ public:
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
     Symbol* _sym;
+    string _name;
+    Type* _type;
 };
 
 /**
@@ -564,3 +612,5 @@ protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
     ProtoParameter* _param;
 };
+
+Type* toAstType(const Datatype* dt);

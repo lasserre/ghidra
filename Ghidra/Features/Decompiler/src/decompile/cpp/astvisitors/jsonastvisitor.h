@@ -36,6 +36,7 @@ public:
 
     virtual void* visitBinaryOperator(BinaryOperator*, void*);
     virtual void* visitBreakStmt(BreakStmt*, void*);
+    virtual void* visitBuiltinType(BuiltinType*, void*);
     virtual void* visitCallExpr(CallExpr*, void*);
     virtual void* visitCaseStmt(CaseStmt*, void*);
     virtual void* visitCharacterLiteral(CharacterLiteral*, void*);
@@ -52,11 +53,17 @@ public:
     virtual void* visitParmVarDecl(ParmVarDecl*, void*);
     virtual void* visitSwitchStmt(SwitchStmt*, void*);
     virtual void* visitTranslationUnitDecl(TranslationUnitDecl*, void*);
+    virtual void* visitType(Type*, void*);
+    virtual void* visitTypedefDecl(TypedefDecl*, void*);
+    virtual void* visitTypedefType(TypedefType*, void*);
     virtual void* visitUnaryOperator(UnaryOperator*, void*);
     virtual void* visitValueDecl(ValueDecl*, void*);
     virtual void* visitVarDecl(VarDecl*, void*);
 
     inline json& get_json() { return _ast_json; }
+
+    json typeToJson(Type* type);
+    json datatypeToJson(const Datatype* dt);
 
 protected:
 
@@ -68,8 +75,6 @@ protected:
      * is returned directly
      */
     json* copy_to_parent(json& data, void* parent_context);
-
-    json datatype_to_json(const Datatype* dt);
 
     json _ast_json;
     ASTBuilder* _builder;

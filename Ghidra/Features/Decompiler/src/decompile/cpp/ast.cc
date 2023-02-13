@@ -187,8 +187,8 @@ void* CaseStmt::doAccept(ASTVisitor* v, void* context)
     return v->visitCaseStmt(this, context);
 }
 
-CharacterLiteral::CharacterLiteral(Datatype* dt, uintb value)
-    : _dt(dt), _value(value)
+CharacterLiteral::CharacterLiteral(BuiltinType* type, uintb value)
+    : _type(type), _value(value)
 {
 }
 
@@ -215,8 +215,8 @@ void* ConstantExpr::doAccept(ASTVisitor* v, void* context)
     return v->visitConstantExpr(this, context);
 }
 
-CStyleCastExpr::CStyleCastExpr(Datatype* dt)
-    : _dt(dt)
+CStyleCastExpr::CStyleCastExpr(Type* type)
+    : _type(type)
 {
 }
 
@@ -247,6 +247,7 @@ void* DeclStmt::doAccept(ASTVisitor* v, void* context)
 FunctionDecl::FunctionDecl(int id, Funcdata* fd)
     : ValueDecl(id), _fd(fd)
 {
+    _return_type = toAstType(fd->getFuncProto().getOutputType());
 }
 
 void* FunctionDecl::doAccept(ASTVisitor* v, void* context)
@@ -263,8 +264,8 @@ void* IfStmt::doAccept(ASTVisitor* v, void* context)
     return v->visitIfStmt(this, context);
 }
 
-IntegerLiteral::IntegerLiteral(const Datatype* dt, uintb value)
-    : _dt(dt), _value(value)
+IntegerLiteral::IntegerLiteral(Type* type, uintb value)
+    : _value(value), _type(type)
 {
 }
 
@@ -310,8 +311,77 @@ void* TranslationUnitDecl::doAccept(ASTVisitor* v, void* context)
     return v->visitTranslationUnitDecl(this, context);
 }
 
-UnaryOperator::UnaryOperator(std::string opcode, Datatype* dt)
-    : _opcode(opcode), _dt(dt)
+Type::Type(const Datatype* dt)
+    : _ghidra_dt(dt), _name(dt->getName())
+{
+}
+
+Type::Type(string name)
+    : _ghidra_dt(nullptr), _name(name)
+{
+}
+
+void* Type::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitType(this, context);
+}
+
+BuiltinType::BuiltinType(const Datatype* dt)
+    : Type(dt), _size(0), _is_floating(false), _is_signed(false)
+{
+}
+
+BuiltinType::BuiltinType(string name, int size, bool isFloatingPoint, bool sign)
+    : Type(name), _size(size), _is_floating(isFloatingPoint), _is_signed(sign)
+{
+}
+
+int BuiltinType::size()
+{
+    return _ghidra_dt ? _ghidra_dt->getSize() : _size;
+}
+
+bool BuiltinType::isFloatingPoint()
+{
+    return _ghidra_dt ? _ghidra_dt->getMetatype() == TYPE_FLOAT : _is_floating;
+}
+
+bool BuiltinType::isSigned()
+{
+    if (_ghidra_dt) {
+        auto meta = _ghidra_dt->getMetatype();
+        return meta == TYPE_INT || meta == TYPE_BOOL || meta == TYPE_FLOAT;
+    }
+    return _is_signed;
+}
+
+void* BuiltinType::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitBuiltinType(this, context);
+}
+
+TypedefDecl::TypedefDecl(string name)
+    : _name(name)
+{
+}
+
+void* TypedefDecl::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitTypedefDecl(this, context);
+}
+
+TypedefType::TypedefType(TypedefDecl* decl)
+    : Type(decl->name()), _decl(decl)
+{
+}
+
+void* TypedefType::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitTypedefType(this, context);
+}
+
+UnaryOperator::UnaryOperator(std::string opcode, Type* type)
+    : _opcode(opcode), _type(type)
 {
 }
 
@@ -340,6 +410,9 @@ void* UnaryOperator::doAccept(ASTVisitor* v, void* context)
 ParmVarDecl::ParmVarDecl(int id, ProtoParameter* param)
     : VarDecl(id, param->getSymbol()), _param(param)
 {
+    if (!_type) {
+        _type = toAstType(param->getType());
+    }
 }
 
 void* ParmVarDecl::doAccept(ASTVisitor* v, void* context)
@@ -358,11 +431,41 @@ void* ValueDecl::doAccept(ASTVisitor* v, void* context)
 }
 
 VarDecl::VarDecl(int id, Symbol* sym)
-    : ValueDecl(id), _sym(sym)
+    : ValueDecl(id), _sym(sym), _name(""), _type(nullptr)
 {
+    if (sym) {
+        _name = sym->getName();
+        _type = toAstType(sym->getType());
+    }
 }
 
 void* VarDecl::doAccept(ASTVisitor* v, void* context)
 {
     return v->visitVarDecl(this, context);
+}
+
+Type* toAstType(const Datatype* dt)
+{
+    switch (dt->getMetatype()) {
+        case TYPE_UNKNOWN:      // fall-through
+        case TYPE_UINT:
+        case TYPE_INT:
+        case TYPE_FLOAT:
+        case TYPE_BOOL:
+            return new BuiltinType(dt);
+        case TYPE_SPACEBASE:    // fall-through
+        default:
+            // _messages.push_back("UNHANDLED metatype " + string(dt->getMetatype())
+                // + " for " + dt->getName());
+            return new Type(dt);
+    }
+
+    // TYPE_VOID = 12,		///< Standard "void" type, absence of type
+    // TYPE_CODE = 6,		///< Data is actual executable code
+
+    // TYPE_PTR = 4,			///< Pointer data-type
+    // TYPE_PTRREL = 3,		///< Pointer relative to another data-type (specialization of TYPE_PTR)
+    // TYPE_ARRAY = 2,		///< Array data-type, made up of a sequence of "element" datatype
+    // TYPE_PARTIALSTRUCT = 1,	///< Part of a structure, stored separately from the whole
+    // TYPE_STRUCT = 0		///< Structure data-type, made up of component datatypes
 }

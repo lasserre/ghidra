@@ -147,7 +147,7 @@ void ASTBuilder::buildFunctionParams(FuncProto& fp, FunctionDecl* fdecl)
         fdecl->addChild(pvdecl);
 
         // save this function parameter for future lookups
-        _parameters[pvdecl->sym()] = pvdecl;
+        _parameters[pvdecl->ghidra_sym()] = pvdecl;
     }
 }
 
@@ -194,7 +194,7 @@ void ASTBuilder::buildLocalDeclsFromScope(const Scope& scope, CompoundStmt* fbod
             fbody->addChild(ds);
 
             // save this local for future lookups
-            _locals[vdecl->sym()] = vdecl;
+            _locals[vdecl->ghidra_sym()] = vdecl;
         }
     }
 
@@ -215,7 +215,7 @@ void ASTBuilder::buildLocalDeclsFromScope(const Scope& scope, CompoundStmt* fbod
             fbody->addChild(ds);
 
             // save this local for future lookups
-            _locals[vdecl->sym()] = vdecl;
+            _locals[vdecl->ghidra_sym()] = vdecl;
         }
     }
 }
@@ -434,13 +434,14 @@ void ASTBuilder::processPendingTemporary(PendingNode* node)
 
 void createIntLiteral(ASTBuilder* builder, Datatype* dt, uintb value)
 {
-    IntegerLiteral* lit = new IntegerLiteral(dt, value);
+    IntegerLiteral* lit = new IntegerLiteral(toAstType(dt), value);
     builder->currentASTNode()->addChild(lit);
 }
 
 void ASTBuilder::createCharConstant(Datatype* dt, uintb value, const Varnode* vn)
 {
-    CharacterLiteral* chr = new CharacterLiteral(dt, value);
+    BuiltinType* builtin = new BuiltinType(dt);
+    CharacterLiteral* chr = new CharacterLiteral(builtin, value);
     currentASTNode()->addChild(chr);
     // CLS: is this sufficient? or do we need to go handle all the cases
     // and print formats like Ghidra does?
@@ -926,7 +927,7 @@ void ASTBuilder::emitBlockSwitch(const BlockSwitch *bl)
                 uintb val = bl->getLabel(i, l);
                 CaseStmt* case_stmt = new CaseStmt();
                 ConstantExpr* cexpr = new ConstantExpr();
-                IntegerLiteral* literal = new IntegerLiteral(dt, val);
+                IntegerLiteral* literal = new IntegerLiteral(toAstType(dt), val);
 
                 cmpstmt->addChild(case_stmt);
                 case_stmt->addChild(cexpr);
@@ -988,7 +989,7 @@ void ASTBuilder::opLoad(const PcodeOp *op)
         expr->ast_op = currentASTNode();
     }
     else {
-        UnaryOperator* deref = new UnaryOperator("*", op->getOut()->getType());
+        UnaryOperator* deref = new UnaryOperator("*", toAstType(op->getOut()->getType()));
         currentASTNode()->addChild(deref);
         expr->ast_op = deref;
     }
@@ -1267,7 +1268,7 @@ std::string ASTBuilder::getTypeStringEnd(const Datatype* dt)
 void ASTBuilder::createTypeCast(const PcodeOp* op)
 {
     Datatype* dt = op->getOut()->getHigh()->getType();
-    CStyleCastExpr* cast = new CStyleCastExpr(dt);
+    CStyleCastExpr* cast = new CStyleCastExpr(toAstType(dt));
     currentASTNode()->addChild(cast);
 
     PendingExpr* expr = new PendingExpr();

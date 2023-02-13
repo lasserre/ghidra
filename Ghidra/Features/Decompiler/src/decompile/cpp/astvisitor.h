@@ -18,6 +18,7 @@ class ASTVisitor
 public:
     virtual void* visitBinaryOperator(BinaryOperator*, void*);
     virtual void* visitBreakStmt(BreakStmt*, void*);
+    virtual void* visitBuiltinType(BuiltinType*, void*);
     virtual void* visitCallExpr(CallExpr*, void*);
     virtual void* visitCaseStmt(CaseStmt*, void*);
     virtual void* visitCharacterLiteral(CharacterLiteral*, void*);
@@ -34,6 +35,9 @@ public:
     virtual void* visitParmVarDecl(ParmVarDecl*, void*);
     virtual void* visitSwitchStmt(SwitchStmt*, void*);
     virtual void* visitTranslationUnitDecl(TranslationUnitDecl*, void*);
+    virtual void* visitType(Type*, void*);
+    virtual void* visitTypedefDecl(TypedefDecl*, void*);
+    virtual void* visitTypedefType(TypedefType*, void*);
     virtual void* visitUnaryOperator(UnaryOperator*, void*);
     virtual void* visitValueDecl(ValueDecl*, void*);
     virtual void* visitVarDecl(VarDecl*, void*);

@@ -337,7 +337,7 @@ void DecompileAt::rawAction(void)
         // export AST if requested
         static char* config_file_path = getenv("GHIDRA_AST_CONFIG_FILE");
         if (config_file_path) {
-            exportFunctionAst(fd, config_file_path);
+            exportFunctionAst(ghidra, fd, config_file_path);
         }
     }
     sout << "</doc>\n";

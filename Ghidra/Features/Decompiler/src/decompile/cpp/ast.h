@@ -33,6 +33,16 @@ public:
      */
     void addChild(ASTNode* child, bool append=true, bool check_parens=true);
 
+    /**
+     * @brief Removes this node and replaces it with new_node in the AST.
+     * This node's children are moved over to become children of new_node,
+     * and new_node takes the place of this node with respect to its parent
+     *
+     * @param replacement
+     * @returns a pointer to this node which may now be deleted
+     */
+    ASTNode* replaceWith(ASTNode* new_node);
+
     void accept(ASTVisitor*, void* context=nullptr);
 
     /**

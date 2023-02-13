@@ -1,5 +1,5 @@
 #include "astbuilder.h"
-#include "astvisitors/datatypeforwarddeclvisitor.h"
+#include "astvisitors/typedefdeclvisitor.h"
 
 #include <ctime>
 #include <string>
@@ -127,8 +127,8 @@ struct PendingExpr
     std::vector<PendingNode*> parts;
 };
 
-ASTBuilder::ASTBuilder(string logfolder)
-    : PrintC(nullptr), _logfolder(logfolder),
+ASTBuilder::ASTBuilder(Architecture* ghidra, string logfolder)
+    : PrintC(ghidra), _logfolder(logfolder),
     _head_translation_unit(nullptr), _next_vdecl_id(0)
 {
 }
@@ -342,8 +342,8 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
     // glb->getDefaultCodeSpace()->getAddrSize()
 
     // forward declare types/typedefs
-    DataTypeForwardDeclVisitor fwd_decl_visitor;
-    fwd_decl_visitor.insertForwardDecls(_head_translation_unit);
+    TypedefDeclVisitor typedef_visitor;
+    typedef_visitor.insertTypedefs(_head_translation_unit);
 
     // add global decls to the AST under top-level translation unit
     for (auto const& entry : _globals)

@@ -26,10 +26,11 @@ public:
     /**
      * @brief Construct a new AST Builder object
      *
+     * @param is the ghidra Architecture pointer
      * @param fbody is the CompoundStmt node (child to FunctionDecl node) that
      * contains the function body statements
      */
-    ASTBuilder(string logfolder);
+    ASTBuilder(Architecture* ghidra, string logfolder);
 
     /**
      * --------------------------------------------------------------

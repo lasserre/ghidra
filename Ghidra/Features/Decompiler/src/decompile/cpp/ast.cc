@@ -79,6 +79,36 @@ void ASTNode::addChild(ASTNode* child, bool append /*= true*/, bool check_parens
     // }
 }
 
+ASTNode* ASTNode::replaceWith(ASTNode* new_node)
+{
+    // clean up any stale state from new_node
+    for (ASTNode* child : new_node->_children) {
+        delete child;
+    }
+
+    // 1. make new node point to parent/children
+    new_node->_parent = _parent;
+    new_node->_children = _children;    // copy children vector over (child pointers ok to stay as-is)
+
+    // 2. make children point to new_node
+    for (ASTNode* child : new_node->_children) {
+        child->_parent = new_node;
+    }
+
+    // 3. make parent point to new_node (if this is not the HEAD with null parent)
+    if (_parent) {
+        std::replace(_parent->_children.begin(),
+                    _parent->_children.end(),
+                    this, new_node);
+    }
+
+    // reset this node's children vector, otherwise deleting it
+    // will delete old children pointers hanging around
+    _children = {};
+
+    return this;
+}
+
 void ASTNode::accept(ASTVisitor* v, void* parent_context /*=nullptr*/)
 {
     // visit this node
@@ -447,13 +477,13 @@ void* VarDecl::doAccept(ASTVisitor* v, void* context)
 Type* toAstType(const Datatype* dt)
 {
     switch (dt->getMetatype()) {
-        case TYPE_UNKNOWN:      // fall-through
-        case TYPE_UINT:
+        case TYPE_UINT:     // fall-through
         case TYPE_INT:
         case TYPE_FLOAT:
         case TYPE_BOOL:
             return new BuiltinType(dt);
-        case TYPE_SPACEBASE:    // fall-through
+        case TYPE_UNKNOWN:      // fall-through
+        case TYPE_SPACEBASE:
         default:
             // _messages.push_back("UNHANDLED metatype " + string(dt->getMetatype())
                 // + " for " + dt->getName());

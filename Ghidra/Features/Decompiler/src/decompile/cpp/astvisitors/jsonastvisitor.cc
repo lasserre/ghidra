@@ -21,9 +21,9 @@ json JsonASTVisitor::datatypeToJson(const Datatype* dt)
     return dt ? _builder->getFullTypeString(dt) : "";
 }
 
-json buildAstForFunction(Funcdata* fd, ExportAstConfig* config)
+json buildAstForFunction(Architecture* ghidra, Funcdata* fd, ExportAstConfig* config)
 {
-    ASTBuilder builder(config->output_folder);
+    ASTBuilder builder(ghidra, config->output_folder);
     ASTNode* ast = builder.buildAST(fd);
 
     JsonASTVisitor visitor(&builder);
@@ -47,10 +47,10 @@ ExportAstConfig readConfig(char* config_file_path)
     return data.get<ExportAstConfig>();
 }
 
-void exportFunctionAst(Funcdata* fd, char* config_file_path)
+void exportFunctionAst(Architecture* ghidra, Funcdata* fd, char* config_file_path)
 {
     static ExportAstConfig config = readConfig(config_file_path);
-    json ast_json = buildAstForFunction(fd, &config);
+    json ast_json = buildAstForFunction(ghidra, fd, &config);
 
     string filename = config.output_folder + "/" + ensureValidFilename(fd->getName()) + ".json";
     ofstream outfile(filename, ios::out);

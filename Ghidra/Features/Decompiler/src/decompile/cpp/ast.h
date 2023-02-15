@@ -222,6 +222,12 @@ public:
 
     inline Type* type() { return _type; }
 
+    inline void replace_type(Type* newtype)
+    {
+        delete _type;
+        _type = newtype;
+    }
+
     int precedence() { return 3; }
     // c-style cast actually is R->L
     bool isLRAssociative() { return false; }
@@ -428,6 +434,7 @@ class Type : public ASTNode
 public:
     Type(const Datatype* dt);
     Type(string name);
+    virtual ~Type() {}
 
     /**
      * @brief The Ghidra Datatype associated with this Type if one exists,
@@ -539,6 +546,7 @@ public:
      * @param id is a unique ID for this ValueDecl
      */
     ValueDecl(int id);
+    virtual ~ValueDecl() {}
 
     inline int id() { return _id; }
 
@@ -563,6 +571,11 @@ public:
     inline uintb address() { return _fd->getAddress().getOffset(); }
     inline Type* return_type() { return _return_type; }
 
+    inline void replace_return_type(Type* newtype)
+    {
+        delete _return_type;
+        _return_type = newtype;
+    }
 
     /** @brief The backing Funcdata for this FunctionDecl */
     inline Funcdata* funcdata() { return _fd; }
@@ -587,10 +600,17 @@ public:
      * @param sym The symbol for this variable
      */
     VarDecl(int id, Symbol* sym);
+    virtual ~VarDecl() { delete _type; }
 
     inline Symbol* ghidra_sym() { return _sym; }
     inline string name() { return _name; }
     inline Type* type() { return _type; }
+
+    inline void replace_type(Type* newtype)
+    {
+        delete _type;
+        _type = newtype;
+    }
 
     int precedence() { return -1; }
     bool isLRAssociative() { return false; }

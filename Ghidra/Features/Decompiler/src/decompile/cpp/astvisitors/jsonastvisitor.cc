@@ -325,7 +325,7 @@ void* JsonASTVisitor::visitTypedefType(TypedefType* tdtype, void* context)
     tdtype_j["name"] = tdtype->name();
     /** QUESTION: should we do anything with the decl? */
     addMessages(tdtype, tdtype_j);
-    return copy_to_parent(tdtype_j, tdtype);
+    return copy_to_parent(tdtype_j, context);
 }
 
 void* JsonASTVisitor::visitUnaryOperator(UnaryOperator* uo, void* context)

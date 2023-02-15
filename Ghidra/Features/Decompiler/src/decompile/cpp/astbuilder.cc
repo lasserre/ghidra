@@ -341,10 +341,6 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
     int4 arch_wordsize = glb->getDefaultSize();
     // glb->getDefaultCodeSpace()->getAddrSize()
 
-    // forward declare types/typedefs
-    TypedefDeclVisitor typedef_visitor;
-    typedef_visitor.insertTypedefs(_head_translation_unit);
-
     // add global decls to the AST under top-level translation unit
     for (auto const& entry : _globals)
     {
@@ -359,6 +355,12 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
 
     // add the function itself last
     _head_translation_unit->addChild(fdecl);
+
+    // forward declare types/typedefs
+    // (these will be prepended @ top, but have to compute last so we process
+    // the globals/fwd decls/function code)
+    TypedefDeclVisitor typedef_visitor;
+    typedef_visitor.insertTypedefs(_head_translation_unit);
 
     _logfile.flush();
     _logfile.close();

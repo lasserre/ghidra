@@ -2,17 +2,24 @@
 
 #include "astvisitor.h"
 
+class AttachedTypeUpdate;
+
 struct NewTypedef
 {
     /** @brief The newly-created TypedefDecl */
     TypedefDecl* decl;
 
-    /**
-     * @brief List of each existing use of this typedef'd type
-     * (each of these needs to be replaced with TypedefType nodes
-     * when we're done)
-    */
-    vector<Type*> uses;
+    // these are proper nodes in the tree and must be replaced by preserving
+    // parent/child links
+    vector<Type*> tree_node_uses;
+
+    // these are Type* instances which are properties of nodes in the tree
+    // (attached to these nodes) but not actual children. Thus there is no
+    // parent/child link - we just need to update the pointer where they are
+    // stored to update the type
+    vector<AttachedTypeUpdate*> attached_uses;
+
+    void addUse(AttachedTypeUpdate* atu, Type* type);
 };
 
 /**
@@ -48,6 +55,7 @@ public:
     // -------------- CHECK NON-NODE DATA TYPES
     virtual void* visitCStyleCastExpr(CStyleCastExpr*, void*);
     virtual void* visitDeclRefExpr(DeclRefExpr*, void*);
+    virtual void* visitFunctionDecl(FunctionDecl*, void*);
     virtual void* visitParmVarDecl(ParmVarDecl*, void*);
     virtual void* visitVarDecl(VarDecl*, void*);
 

@@ -1,5 +1,35 @@
 #include "typedefdeclvisitor.h"
 
+/**
+ * Probably a better way to do this...but I just need a flexible way
+ * of update Type* properties that are ATTACHED to nodes but not proper
+ * nodes themselves (i.e. not children of other nodes). This gives me
+ * alot of flexibility, especially if a particular node type ends up
+ * having multiple Type* properties that need to be updated...instead
+ * of another visitor implementation "not being sure" which property
+ * needs to be updated, this approach lets me simply define 2 lambdas
+ * - one for each property - and it should "just work".
+ */
+struct AttachedTypeUpdate
+{
+    AttachedTypeUpdate(ASTNode* (*updateType)(ASTNode*,Type*), ASTNode* node)
+        : updateType(updateType), node(node)
+    {}
+
+    ASTNode* (*updateType)(ASTNode*, Type*);
+    ASTNode* node;
+};
+
+void NewTypedef::addUse(AttachedTypeUpdate* atu, Type* type)
+{
+    if (atu) {
+        // make a copy so caller can delete
+        attached_uses.push_back(new AttachedTypeUpdate(*atu));
+    } else {
+        tree_node_uses.push_back(type);
+    }
+}
+
 TypedefDeclVisitor::TypedefDeclVisitor()
     : _typedefs_to_add()
 {
@@ -11,12 +41,21 @@ void TypedefDeclVisitor::insertTypedefs(ASTNode* parent)
 
     for (const auto& entry : _typedefs_to_add) {
         // add typedef declarations for each at the top
-        parent->addChild(entry.second.decl);
+        parent->addChild(entry.second.decl, /* append =*/ false);
 
         // replace each use of this typedef
-        for (Type* typedef_use : entry.second.uses) {
+        for (Type* typedef_use : entry.second.tree_node_uses) {
             typedef_use->replaceWith(new TypedefType(entry.second.decl));
             delete typedef_use;     // clean up the original
+        }
+
+        for (AttachedTypeUpdate* attached_update : entry.second.attached_uses) {
+            attached_update->updateType(
+                attached_update->node,
+                new TypedefType(entry.second.decl
+            ));
+
+            delete attached_update;     // done with this now
         }
     }
 }
@@ -75,11 +114,11 @@ void TypedefDeclVisitor::insertTypedefs(ASTNode* parent)
 
 // }
 
-void* TypedefDeclVisitor::visitType(Type* type, void*)
+void* TypedefDeclVisitor::visitType(Type* type, void* atu)
 {
     if (_typedefs_to_add.count(type->name())) {
         // already defined the typedef, so add this use to the list
-        _typedefs_to_add[type->name()].uses.push_back(type);
+        _typedefs_to_add[type->name()].addUse((AttachedTypeUpdate*)atu, type);
         return nullptr;
     }
 
@@ -120,7 +159,7 @@ void* TypedefDeclVisitor::visitType(Type* type, void*)
         NewTypedef td;
         td.decl = new TypedefDecl(type->name());
         td.decl->addChild(real_type);
-        td.uses.push_back(type);
+        td.addUse((AttachedTypeUpdate*)atu, type);
         _typedefs_to_add.insert({type->name(), td});
     }
 
@@ -138,7 +177,17 @@ void* TypedefDeclVisitor::visitType(Type* type, void*)
 
 void* TypedefDeclVisitor::visitCStyleCastExpr(CStyleCastExpr* castexpr, void* context)
 {
-    castexpr->type()->accept(this);
+    auto type_update = new AttachedTypeUpdate(
+        [](ASTNode* cast, Type* newtype) {
+            ((CStyleCastExpr*)cast)->replace_type(newtype);
+            return cast;
+        },
+        castexpr
+    );
+
+    castexpr->type()->accept(this, type_update);
+
+    delete type_update;
     return nullptr;
 }
 
@@ -148,14 +197,50 @@ void* TypedefDeclVisitor::visitDeclRefExpr(DeclRefExpr* declref, void* context)
     return nullptr;
 }
 
+void* TypedefDeclVisitor::visitFunctionDecl(FunctionDecl* fdecl, void* context)
+{
+    auto type_update = new AttachedTypeUpdate(
+        [](ASTNode* fd, Type* newtype) {
+            ((FunctionDecl*)fd)->replace_return_type(newtype);
+            return fd;
+        },
+        fdecl
+    );
+
+    fdecl->return_type()->accept(this, type_update);
+
+    delete type_update;
+    return nullptr;
+}
+
 void* TypedefDeclVisitor::visitParmVarDecl(ParmVarDecl* pvdecl, void* context)
 {
-    pvdecl->type()->accept(this);
+    auto type_update = new AttachedTypeUpdate(
+        [](ASTNode* pv, Type* newtype) {
+            ((ParmVarDecl*)pv)->replace_type(newtype);
+            return pv;
+        },
+        pvdecl
+    );
+
+    pvdecl->type()->accept(this, type_update);
+
+    delete type_update;
     return nullptr;
 }
 
 void* TypedefDeclVisitor::visitVarDecl(VarDecl* vdecl, void* context)
 {
-    vdecl->type()->accept(this);
+    auto type_update = new AttachedTypeUpdate(
+        [](ASTNode* vd, Type* newtype) {
+            ((VarDecl*)vd)->replace_type(newtype);
+            return vd;
+        },
+        vdecl
+    );
+
+    vdecl->type()->accept(this, type_update);
+
+    delete type_update;
     return nullptr;
 }

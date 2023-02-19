@@ -37,6 +37,11 @@ void* ASTVisitor::visitCompoundStmt(CompoundStmt*, void*)
     return nullptr;
 }
 
+void* ASTVisitor::visitConstantArrayType(ConstantArrayType*, void*)
+{
+    return nullptr;
+}
+
 void* ASTVisitor::visitConstantExpr(ConstantExpr*, void*)
 {
     return nullptr;
@@ -83,6 +88,11 @@ void* ASTVisitor::visitParenExpr(ParenExpr*, void*)
 }
 
 void* ASTVisitor::visitParmVarDecl(ParmVarDecl*, void*)
+{
+    return nullptr;
+}
+
+void* ASTVisitor::visitReturnStmt(ReturnStmt*, void*)
 {
     return nullptr;
 }

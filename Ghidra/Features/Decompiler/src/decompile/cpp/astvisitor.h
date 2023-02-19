@@ -23,6 +23,7 @@ public:
     virtual void* visitCaseStmt(CaseStmt*, void*);
     virtual void* visitCharacterLiteral(CharacterLiteral*, void*);
     virtual void* visitCompoundStmt(CompoundStmt*, void*);
+    virtual void* visitConstantArrayType(ConstantArrayType*, void*);
     virtual void* visitConstantExpr(ConstantExpr*, void*);
     virtual void* visitCStyleCastExpr(CStyleCastExpr*, void*);
     virtual void* visitDeclRefExpr(DeclRefExpr*, void*);
@@ -33,6 +34,7 @@ public:
     virtual void* visitLogMsg(LogMsg*, void*);
     virtual void* visitParenExpr(ParenExpr*, void*);
     virtual void* visitParmVarDecl(ParmVarDecl*, void*);
+    virtual void* visitReturnStmt(ReturnStmt*, void*);
     virtual void* visitSwitchStmt(SwitchStmt*, void*);
     virtual void* visitTranslationUnitDecl(TranslationUnitDecl*, void*);
     virtual void* visitType(Type*, void*);

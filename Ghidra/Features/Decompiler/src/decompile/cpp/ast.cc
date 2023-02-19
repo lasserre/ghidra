@@ -323,6 +323,15 @@ void* ParenExpr::doAccept(ASTVisitor* v, void* context)
     return v->visitParenExpr(this, context);
 }
 
+ReturnStmt::ReturnStmt()
+{
+}
+
+void* ReturnStmt::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitReturnStmt(this, context);
+}
+
 SwitchStmt::SwitchStmt()
 {
 }
@@ -388,6 +397,22 @@ bool BuiltinType::isSigned()
 void* BuiltinType::doAccept(ASTVisitor* v, void* context)
 {
     return v->visitBuiltinType(this, context);
+}
+
+ConstantArrayType::ConstantArrayType(const Datatype* elementType, int numElements)
+    : Type(""), _num_elements(numElements)
+{
+    addChild(toAstType(elementType));
+}
+
+ConstantArrayType::ConstantArrayType(const TypeArray* arrType)
+    : ConstantArrayType(arrType->getBase(), arrType->numElements())
+{
+}
+
+void* ConstantArrayType::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitConstantArrayType(this, context);
 }
 
 TypedefDecl::TypedefDecl(string name)
@@ -469,6 +494,17 @@ VarDecl::VarDecl(int id, Symbol* sym)
     }
 }
 
+VarDecl::VarDecl(int id, string name, Type* type)
+    : ValueDecl(id), _sym(nullptr), _name(name), _type(type)
+{
+}
+
+VarDecl::VarDecl(int id, string name, const Datatype* dt)
+    : ValueDecl(id), _sym(nullptr), _name(name), _type(nullptr)
+{
+    _type = toAstType(dt);
+}
+
 void* VarDecl::doAccept(ASTVisitor* v, void* context)
 {
     return v->visitVarDecl(this, context);
@@ -482,6 +518,8 @@ Type* toAstType(const Datatype* dt)
         case TYPE_FLOAT:
         case TYPE_BOOL:
             return new BuiltinType(dt);
+        case TYPE_ARRAY:
+            return new ConstantArrayType((TypeArray*)dt);
         case TYPE_UNKNOWN:      // fall-through
         case TYPE_SPACEBASE:
         default:
@@ -495,7 +533,6 @@ Type* toAstType(const Datatype* dt)
 
     // TYPE_PTR = 4,			///< Pointer data-type
     // TYPE_PTRREL = 3,		///< Pointer relative to another data-type (specialization of TYPE_PTR)
-    // TYPE_ARRAY = 2,		///< Array data-type, made up of a sequence of "element" datatype
     // TYPE_PARTIALSTRUCT = 1,	///< Part of a structure, stored separately from the whole
     // TYPE_STRUCT = 0		///< Structure data-type, made up of component datatypes
 }

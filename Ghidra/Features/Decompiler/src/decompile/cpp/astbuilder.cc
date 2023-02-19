@@ -342,14 +342,18 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
     // glb->getDefaultCodeSpace()->getAddrSize()
 
     // add global decls to the AST under top-level translation unit
-    for (auto const& entry : _globals)
-    {
+    for (auto const& entry : _globals) {
         _head_translation_unit->addChild(entry.second);
     }
 
+    for (auto const& entry : _mismatch_globals) {
+        for (auto const& vdecl : entry.second) {
+            _head_translation_unit->addChild(vdecl);
+        }
+    }
+
     // add function forward-declarations to top-level translation unit
-    for (auto const& entry : _fwd_decl_funcs)
-    {
+    for (auto const& entry : _fwd_decl_funcs) {
         _head_translation_unit->addChild(entry.second);
     }
 
@@ -539,17 +543,54 @@ void ASTBuilder::processPendingSymbol(PendingNode* node)
         // Ghidra code
     }
     else if (sym_offset + node->vnode->getSize() <= node->sym->getType()->getSize()) {
+        // partial symbol => size+offset
         // partial: STRUCT FIELDS/ARRAYS!
         unimplementedCode("processPendingSymbol: STRUCT FIELD/ARRAY");
         return;
     }
     else {
         // mismatch
-        unimplementedCode("processPendingSymbol: mismatch symbol");
+        // save and index mismatch_globals by the original symbol (node->sym)
+        // which points to a list of decl's (one each for different mismatching
+        // accesses to that symbol)
+
+        if (!node->sym->getScope()->isGlobal()) {
+            unimplementedCode("processPendingSymbol: mismatch symbol NON GLOBAL");
+            return;
+        }
+
+        VarDecl* sym_decl = nullptr;
+
+        if (_mismatch_globals.count(node->sym)) {
+            // check size
+            for (VarDecl* vd : _mismatch_globals[node->sym]) {
+                auto existing_size = vd->ghidra_sym()->getType()->getSize();
+                if (node->vnode->getSize() == existing_size) {
+                    // use this one
+                    sym_decl = vd;
+                }
+            }
+        }
+
+        // node->sym not mapped OR we didn't find a size match
+        if (!sym_decl) {
+            sym_decl = new VarDecl(_next_vdecl_id++,
+                "_" + node->sym->getName(),
+                node->vnode->getType());    // use vnode type, not sym type
+
+            if (_mismatch_globals.count(node->sym)) {
+                _mismatch_globals[node->sym].push_back(sym_decl);
+            } else {
+                _mismatch_globals[node->sym] = {sym_decl};
+            }
+        }
+
+        DeclRefExpr* refexpr = new DeclRefExpr(sym_decl);
+        currentASTNode()->addChild(refexpr);
         return;
     }
 
-    ValueDecl* sym_decl = nullptr;
+    VarDecl* sym_decl = nullptr;
 
     if (_locals.count(node->sym)) {
         sym_decl = _locals.at(node->sym);
@@ -1119,7 +1160,16 @@ void ASTBuilder::opConstructor(const PcodeOp *op,bool withNew)
 
 void ASTBuilder::opReturn(const PcodeOp *op)
 {
-    unimplementedOp("opReturn");
+    ReturnStmt* rs = new ReturnStmt();
+    currentASTNode()->addChild(rs);
+
+    // CLS: ignoring op->getHaltType() for now...if we need this,
+    // we can add it later
+
+    if (op->numInput() > 1) {
+        // returns a value?
+        unimplementedOp("opReturn RETURN VALUE");
+    }
 }
 
 void ASTBuilder::opIntEqual(const PcodeOp *op)
@@ -1154,7 +1204,16 @@ void ASTBuilder::opIntLessEqual(const PcodeOp *op)
 
 void ASTBuilder::opIntZext(const PcodeOp *op,const PcodeOp *readOp)
 {
-    unimplementedOp("opIntZext");
+    // CLS: we can change this if desired, but I think I want to
+    // consider zero-extension implicit in the AST and simply
+    // emit the argument, not "ZEXT816()" or similar
+
+    PendingExpr* expr = new PendingExpr();
+    expr->ast_op = currentASTNode();
+    expr->parts.push_back(
+        buildNodeImplied(op->getIn(0), op, mods)
+    );
+    _pending_expressions.push_back(expr);
 }
 
 // corresponds to pushType()...just working out how we want to

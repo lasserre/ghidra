@@ -178,6 +178,16 @@ void* JsonASTVisitor::visitCompoundStmt(CompoundStmt* cs, void* context)
     return copy_to_parent(cmp_stmt, context);
 }
 
+void* JsonASTVisitor::visitConstantArrayType(ConstantArrayType* cat, void* context)
+{
+    json cat_j;
+    cat_j["kind"] = "ConstantArrayType";
+    cat_j["inner"] = json::array();
+    cat_j["num_elements"] = cat->numElements();
+    addMessages(cat, cat_j);
+    return copy_to_parent(cat_j, context);
+}
+
 void* JsonASTVisitor::visitConstantExpr(ConstantExpr* cexpr, void* context)
 {
     json cexpr_j;
@@ -279,6 +289,15 @@ void* JsonASTVisitor::visitParmVarDecl(ParmVarDecl* pv, void* context)
     pvdecl["dtype_name"] = datatypeToJson(pv->type()->ghidra_dtype());
     addMessages(pv, pvdecl);
     return copy_to_parent(pvdecl, context);
+}
+
+void* JsonASTVisitor::visitReturnStmt(ReturnStmt* rs, void* context)
+{
+    json rs_j;
+    rs_j["kind"] = "ReturnStmt";
+    rs_j["inner"] = json::array();
+    addMessages(rs, rs_j);
+    return copy_to_parent(rs_j, context);
 }
 
 void* JsonASTVisitor::visitSwitchStmt(SwitchStmt* ss, void* context)

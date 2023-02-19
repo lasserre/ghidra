@@ -248,6 +248,12 @@ protected:
     std::map<Symbol*, ParmVarDecl*> _parameters;
     std::map<Symbol*, VarDecl*> _globals;
     std::map<Symbol*, FunctionDecl*> _fwd_decl_funcs;
+    // references to globals where the size doesn't match the
+    // variable size (Ghidra indicates this with _VARNAME)
+    // each original Symbol* maps to a list of VarDecls, with
+    // entries being added only if they introduce a reference with
+    // a size not already present in the list of VarDecls
+    std::map<Symbol*, vector<VarDecl*>> _mismatch_globals;
 
     // counter to generate unique ValueDecl ids within a given context
     // ** This includes globals, locals, and function decls **

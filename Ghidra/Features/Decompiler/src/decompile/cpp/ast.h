@@ -356,6 +356,19 @@ protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
 };
 
+class ReturnStmt : public ASTNode
+{
+public:
+    ReturnStmt();
+
+    int precedence() { return -1; }
+    bool isLRAssociative() { return false; }
+    bool wouldNextChildBeLeftOfOp() { return false; }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+};
+
 class SwitchStmt : public ASTNode
 {
 public:
@@ -480,6 +493,30 @@ protected:
 };
 
 /**
+ * @brief Array with specified constant size
+ */
+class ConstantArrayType : public Type
+{
+public:
+    /**
+     * @brief The element datatype will be created as a child node,
+     * but is provided here as a parameter for convenience and to
+     * hopefully reduce mistakes.
+     *
+     * @param elementType
+     * @param numElements
+     */
+    ConstantArrayType(const Datatype* elementType, int numElements);
+    ConstantArrayType(const TypeArray* arrType);
+
+    inline int numElements() { return _num_elements; }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+    int _num_elements;
+};
+
+/**
  * @brief This declares the typedef
  * (e.g. typedef int foo; )
  */
@@ -600,7 +637,12 @@ public:
      * @param sym The symbol for this variable
      */
     VarDecl(int id, Symbol* sym);
-    virtual ~VarDecl() { delete _type; }
+    VarDecl(int id, string name, Type* type);
+    VarDecl(int id, string name, const Datatype* dt);
+    virtual ~VarDecl()
+    {
+        delete _type;
+    }
 
     inline Symbol* ghidra_sym() { return _sym; }
     inline string name() { return _name; }

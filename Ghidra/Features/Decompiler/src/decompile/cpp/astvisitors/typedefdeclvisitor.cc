@@ -12,19 +12,29 @@
  */
 struct AttachedTypeUpdate
 {
-    AttachedTypeUpdate(ASTNode* (*updateType)(ASTNode*,Type*), ASTNode* node)
-        : updateType(updateType), node(node)
+    AttachedTypeUpdate(ASTNode* (*updateType)(ASTNode*,Type*), ASTNode* node,
+        bool dont_copy=false)
+        : updateType(updateType), node(node), dont_copy(dont_copy)
     {}
 
     ASTNode* (*updateType)(ASTNode*, Type*);
     ASTNode* node;
+    // CLS: hacky workaround for situations (e.g. ConstantArrayType) where
+    // I can't pass and delete the pointer from where its created, so I
+    // need NewTypedef::addUse() to keep the original instead of copying
+    // and leaking
+    bool dont_copy;
 };
 
 void NewTypedef::addUse(AttachedTypeUpdate* atu, Type* type)
 {
     if (atu) {
-        // make a copy so caller can delete
-        attached_uses.push_back(new AttachedTypeUpdate(*atu));
+        if (atu->dont_copy) {
+            attached_uses.push_back(atu);
+        } else {
+            // make a copy so caller can delete
+            attached_uses.push_back(new AttachedTypeUpdate(*atu));
+        }
     } else {
         tree_node_uses.push_back(type);
     }
@@ -113,6 +123,23 @@ void TypedefDeclVisitor::insertTypedefs(ASTNode* parent)
 // {
 
 // }
+
+void* TypedefDeclVisitor::visitConstantArrayType(ConstantArrayType* cat, void* atu)
+{
+    // replace the array element type...not the array itself
+    auto type_update = new AttachedTypeUpdate(
+        [](ASTNode* cat_node, Type* newtype) {
+            ASTNode* original_type = cat_node->children()->at(0);
+            original_type->replaceWith(newtype);
+            delete original_type;
+            return cat_node;
+        },
+        cat,
+        /*dont_copy =*/ true
+    );
+
+    return type_update;
+}
 
 void* TypedefDeclVisitor::visitType(Type* type, void* atu)
 {

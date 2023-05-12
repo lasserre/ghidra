@@ -85,9 +85,7 @@ public class FunctionSignatureStringable extends Stringable {
 		this.signatureSource = function.getSignatureSource();
 		this.hasCustomStorage = function.hasCustomVariableStorage();
 
-		GenericCallingConvention guessedCallingConvention =
-			GenericCallingConvention.guessFromName(function.getCallingConventionName());
-		isThisCall = (guessedCallingConvention == GenericCallingConvention.thiscall);
+		isThisCall = CompilerSpec.CALLING_CONVENTION_thiscall.equals(callingConventionName);
 
 		// ignore source from function return which is same as signature source
 		returnInfo = getParameterInfo(function.getReturn(), SourceType.DEFAULT);
@@ -469,6 +467,11 @@ public class FunctionSignatureStringable extends Stringable {
 		if (!returnInfo.isEquivalent(other.returnInfo)) { // storage not checked
 			return false;
 		}
+
+		if (!callingConventionName.equals(other.callingConventionName)) {
+			return false;
+		}
+
 		int paramCnt = parameterInfos.size();
 		if (paramCnt != other.parameterInfos.size()) {
 			return false;
@@ -526,7 +529,7 @@ public class FunctionSignatureStringable extends Stringable {
 			if (hasCustomStorage != toFunction.hasCustomVariableStorage()) {
 				// This should only change to use custom storage if same language.
 				boolean sameLanguage =
-					FunctionUtility.isSameLanguage(toFunction.getProgram(), program);
+					FunctionUtility.isSameLanguageAndCompilerSpec(toFunction.getProgram(), program);
 				if (!hasCustomStorage || (hasCustomStorage && sameLanguage)) {
 					useCustomStorage = hasCustomStorage;
 				}
@@ -668,7 +671,7 @@ public class FunctionSignatureStringable extends Stringable {
 		}
 		if (callFixupChoice == ReplaceChoices.REPLACE) {
 			// Check that you have the same cspec before trying to apply call fixup.
-			if (FunctionUtility.isSameLanguage(toFunction.getProgram(), program)) {
+			if (FunctionUtility.isSameLanguageAndCompilerSpec(toFunction.getProgram(), program)) {
 				toFunction.setCallFixup(fromFunctionCallFixup);
 			}
 		}
@@ -687,7 +690,7 @@ public class FunctionSignatureStringable extends Stringable {
 
 		switch (callingConventionChoice) {
 			case SAME_LANGUAGE:
-				if (FunctionUtility.isSameLanguage(program, toProgram)) {
+				if (FunctionUtility.isSameLanguageAndCompilerSpec(program, toProgram)) {
 					return callingConventionName;
 				}
 				break;

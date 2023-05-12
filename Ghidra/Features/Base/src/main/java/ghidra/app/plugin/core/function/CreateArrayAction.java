@@ -93,24 +93,27 @@ class CreateArrayAction extends ListingContextAction {
 				return;
 			}
 			Array array = new ArrayDataType(dt, n, dt.getLength());
-			plugin.createData(array, context, false);
+			plugin.createData(array, context, true, false);
 		}
 		else if (loc instanceof VariableLocation) {
 			VariableLocation varLoc = (VariableLocation) loc;
 			Variable var = varLoc.getVariable();
 			if (var.isStackVariable()) {
 				DataType dt = var.getDataType();
-				int len = var.getLength();
-				int defaultElements = plugin.getMaxStackVariableSize(fun, var);
-				if (defaultElements <= 0) {
-					defaultElements = 1;
+				if (dt.getLength() < 1) {
+					return;
 				}
-				int n = getNumElements(dt, Integer.MAX_VALUE, defaultElements);
+				int availableLen = plugin.getMaxStackVariableSize(fun, var);
+				if (availableLen <= 0) {
+					availableLen = 1;
+				}
+				int maxElements = availableLen / var.getDataType().getAlignedLength();
+				int n = getNumElements(dt, Integer.MAX_VALUE, maxElements);
 				if (n == 0) {
 					return;
 				}
-				Array array = new ArrayDataType(dt, n, len);
-				plugin.createData(array, context, true);
+				Array array = new ArrayDataType(dt, n, -1);
+				plugin.createData(array, context, true, true);
 			}
 		}
 	}

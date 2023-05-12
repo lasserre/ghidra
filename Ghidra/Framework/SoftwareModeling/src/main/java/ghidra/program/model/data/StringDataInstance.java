@@ -20,9 +20,10 @@ import static ghidra.program.model.data.RenderUnicodeSettingsDefinition.RENDER;
 import static ghidra.program.model.data.StringLayoutEnum.*;
 import static ghidra.program.model.data.TranslationSettingsDefinition.TRANSLATION;
 
+import java.util.*;
+
 import java.nio.*;
 import java.nio.charset.*;
-import java.util.*;
 
 import generic.stl.Pair;
 import ghidra.docking.settings.*;
@@ -232,7 +233,7 @@ public class StringDataInstance {
 	private final int charSize;
 	private final int paddedCharSize;
 	private final StringLayoutEnum stringLayout;
-	private final String translatedValue;
+	private final String translatedValue; // empty string indicates no-value, null indicates not-initialized
 	private final Endian endianSetting;
 
 	private final boolean showTranslation;
@@ -300,11 +301,22 @@ public class StringDataInstance {
 				? StringLayoutEnum.NULL_TERMINATED_BOUNDED
 				: getLayoutFromDataType(dataType);
 		this.showTranslation = TRANSLATION.isShowTranslated(settings);
-		this.translatedValue = TRANSLATION.getTranslatedValue(settings);
+		this.translatedValue = getTranslatedValue(settings, buf);
 		this.renderSetting = RENDER.getEnumValue(settings);
 		this.endianSetting = ENDIAN.getEndianess(settings, null);
 
 		this.length = length;
+	}
+
+	private static String getTranslatedValue(Settings settings, MemBuffer buf) {
+		// Translation only exists for defined Data which corresponds to settings.
+		if (settings instanceof Data) {
+			Data data = (Data) settings;
+			if (data.isDefined()) {
+				return TRANSLATION.getTranslatedValue(data);
+			}
+		}
+		return null;
 	}
 
 	private StringDataInstance(StringDataInstance copyFrom, StringLayoutEnum newLayout,
@@ -342,8 +354,7 @@ public class StringDataInstance {
 		return StringLayoutEnum.NULL_TERMINATED_BOUNDED;
 	}
 
-	static String getCharsetNameFromDataTypeOrSettings(DataType dataType,
-			Settings settings) {
+	static String getCharsetNameFromDataTypeOrSettings(DataType dataType, Settings settings) {
 		if (dataType instanceof BitFieldDataType) {
 			dataType = ((BitFieldDataType) dataType).getBaseDataType();
 		}
@@ -416,7 +427,7 @@ public class StringDataInstance {
 	 * contains our n-bit character which will be tested for null-ness. (not the endian'ness of the
 	 * character set name - ie. "UTF-16BE")
 	 *
-	 * @return length of the string (NOT including null term if null term probe), in bytes, or -1 if
+	 * @return length of the string (INCLUDING null term if null term probe), in bytes, or -1 if
 	 *         no terminator found.
 	 */
 	public int getStringLength() {
@@ -628,9 +639,9 @@ public class StringDataInstance {
 		}
 
 		byte[] unpaddedBytes = new byte[(paddedBytes.length / paddedCharSize) * charSize];
-		for (int srcOffset = buf.isBigEndian() ? paddedCharSize - charSize : 0, destOffset =
-			0; srcOffset < paddedBytes.length; srcOffset += paddedCharSize, destOffset +=
-				charSize) {
+		for (int srcOffset = buf.isBigEndian() ? paddedCharSize - charSize : 0,
+				destOffset = 0; srcOffset < paddedBytes.length; srcOffset +=
+					paddedCharSize, destOffset += charSize) {
 			System.arraycopy(paddedBytes, srcOffset, unpaddedBytes, destOffset, charSize);
 		}
 
@@ -902,7 +913,7 @@ public class StringDataInstance {
 
 	/**
 	 * Returns the value of the stored
-	 * {@link TranslationSettingsDefinition#getTranslatedValue(Settings) translated settings}
+	 * {@link TranslationSettingsDefinition#getTranslatedValue(Data) translated settings}
 	 * string.
 	 * <p>
 	 * 
@@ -950,8 +961,7 @@ public class StringDataInstance {
 			return false;
 		}
 		long origCodePointValue = DataConverter.getInstance(buf.isBigEndian())
-				.getValue(stringBytes,
-					byteOffset, charSize);
+				.getValue(stringBytes, byteOffset, charSize);
 		return origCodePointValue == StringUtilities.UNICODE_REPLACEMENT;
 	}
 
@@ -1012,16 +1022,19 @@ public class StringDataInstance {
 	 * Returns a new {@link StringDataInstance} that points to the string characters that start at
 	 * {@code byteOffset} from the start of this instance.
 	 * <p>
-	 * If the requested offset is not valid, the base string instance (itself) will be returned
-	 * instead of a new instance.
+	 * If the requested offset is not valid, StringDataInstance.NULL_INSTANCE is returned.
 	 * <p>
 	 * 
 	 * @param byteOffset number of bytes from start of data instance to start new instance.
-	 * @return new StringDataInstance, or <code>this</code> if offset not valid.
+	 * @return new StringDataInstance, or <code>StringDataInstance.NULL_INSTANCE</code> if 
+	 * offset not valid.
 	 */
 	public StringDataInstance getByteOffcut(int byteOffset) {
 		if (isBadCharSize() || isProbe() || !isValidOffcutOffset(byteOffset)) {
 			return NULL_INSTANCE;
+		}
+		if (byteOffset == 0) {
+			return this;
 		}
 		int newLength = Math.max(0, length - byteOffset);
 		StringDataInstance sub = new StringDataInstance(this, getOffcutLayout(),

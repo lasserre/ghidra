@@ -32,29 +32,45 @@ public class DefaultPdbUniversalMember extends PdbMember {
 
 	/**
 	 * Default PDB member construction
-	 * @param applicator {@link PdbApplicator} for which we are working.
+	 * @param applicator {@link DefaultPdbApplicator} for which we are working.
 	 * @param name member field name.  For bitfields this also conveys the bit-size
 	 * and optionally the bit-offset.
 	 * @param applier fieldApplier for the field datatype or base datatype associated with the
 	 * bitfield.
 	 * @param offset member's byte offset within the root composite.
 	 */
-	DefaultPdbUniversalMember(PdbApplicator applicator, String name, MsTypeApplier applier,
+	DefaultPdbUniversalMember(DefaultPdbApplicator applicator, String name, MsTypeApplier applier,
 			int offset) {
-		super(name, (applier.getDataType()).getName(), offset, null);
+		this(applicator, name, applier, offset, null);
+		dataType = null;
+	}
+
+	/**
+	 * Default PDB member construction
+	 * @param applicator {@link DefaultPdbApplicator} for which we are working.
+	 * @param name member field name.  For bitfields this also conveys the bit-size
+	 * and optionally the bit-offset.
+	 * @param applier fieldApplier for the field datatype or base datatype associated with the
+	 * bitfield.
+	 * @param offset member's byte offset within the root composite.
+	 * @param memberComment comment for member field
+	 */
+	DefaultPdbUniversalMember(DefaultPdbApplicator applicator, String name, MsTypeApplier applier,
+			int offset, String memberComment) {
+		super(name, applier.getDataType().getName(), offset, memberComment);
 		this.applier = applier;
 		dataType = null;
 	}
 
 	/**
 	 * Default PDB member construction
-	 * @param applicator {@link PdbApplicator} for which we are working.
+	 * @param applicator {@link DefaultPdbApplicator} for which we are working.
 	 * @param name member field name.  For bitfields this also conveys the bit-size
 	 * and optionally the bit-offset.
 	 * @param dataType for the field.
 	 * @param offset member's byte offset within the root composite.
 	 */
-	DefaultPdbUniversalMember(PdbApplicator applicator, String name, DataType dataType,
+	DefaultPdbUniversalMember(DefaultPdbApplicator applicator, String name, DataType dataType,
 			int offset) {
 		super(name, dataType.getName(), offset, null);
 		this.applier = null;
@@ -85,7 +101,7 @@ public class DefaultPdbUniversalMember extends PdbMember {
 
 		DataType dt = getDataTypeInternal();
 		if (dt instanceof PdbBitField) {
-			PdbBitField bfDt = (PdbBitField) dataType;
+			PdbBitField bfDt = (PdbBitField) dt;
 			builder.append(", type=");
 			builder.append(bfDt.getBaseDataType().getName());
 			builder.append(", offset=");
@@ -97,7 +113,7 @@ public class DefaultPdbUniversalMember extends PdbMember {
 		}
 		else {
 			builder.append(", type=");
-			builder.append(dataType.getName());
+			builder.append(dt.getName());
 			builder.append(", offset=");
 			builder.append(getOffset());
 		}

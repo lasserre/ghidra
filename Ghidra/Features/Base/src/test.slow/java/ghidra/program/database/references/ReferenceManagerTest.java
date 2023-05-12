@@ -28,7 +28,7 @@ import ghidra.program.model.listing.CodeUnit;
 import ghidra.program.model.listing.Listing;
 import ghidra.program.model.symbol.*;
 import ghidra.test.AbstractGhidraHeadedIntegrationTest;
-import ghidra.util.task.TaskMonitorAdapter;
+import ghidra.util.task.TaskMonitor;
 
 /**
  * Test the reference manager for the database implementation.
@@ -61,7 +61,7 @@ public class ReferenceManagerTest extends AbstractGhidraHeadedIntegrationTest {
 		listing = program.getListing();
 		transactionID = program.startTransaction("Test");
 		program.getMemory().createInitializedBlock("code", addr(0), 10000, (byte) 0,
-			TaskMonitorAdapter.DUMMY_MONITOR, false);
+			TaskMonitor.DUMMY, false);
 	}
 
     @After
@@ -748,8 +748,8 @@ public class ReferenceManagerTest extends AbstractGhidraHeadedIntegrationTest {
 
 @Test
     public void testAddOffsetReference() {
-		refMgr.addOffsetMemReference(addr(100), addr(600), 100, RefType.COMPUTED_JUMP,
-			SourceType.USER_DEFINED, 0);
+		refMgr.addOffsetMemReference(addr(100), addr(600), false, 100,
+			RefType.COMPUTED_JUMP, SourceType.USER_DEFINED, 0);
 
 		Reference ref = refMgr.getReference(addr(100), addr(600), 0);
 		assertNotNull(ref);

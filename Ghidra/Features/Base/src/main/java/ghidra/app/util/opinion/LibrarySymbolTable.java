@@ -105,27 +105,38 @@ class LibrarySymbolTable {
 		//    get the number and name for the symbol
 		SymbolIterator iter = symTab.getSymbolIterator(SymbolUtilities.ORDINAL_PREFIX + "*", true);
 		while (iter.hasNext()) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			Symbol sym = iter.next();
-			int ordinal = SymbolUtilities.getOrdinalValue(sym.getName());
-			if (ordinal == -1) {
-				throw new RuntimeException("Should never happen!");
-			}
-			Address symAddr = sym.getAddress();
-			String realName = sym.getName();
-			Symbol primary = symTab.getPrimarySymbol(symAddr);
-			if (primary != null) {
-				realName = primary.getName();
+
+			// Only consider ordinal exports, not ordinal imports
+			if (!(sym.isGlobal() && sym.isExternalEntryPoint())) {
+				continue;
 			}
 
-			// assumes that Ordinal_# name comes right before the actual name
+			int ordinal = SymbolUtilities.getOrdinalValue(sym.getName());
+			if (ordinal == -1) {
+				continue;
+			}
+
+			// The symbols at the given address should be in a list ordered like:
+			// [realName1, ordinalName1, realName2, ordinalName2, ...]
+			// where the realName elements are optional.  For example,
+			// [ordinalName1, realName2, ordinalName2, ordinalName3, ...]
+			// is also valid.  We want to find our ordinalName in the list and look at the
+			// previous entry to find its corresponding realName.  If there is no previous
+			// entry or the previous entry starts with Ordinal_, then we'll assume it's
+			// a [NONAME] export and we'll just use the ordinalName as the realName.
+			String ordinalName = sym.getName();
+			String realName = ordinalName;
+			Address symAddr = sym.getAddress();
 			Symbol symbolsAt[] = symTab.getSymbols(symAddr);
 			for (int i = 0; i < symbolsAt.length; i++) {
-				if (symbolsAt[i].getName().equals(sym.getName())) {
-					if (i + 1 < symbolsAt.length) {
-						realName = symbolsAt[i + 1].getName();
-						break;
+				if (symbolsAt[i].getName().equals(ordinalName)) {
+					if (i > 0 &&
+						!symbolsAt[i - 1].getName().startsWith(SymbolUtilities.ORDINAL_PREFIX)) {
+						realName = symbolsAt[i - 1].getName();
 					}
+					break;
 				}
 			}
 
@@ -437,7 +448,7 @@ class LibrarySymbolTable {
 
 				exportList.add(sym);
 				symMap.put(name, sym);
-				ordMap.put(new Integer(ordinal), sym);
+				ordMap.put(Integer.valueOf(ordinal), sym);
 			}
 		}
 		catch (JDOMException e) {
@@ -465,7 +476,7 @@ class LibrarySymbolTable {
 		//            LibraryExportedSymbol sym = new LibraryExportedSymbol(tableName, ord, funcName, purge, comment);
 		//            exportList.add(sym);
 		//            symMap.put(funcName, sym);
-		//            ordMap.put(new Integer(ord), sym);
+		//            ordMap.put(Integer.valueOf(ord), sym);
 		//        }
 		//    }
 		//}

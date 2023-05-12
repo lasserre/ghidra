@@ -72,6 +72,10 @@
           <element name="volatile">
             <attribute name="inputop"/>
             <attribute name="outputop"/>
+            <optional>
+              <attribute name="format"/>
+              <!-- format="functional" forces functional operator synxtax-->
+            </optional>
             <oneOrMore>
               <ref name="memory_tags_type"/>
             </oneOrMore>
@@ -124,6 +128,14 @@
               <element name="symbol">
                 <attribute name="name"/>
                 <attribute name="address"/>
+                <optional>
+                  <attribute name="volatile">
+                    <ref name="boolean_type"/>
+                  </attribute>
+                </optional>
+                <optional>
+                  <attribute name="size"/>
+                </optional>
                 <optional>
                   <attribute name="entry">
                     <ref name="boolean_type"/>

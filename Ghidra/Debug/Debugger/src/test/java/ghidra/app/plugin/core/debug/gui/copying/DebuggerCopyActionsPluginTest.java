@@ -19,16 +19,15 @@ import static org.junit.Assert.*;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 
-import com.google.common.collect.Range;
-
-import docking.ActionContext;
+import db.Transaction;
 import docking.action.DockingActionIf;
 import generic.Unique;
+import generic.test.category.NightlyCategory;
 import ghidra.app.plugin.core.debug.gui.AbstractGhidraHeadedDebuggerGUITest;
 import ghidra.app.plugin.core.debug.gui.action.AutoReadMemorySpec;
 import ghidra.app.plugin.core.debug.gui.action.NoneAutoReadMemorySpec;
@@ -36,22 +35,20 @@ import ghidra.app.plugin.core.debug.gui.copying.DebuggerCopyIntoProgramDialog.Ra
 import ghidra.app.plugin.core.debug.gui.listing.DebuggerListingPlugin;
 import ghidra.app.plugin.core.debug.gui.listing.DebuggerListingProvider;
 import ghidra.app.plugin.core.debug.service.modules.DebuggerStaticMappingServicePlugin;
+import ghidra.app.services.ActionSource;
 import ghidra.app.services.DebuggerStaticMappingService;
-import ghidra.app.services.TraceRecorder;
 import ghidra.dbg.DebuggerModelListener;
 import ghidra.dbg.target.TargetObject;
 import ghidra.program.model.address.*;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.mem.MemoryBlock;
 import ghidra.program.util.ProgramLocation;
-import ghidra.program.util.ProgramSelection;
 import ghidra.test.ToyProgramBuilder;
 import ghidra.trace.database.memory.DBTraceMemoryManager;
-import ghidra.trace.model.DefaultTraceLocation;
-import ghidra.trace.model.TraceLocation;
+import ghidra.trace.model.*;
 import ghidra.trace.model.memory.TraceMemoryFlag;
-import ghidra.util.database.UndoableTransaction;
 
+@Category(NightlyCategory.class)
 public class DebuggerCopyActionsPluginTest extends AbstractGhidraHeadedDebuggerGUITest {
 
 	DebuggerCopyActionsPlugin copyActionsPlugin;
@@ -69,33 +66,24 @@ public class DebuggerCopyActionsPluginTest extends AbstractGhidraHeadedDebuggerG
 		listingProvider = waitForComponentProvider(DebuggerListingProvider.class);
 	}
 
-	protected void select(Address min, Address max) {
-		select(new ProgramSelection(min, max));
-	}
-
-	protected void select(AddressSetView set) {
-		select(new ProgramSelection(set));
-	}
-
-	protected void select(ProgramSelection sel) {
-		runSwing(() -> {
-			listingProvider.setSelection(sel);
-		});
-	}
-
 	protected void assertDisabled(DockingActionIf action) {
-		ActionContext context = listingProvider.getActionContext(null);
-		assertFalse(action.isEnabledForContext(context));
+		assertDisabled(listingProvider, action);
 	}
 
 	protected void performEnabledAction(DockingActionIf action) {
-		ActionContext context = listingProvider.getActionContext(null);
-		waitForCondition(() -> action.isEnabledForContext(context));
-		performAction(action, context, false);
+		performEnabledAction(listingProvider, action, false);
+	}
+
+	protected void select(Address min, Address max) {
+		select(listingProvider, min, max);
+	}
+
+	protected void select(AddressSetView set) {
+		select(listingProvider, set);
 	}
 
 	@Test
-	public void testActionCopyIntoCurrentProgramWithoutRelocationCreateBlocks() throws Exception {
+	public void testActionCopyIntoCurrentProgramWithoutRelocationCreateBlocks() throws Throwable {
 		assertDisabled(copyActionsPlugin.actionCopyIntoCurrentProgram);
 
 		createProgram();
@@ -104,7 +92,7 @@ public class DebuggerCopyActionsPluginTest extends AbstractGhidraHeadedDebuggerG
 		assertDisabled(copyActionsPlugin.actionCopyIntoCurrentProgram);
 
 		createAndOpenTrace();
-		try (UndoableTransaction tid = tb.startTransaction()) {
+		try (Transaction tx = tb.startTransaction()) {
 			tb.trace.getMemoryManager()
 					.createRegion(".text", 0, tb.range(0x00400000, 0x0040ffff),
 						TraceMemoryFlag.READ, TraceMemoryFlag.EXECUTE);
@@ -128,7 +116,7 @@ public class DebuggerCopyActionsPluginTest extends AbstractGhidraHeadedDebuggerG
 		assertEquals(".text", entry.getBlockName());
 		assertTrue(entry.isCreate());
 		dialog.okCallback();
-		dialog.lastTask.get(1000, TimeUnit.MILLISECONDS);
+		waitOn(dialog.lastTask);
 		waitForSwing();
 
 		MemoryBlock text = Unique.assertOne(Arrays.asList(program.getMemory().getBlocks()));
@@ -136,7 +124,7 @@ public class DebuggerCopyActionsPluginTest extends AbstractGhidraHeadedDebuggerG
 	}
 
 	@Test
-	public void testActionCopyIntoCurrentProgramWithoutRelocationCrossLanguage() throws Exception {
+	public void testActionCopyIntoCurrentProgramWithoutRelocationCrossLanguage() throws Throwable {
 		assertDisabled(copyActionsPlugin.actionCopyIntoCurrentProgram);
 
 		createProgram(getSLEIGH_X86_LANGUAGE());
@@ -145,19 +133,19 @@ public class DebuggerCopyActionsPluginTest extends AbstractGhidraHeadedDebuggerG
 
 		AddressSpace stSpace = program.getAddressFactory().getDefaultAddressSpace();
 
-		try (UndoableTransaction tid = UndoableTransaction.start(program, "Add blocks", true)) {
+		try (Transaction tx = program.openTransaction("Add blocks")) {
 			program.getMemory()
-					.createInitializedBlock(".text", tb.addr(stSpace, 0x00400000), 0x8000,
-						(byte) 0, monitor, false);
+					.createInitializedBlock(".text", tb.addr(stSpace, 0x00400000), 0x8000, (byte) 0,
+						monitor, false);
 			program.getMemory()
 					.createInitializedBlock(".text2", tb.addr(stSpace, 0x00408000), 0x8000,
 						(byte) 0, monitor, false);
 		}
 
-		try (UndoableTransaction tid = tb.startTransaction()) {
+		try (Transaction tx = tb.startTransaction()) {
 			DBTraceMemoryManager mm = tb.trace.getMemoryManager();
-			mm.createRegion(".text", 0, tb.range(0x00400000, 0x0040ffff),
-				TraceMemoryFlag.READ, TraceMemoryFlag.EXECUTE);
+			mm.createRegion(".text", 0, tb.range(0x00400000, 0x0040ffff), TraceMemoryFlag.READ,
+				TraceMemoryFlag.EXECUTE);
 			mm.putBytes(0, tb.addr(0x00401234), tb.buf(1, 2, 3, 4));
 
 			// This region should be excluded, since it cannot be mapped identically into 32-bits
@@ -174,9 +162,7 @@ public class DebuggerCopyActionsPluginTest extends AbstractGhidraHeadedDebuggerG
 		traceManager.activateTrace(tb.trace);
 		assertDisabled(copyActionsPlugin.actionCopyIntoCurrentProgram);
 
-		select(tb.set(
-			tb.range(0x00400000, 0x0040ffff),
-			tb.range(0x7fff00400000L, 0x7fff0040ffffL),
+		select(tb.set(tb.range(0x00400000, 0x0040ffff), tb.range(0x7fff00400000L, 0x7fff0040ffffL),
 			tb.range(0xfffff000L, 0x100000fffL)));
 
 		performEnabledAction(copyActionsPlugin.actionCopyIntoCurrentProgram);
@@ -211,7 +197,7 @@ public class DebuggerCopyActionsPluginTest extends AbstractGhidraHeadedDebuggerG
 		assertTrue(entry.isCreate());
 
 		dialog.okCallback();
-		dialog.lastTask.get(1000, TimeUnit.MILLISECONDS);
+		waitOn(dialog.lastTask);
 		waitForSwing();
 
 		byte[] dest = new byte[4];
@@ -220,7 +206,7 @@ public class DebuggerCopyActionsPluginTest extends AbstractGhidraHeadedDebuggerG
 	}
 
 	@Test
-	public void testActionCopyIntoCurrentProgramWithRelocationExistingBlocks() throws Exception {
+	public void testActionCopyIntoCurrentProgramWithRelocationExistingBlocks() throws Throwable {
 		assertDisabled(copyActionsPlugin.actionCopyIntoCurrentProgram);
 
 		createAndOpenTrace();
@@ -228,7 +214,7 @@ public class DebuggerCopyActionsPluginTest extends AbstractGhidraHeadedDebuggerG
 		intoProject(program);
 		intoProject(tb.trace);
 
-		try (UndoableTransaction tid = tb.startTransaction()) {
+		try (Transaction tx = tb.startTransaction()) {
 			tb.trace.getMemoryManager()
 					.createRegion(".text", 0, tb.range(0x55550000, 0x5555ffff),
 						TraceMemoryFlag.READ, TraceMemoryFlag.EXECUTE);
@@ -241,16 +227,16 @@ public class DebuggerCopyActionsPluginTest extends AbstractGhidraHeadedDebuggerG
 
 		AddressSpace stSpace = program.getAddressFactory().getDefaultAddressSpace();
 		MemoryBlock block;
-		try (UndoableTransaction tid = UndoableTransaction.start(program, "Create block", true)) {
+		try (Transaction tx = program.openTransaction("Create block")) {
 			block = program.getMemory()
 					.createUninitializedBlock(".text", tb.addr(stSpace, 0x00400000), 0x10000,
 						false);
 		}
 
 		TraceLocation tloc =
-			new DefaultTraceLocation(tb.trace, null, Range.atLeast(0L), tb.addr(0x55550000));
+			new DefaultTraceLocation(tb.trace, null, Lifespan.nowOn(0), tb.addr(0x55550000));
 		ProgramLocation ploc = new ProgramLocation(program, tb.addr(stSpace, 0x00400000));
-		try (UndoableTransaction tid = tb.startTransaction()) {
+		try (Transaction tx = tb.startTransaction()) {
 			mappingService.addMapping(tloc, ploc, 0x10000, true);
 		}
 
@@ -274,7 +260,7 @@ public class DebuggerCopyActionsPluginTest extends AbstractGhidraHeadedDebuggerG
 		assertEquals(".text *", entry.getBlockName());
 		assertFalse(entry.isCreate());
 		dialog.okCallback();
-		dialog.lastTask.get(1000, TimeUnit.MILLISECONDS);
+		waitOn(dialog.lastTask);
 		waitForSwing();
 
 		MemoryBlock text = Unique.assertOne(Arrays.asList(program.getMemory().getBlocks()));
@@ -282,7 +268,7 @@ public class DebuggerCopyActionsPluginTest extends AbstractGhidraHeadedDebuggerG
 	}
 
 	@Test
-	public void testActionCopyIntoCurrentProgramWithRelocationOverlayBlocks() throws Exception {
+	public void testActionCopyIntoCurrentProgramWithRelocationOverlayBlocks() throws Throwable {
 		assertDisabled(copyActionsPlugin.actionCopyIntoCurrentProgram);
 
 		createAndOpenTrace();
@@ -290,7 +276,7 @@ public class DebuggerCopyActionsPluginTest extends AbstractGhidraHeadedDebuggerG
 		intoProject(program);
 		intoProject(tb.trace);
 
-		try (UndoableTransaction tid = tb.startTransaction()) {
+		try (Transaction tx = tb.startTransaction()) {
 			tb.trace.getMemoryManager()
 					.createRegion(".text", 0, tb.range(0x55550000, 0x5555ffff),
 						TraceMemoryFlag.READ, TraceMemoryFlag.EXECUTE);
@@ -303,16 +289,16 @@ public class DebuggerCopyActionsPluginTest extends AbstractGhidraHeadedDebuggerG
 
 		AddressSpace stSpace = program.getAddressFactory().getDefaultAddressSpace();
 		MemoryBlock block;
-		try (UndoableTransaction tid = UndoableTransaction.start(program, "Create block", true)) {
+		try (Transaction tx = program.openTransaction("Create block")) {
 			block = program.getMemory()
 					.createUninitializedBlock(".text", tb.addr(stSpace, 0x00400000), 0x10000,
 						false);
 		}
 
 		TraceLocation tloc =
-			new DefaultTraceLocation(tb.trace, null, Range.atLeast(0L), tb.addr(0x55550000));
+			new DefaultTraceLocation(tb.trace, null, Lifespan.nowOn(0), tb.addr(0x55550000));
 		ProgramLocation ploc = new ProgramLocation(program, tb.addr(stSpace, 0x00400000));
-		try (UndoableTransaction tid = tb.startTransaction()) {
+		try (Transaction tx = tb.startTransaction()) {
 			mappingService.addMapping(tloc, ploc, 0x10000, true);
 		}
 
@@ -337,7 +323,7 @@ public class DebuggerCopyActionsPluginTest extends AbstractGhidraHeadedDebuggerG
 		assertEquals(".text_2", entry.getBlockName());
 		assertTrue(entry.isCreate());
 		dialog.okCallback();
-		dialog.lastTask.get(1000, TimeUnit.MILLISECONDS);
+		waitOn(dialog.lastTask);
 		waitForSwing();
 
 		MemoryBlock text2 =
@@ -347,12 +333,12 @@ public class DebuggerCopyActionsPluginTest extends AbstractGhidraHeadedDebuggerG
 	}
 
 	@Test
-	public void testActionCopyIntoNewProgram() throws Exception {
+	public void testActionCopyIntoNewProgram() throws Throwable {
 		assertDisabled(copyActionsPlugin.actionCopyIntoNewProgram);
 
 		createAndOpenTrace();
 
-		try (UndoableTransaction tid = tb.startTransaction()) {
+		try (Transaction tx = tb.startTransaction()) {
 			tb.trace.getMemoryManager()
 					.createRegion(".text", 0, tb.range(0x55550000, 0x5555ffff),
 						TraceMemoryFlag.READ, TraceMemoryFlag.EXECUTE);
@@ -376,7 +362,7 @@ public class DebuggerCopyActionsPluginTest extends AbstractGhidraHeadedDebuggerG
 		assertTrue(entry.isCreate());
 		entry.setBlockName(".my_text");
 		dialog.okCallback();
-		dialog.lastTask.get(1000, TimeUnit.MILLISECONDS);
+		waitOn(dialog.lastTask);
 		waitForSwing();
 
 		// Declare my own, or the @After will try to release it erroneously
@@ -389,12 +375,12 @@ public class DebuggerCopyActionsPluginTest extends AbstractGhidraHeadedDebuggerG
 	}
 
 	@Test
-	public void testActionCopyIntoNewProgramAdjacentRegions() throws Exception {
+	public void testActionCopyIntoNewProgramAdjacentRegions() throws Throwable {
 		assertDisabled(copyActionsPlugin.actionCopyIntoNewProgram);
 
 		createAndOpenTrace();
 
-		try (UndoableTransaction tid = tb.startTransaction()) {
+		try (Transaction tx = tb.startTransaction()) {
 			tb.trace.getMemoryManager()
 					.createRegion(".text", 0, tb.range(0x55550000, 0x5555ffff),
 						TraceMemoryFlag.READ, TraceMemoryFlag.EXECUTE);
@@ -432,7 +418,7 @@ public class DebuggerCopyActionsPluginTest extends AbstractGhidraHeadedDebuggerG
 		assertTrue(entry.isCreate());
 
 		dialog.okCallback();
-		dialog.lastTask.get(1000, TimeUnit.MILLISECONDS);
+		waitOn(dialog.lastTask);
 		waitForSwing();
 
 		// Declare my own, or the @After will try to release it erroneously
@@ -441,7 +427,7 @@ public class DebuggerCopyActionsPluginTest extends AbstractGhidraHeadedDebuggerG
 	}
 
 	@Test
-	public void testActionCopyIntoNewProgramCaptureLive() throws Exception {
+	public void testActionCopyIntoNewProgramCaptureLive() throws Throwable {
 		assertDisabled(copyActionsPlugin.actionCopyIntoNewProgram);
 
 		createTestModel();
@@ -457,9 +443,8 @@ public class DebuggerCopyActionsPluginTest extends AbstractGhidraHeadedDebuggerG
 		mb.testModel.addModelListener(listener);
 
 		mb.createTestProcessesAndThreads();
-		TraceRecorder recorder = modelService.recordTarget(mb.testProcess1,
-			new TestDebuggerTargetTraceMapper(mb.testProcess1));
-		useTrace(recorder.getTrace());
+		modelService.recordTarget(mb.testProcess1, createTargetTraceMapper(mb.testProcess1),
+			ActionSource.AUTOMATIC);
 		mb.testProcess1.memory.addRegion(".text", mb.rng(0x55550000, 0x5555ffff), "rx");
 		mb.testProcess1.memory.setMemory(mb.addr(0x55550000), mb.arr(1, 2, 3, 4, 5, 6, 7, 8));
 		waitForPass(() -> {
@@ -493,7 +478,7 @@ public class DebuggerCopyActionsPluginTest extends AbstractGhidraHeadedDebuggerG
 
 		assertEquals(0, listener.count);
 		dialog.okCallback();
-		dialog.lastTask.get(10000, TimeUnit.MILLISECONDS);
+		waitOn(dialog.lastTask);
 		waitForSwing();
 		assertEquals(16, listener.count);
 
@@ -505,7 +490,13 @@ public class DebuggerCopyActionsPluginTest extends AbstractGhidraHeadedDebuggerG
 		assertEquals(tb.addr(stSpace, 0x55550000), text.getStart());
 		assertEquals(".my_text", text.getName());
 		byte[] arr = new byte[8];
-		text.getBytes(tb.addr(stSpace, 0x55550000), arr);
-		assertArrayEquals(tb.arr(1, 2, 3, 4, 5, 6, 7, 8), arr);
+		/**
+		 * While waitOn will ensure the read request completes, it doesn't ensure the recorder has
+		 * actually written the result to the database, yet.
+		 */
+		waitForPass(noExc(() -> {
+			text.getBytes(tb.addr(stSpace, 0x55550000), arr);
+			assertArrayEquals(tb.arr(1, 2, 3, 4, 5, 6, 7, 8), arr);
+		}));
 	}
 }

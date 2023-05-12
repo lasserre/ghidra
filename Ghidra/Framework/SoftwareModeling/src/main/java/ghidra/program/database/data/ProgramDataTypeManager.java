@@ -19,29 +19,26 @@ import java.io.IOException;
 import java.util.Iterator;
 import java.util.LinkedList;
 
-import db.DBConstants;
-import db.DBHandle;
+import db.*;
 import db.util.ErrorHandler;
 import ghidra.framework.model.DomainFile;
 import ghidra.framework.options.Options;
 import ghidra.program.database.ManagerDB;
 import ghidra.program.database.ProgramDB;
-import ghidra.program.database.function.FunctionManagerDB;
 import ghidra.program.database.map.AddressMap;
-import ghidra.program.database.symbol.SymbolManager;
+import ghidra.program.model.address.Address;
 import ghidra.program.model.data.*;
 import ghidra.program.model.listing.Program;
 import ghidra.program.util.ChangeManager;
 import ghidra.util.*;
-import ghidra.util.exception.CancelledException;
-import ghidra.util.exception.VersionException;
+import ghidra.util.exception.*;
 import ghidra.util.task.TaskMonitor;
 
 /**
  * Class for managing data types in a program
  */
-public class ProgramDataTypeManager extends DataTypeManagerDB
-		implements ManagerDB, ProgramBasedDataTypeManager {
+public class ProgramDataTypeManager extends ProgramBasedDataTypeManagerDB
+		implements ManagerDB {
 
 	private static final String OLD_DT_ARCHIVE_FILENAMES = "DataTypeArchiveFilenames"; // eliminated with Ghidra 4.3
 
@@ -52,26 +49,45 @@ public class ProgramDataTypeManager extends DataTypeManagerDB
 	 * Constructor
 	 * @param handle open database  handle
 	 * @param addrMap the address map
-	 * @param openMode the program open mode
+	 * @param openMode the program open mode (see {@link DBConstants})
 	 * @param errHandler the database io error handler
 	 * @param lock the program synchronization lock
 	 * @param monitor the progress monitor
 	 * @throws CancelledException if the user cancels an upgrade
 	 * @throws VersionException if the database does not match the expected version.
-	 * @throws IOException if a database io error occurs.
+	 * @throws IOException if a database IO error occurs.
 	 */
 	public ProgramDataTypeManager(DBHandle handle, AddressMap addrMap, int openMode,
 			ErrorHandler errHandler, Lock lock, TaskMonitor monitor)
 			throws CancelledException, VersionException, IOException {
-		super(handle, addrMap, openMode, errHandler, lock, monitor);
+		super(handle, addrMap, openMode, null, errHandler, lock, monitor);
 		upgrade = (openMode == DBConstants.UPGRADE);
+	}
+
+	@Override
+	protected void dataSettingChanged(Address dataAddr) {
+		program.setChanged(ChangeManager.DOCR_DATA_TYPE_SETTING_CHANGED, dataAddr,
+			dataAddr, null, null);
+	}
+
+	@Override
+	public boolean allowsDefaultBuiltInSettings() {
+		return true;
 	}
 
 	@Override
 	public void setProgram(ProgramDB p) {
 		this.program = p;
-		dataOrganization = p.getCompilerSpec().getDataOrganization();
-		removeOldFileNameList();
+		try {
+			setProgramArchitecture(p, p.getSymbolTable().getVariableStorageManager(), false,
+				TaskMonitor.DUMMY);
+		}
+		catch (CancelledException e) {
+			throw new AssertException(e); // unexpected - no IO performed
+		}
+		catch (IOException e) {
+			errHandler.dbError(e);
+		}
 		if (upgrade) {
 			removeOldFileNameList();
 		}
@@ -93,19 +109,25 @@ public class ProgramDataTypeManager extends DataTypeManagerDB
 	public void programReady(int openMode, int currentRevision, TaskMonitor monitor)
 			throws IOException, CancelledException {
 		if (openMode == DBConstants.UPGRADE) {
-			doSourceArchiveUpdates(program.getCompilerSpec(), monitor);
+			doSourceArchiveUpdates(monitor);
 			migrateOldFlexArrayComponentsIfRequired(monitor);
 		}
 	}
 
+	/**
+	 * Update program-architecture information following a language upgrade/change
+	 * @param monitor task monitor
+	 * @throws IOException if IO error occurs
+	 * @throws CancelledException if task monitor cancelled
+	 */
+	public void languageChanged(TaskMonitor monitor) throws IOException, CancelledException {
+		setProgramArchitecture(program, program.getSymbolTable().getVariableStorageManager(), true,
+			monitor);
+	}
+	
 	@Override
 	public String getName() {
 		return program.getName();
-	}
-
-	@Override
-	public Pointer getPointer(DataType dt) {
-		return PointerDataType.getPointer(dt, this);
 	}
 
 	@Override
@@ -135,8 +157,6 @@ public class ProgramDataTypeManager extends DataTypeManagerDB
 	public void dataTypeChanged(DataType dt, boolean isAutoChange) {
 		super.dataTypeChanged(dt, isAutoChange);
 		if (!isCreatingDataType()) {
-			program.getCodeManager().invalidateCache(false);
-			program.getFunctionManager().invalidateCache(false);
 			program.dataTypeChanged(getID(dt), ChangeManager.DOCR_DATA_TYPE_CHANGED,
 				isAutoChange, null, dt);
 		}
@@ -215,14 +235,16 @@ public class ProgramDataTypeManager extends DataTypeManagerDB
 			return;
 		}
 		program.getCodeManager().replaceDataTypes(oldDataTypeID, newDataTypeID);
-		((SymbolManager) program.getSymbolTable()).replaceDataTypes(oldDataTypeID, newDataTypeID);
-		((FunctionManagerDB) program.getFunctionManager()).replaceDataTypes(oldDataTypeID,
-			newDataTypeID);
+		program.getSymbolTable().replaceDataTypes(oldDataTypeID, newDataTypeID);
+		program.getFunctionManager().replaceDataTypes(oldDataTypeID, newDataTypeID);
 	}
 
 	@Override
 	protected void deleteDataTypeIDs(LinkedList<Long> deletedIds, TaskMonitor monitor)
 			throws CancelledException {
+		// TODO: SymbolManager/FunctionManager do not appear to handle datatype removal update.
+		// Suspect it handles indirectly through detection of deleted datatype.  Old deleted ID
+		// use could be an issue.
 		long[] ids = new long[deletedIds.size()];
 		Iterator<Long> it = deletedIds.iterator();
 		int i = 0;
@@ -236,6 +258,11 @@ public class ProgramDataTypeManager extends DataTypeManagerDB
 	@Override
 	public boolean isUpdatable() {
 		return program.isChangeable();
+	}
+
+	@Override
+	public Transaction openTransaction(String description) throws IllegalStateException {
+		return program.openTransaction(description);
 	}
 
 	@Override
@@ -287,11 +314,4 @@ public class ProgramDataTypeManager extends DataTypeManagerDB
 		return ArchiveType.PROGRAM;
 	}
 
-	@Override
-	public DataOrganization getDataOrganization() {
-		if (dataOrganization == null) {
-			dataOrganization = program.getCompilerSpec().getDataOrganization();
-		}
-		return dataOrganization;
-	}
 }

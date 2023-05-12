@@ -17,18 +17,15 @@ package ghidra.trace.model.modules;
 
 import java.net.URL;
 
-import com.google.common.collect.Range;
-
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressRange;
 import ghidra.program.model.listing.Program;
-import ghidra.trace.model.Trace;
-import ghidra.trace.model.TraceObject;
+import ghidra.trace.model.*;
 
 /**
  * A mapped range from this trace to a Ghidra {@link Program}
  */
-public interface TraceStaticMapping extends TraceObject {
+public interface TraceStaticMapping extends TraceUniqueObject {
 
 	/**
 	 * Get the "from" trace, i.e., the trace containing this mapping
@@ -80,7 +77,7 @@ public interface TraceStaticMapping extends TraceObject {
 	 * 
 	 * @return the lifespan
 	 */
-	Range<Long> getLifespan();
+	Lifespan getLifespan();
 
 	/**
 	 * Get the starting snap of the lifespan
@@ -118,13 +115,13 @@ public interface TraceStaticMapping extends TraceObject {
 	/**
 	 * Check if this mapping would conflict with the given prospective mapping
 	 * 
-	 * @see TraceStaticMappingManager#isAnyConflicting(AddressRange, Range, URL, String)
+	 * @see TraceStaticMappingManager#isAnyConflicting(AddressRange, Lifespan, URL, String)
 	 * @param range the range in the trace ("from")
 	 * @param lifespan the span of time in the trace
 	 * @param toProgramURL the (Ghidra) URL of the static image ("to")
 	 * @param toAddress the starting address (in string form) in the staic image ("to")
 	 * @return true if this mapping conflicts.
 	 */
-	boolean conflictsWith(AddressRange range, Range<Long> lifespan, URL toProgramURL,
+	boolean conflictsWith(AddressRange range, Lifespan lifespan, URL toProgramURL,
 			String toAddress);
 }

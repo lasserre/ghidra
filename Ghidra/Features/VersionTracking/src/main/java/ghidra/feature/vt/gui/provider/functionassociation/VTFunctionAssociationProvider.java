@@ -15,12 +15,8 @@
  */
 package ghidra.feature.vt.gui.provider.functionassociation;
 
-import static ghidra.feature.vt.api.impl.VTChangeManager.DOCR_VT_ASSOCIATION_STATUS_CHANGED;
-import static ghidra.feature.vt.api.impl.VTChangeManager.DOCR_VT_MATCH_ADDED;
-import static ghidra.feature.vt.api.impl.VTChangeManager.DOCR_VT_MATCH_DELETED;
-import static ghidra.feature.vt.gui.provider.functionassociation.FilterSettings.SHOW_ALL;
-import static ghidra.feature.vt.gui.provider.functionassociation.FilterSettings.SHOW_UNACCEPTED;
-import static ghidra.feature.vt.gui.provider.functionassociation.FilterSettings.SHOW_UNMATCHED;
+import static ghidra.feature.vt.api.impl.VTChangeManager.*;
+import static ghidra.feature.vt.gui.provider.functionassociation.FilterSettings.*;
 
 import java.awt.*;
 import java.awt.event.*;
@@ -41,6 +37,8 @@ import docking.widgets.EventTrigger;
 import docking.widgets.fieldpanel.FieldPanel;
 import docking.widgets.label.GDLabel;
 import docking.widgets.table.threaded.ThreadedTableModel;
+import generic.theme.GIcon;
+import generic.theme.GThemeDefaults.Colors;
 import ghidra.app.plugin.core.functioncompare.FunctionComparisonPanel;
 import ghidra.app.services.GoToService;
 import ghidra.app.util.viewer.listingpanel.ListingCodeComparisonPanel;
@@ -63,8 +61,6 @@ import ghidra.program.util.*;
 import ghidra.util.HelpLocation;
 import ghidra.util.SystemUtilities;
 import ghidra.util.table.*;
-import resources.Icons;
-import resources.ResourceManager;
 
 /**
  * Provider for the version tracking function association table. 
@@ -74,13 +70,14 @@ public class VTFunctionAssociationProvider extends ComponentProviderAdapter
 
 	private static final String FILTER_SETTINGS_KEY = "FUNCTION_FILTER_SETTINGS";
 	private static final String BASE_TITLE = "Version Tracking Functions";
-	private static final ImageIcon PROVIDER_ICON =
-		ResourceManager.loadImage("images/functions.gif");
+	private static final Icon PROVIDER_ICON = new GIcon("icon.version.tracking.provider.function");
 	private static final String SOURCE_TITLE = "Source";
 	private static final String DESTINATION_TITLE = "Destination";
 	private static final String NO_SESSION = "None";
 	private static final Icon SHOW_LISTINGS_ICON =
-		ResourceManager.loadImage("images/application_tile_horizontal.png");
+		new GIcon("icon.version.tracking.action.show.listings");
+	public static final Icon FILTER_NOT_ACCEPTED_ICON =
+		new GIcon("icon.version.tracking.action.function.filter.not.accepted");
 	private static final String SHOW_COMPARE_ACTION_GROUP = "A9_ShowCompare"; // "A9_" forces to right of other dual view actions in toolbar.
 
 	private GhidraTable sourceFunctionsTable;
@@ -156,15 +153,16 @@ public class VTFunctionAssociationProvider extends ComponentProviderAdapter
 					destinationFunctionsModel.setFilterSettings(filterSettings);
 				}
 			};
+
 		filterAction.setHelpLocation(new HelpLocation("VersionTrackingPlugin", "Functions_Filter"));
 
-		Icon allFunctionsIcon = ResourceManager.loadImage("images/function.png");
+		Icon allFunctionsIcon = new GIcon("icon.version.tracking.function.filter.all");
 		ActionState<FilterSettings> allFunctionsActionState =
 			new ActionState<>("Show All Functions", allFunctionsIcon, SHOW_ALL);
 		allFunctionsActionState.setHelpLocation(
 			new HelpLocation("VersionTrackingPlugin", "Show_All_Functions"));
 
-		Icon unmatchedIcon = ResourceManager.loadImage("images/filter_matched.png");
+		Icon unmatchedIcon = new GIcon("icon.version.tracking.function.filter.unmatched");
 		ActionState<FilterSettings> unmatchedOnlyActionState =
 			new ActionState<>("Show Only Unmatched Functions", unmatchedIcon, SHOW_UNMATCHED);
 		unmatchedOnlyActionState.setHelpLocation(
@@ -172,7 +170,7 @@ public class VTFunctionAssociationProvider extends ComponentProviderAdapter
 
 		ActionState<FilterSettings> unacceptedOnlyActionState =
 			new ActionState<>("Show Only Unaccepted Match Functions",
-				Icons.FILTER_NOT_ACCEPTED_ICON, SHOW_UNACCEPTED);
+				FILTER_NOT_ACCEPTED_ICON, SHOW_UNACCEPTED);
 		unacceptedOnlyActionState.setHelpLocation(
 			new HelpLocation("VersionTrackingPlugin", "Show_Unaccepted_Functions"));
 
@@ -219,7 +217,7 @@ public class VTFunctionAssociationProvider extends ComponentProviderAdapter
 	}
 
 	@Override
-	public List<DockingActionIf> getPopupActions(Tool tool, ActionContext context) {
+	public List<DockingActionIf> getPopupActions(Tool t, ActionContext context) {
 		if (context.getComponentProvider() == this) {
 			ListingCodeComparisonPanel dualListingPanel =
 				functionComparisonPanel.getDualListingPanel();
@@ -361,7 +359,7 @@ public class VTFunctionAssociationProvider extends ComponentProviderAdapter
 		JPanel statusPanel = new JPanel(new BorderLayout());
 		statusLabel = new GDLabel(NO_ERROR_MESSAGE);
 		statusLabel.setHorizontalAlignment(SwingConstants.CENTER);
-		statusLabel.setForeground(Color.RED.darker());
+		statusLabel.setForeground(Colors.ERROR);
 		statusLabel.addComponentListener(new ComponentAdapter() {
 			@Override
 			public void componentResized(ComponentEvent e) {

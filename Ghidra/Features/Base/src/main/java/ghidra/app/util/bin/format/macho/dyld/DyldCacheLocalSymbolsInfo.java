@@ -20,10 +20,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import generic.continues.RethrowContinuesFactory;
 import ghidra.app.util.bin.BinaryReader;
 import ghidra.app.util.bin.StructConverter;
-import ghidra.app.util.bin.format.FactoryBundledWithBinaryReader;
 import ghidra.app.util.bin.format.macho.CpuTypes;
 import ghidra.app.util.bin.format.macho.MachConstants;
 import ghidra.app.util.bin.format.macho.commands.NList;
@@ -40,7 +38,7 @@ import ghidra.util.task.TaskMonitor;
 /**
  * Represents a dyld_cache_local_symbols_info structure.
  * 
- * @see <a href="https://opensource.apple.com/source/dyld/dyld-852.2/dyld3/shared-cache/dyld_cache_format.h.auto.html">dyld3/shared-cache/dyld_cache_format.h</a> 
+ * @see <a href="https://github.com/apple-oss-distributions/dyld/blob/main/cache-builder/dyld_cache_format.h">dyld_cache_format.h</a> 
  */
 @SuppressWarnings("unused")
 public class DyldCacheLocalSymbolsInfo implements StructConverter {
@@ -108,8 +106,10 @@ public class DyldCacheLocalSymbolsInfo implements StructConverter {
 	 */
 	public void markup(Program program, Address localSymbolsInfoAddr, TaskMonitor monitor,
 			MessageLog log) throws CancelledException {
-		markupNList(program, localSymbolsInfoAddr, monitor, log);
 		markupLocalSymbols(program, localSymbolsInfoAddr, monitor, log);
+		
+		// Not worth marking up the huge NList in production code.  Keep it commented for debugging.
+		//markupNList(program, localSymbolsInfoAddr, monitor, log);
 	}
 
 	/**
@@ -126,7 +126,7 @@ public class DyldCacheLocalSymbolsInfo implements StructConverter {
 	 * 
 	 * @return The {@link List} of {@link DyldCacheLocalSymbolsEntry}
 	 */
-	public List<DyldCacheLocalSymbolsEntry> getLocalSymbols() {
+	public List<DyldCacheLocalSymbolsEntry> getLocalSymbolsEntries() {
 		return localSymbolsEntryList;
 	}
 
@@ -146,16 +146,16 @@ public class DyldCacheLocalSymbolsInfo implements StructConverter {
 	}
 
 	private void parseNList(MessageLog log, TaskMonitor monitor) throws CancelledException {
-		FactoryBundledWithBinaryReader nListReader = new FactoryBundledWithBinaryReader(
-			RethrowContinuesFactory.INSTANCE, reader.getByteProvider(), reader.isLittleEndian());
-		monitor.setMessage("Parsing DYLD nlist symbol table...");
+		BinaryReader nListReader =
+			new BinaryReader(reader.getByteProvider(), reader.isLittleEndian());
+		monitor.setMessage("Parsing DYLD local symbol nlists...");
 		monitor.initialize(nlistCount * 2);
 		nListReader.setPointerIndex(startIndex + nlistOffset);
 		try {
 
 			for (int i = 0; i < nlistCount; ++i) {
-				nlistList.add(NList.createNList(nListReader, is32bit));
-				monitor.checkCanceled();
+				nlistList.add(new NList(nListReader, is32bit));
+				monitor.checkCancelled();
 				monitor.incrementProgress(1);
 			}
 			// sort the entries by the index in the string table, so don't jump around reading
@@ -167,7 +167,7 @@ public class DyldCacheLocalSymbolsInfo implements StructConverter {
 			// initialize the NList strings from string table
 			long stringTableOffset = startIndex + stringsOffset;
 			for (NList nList : sortedList) {
-				monitor.checkCanceled();
+				monitor.checkCancelled();
 				monitor.incrementProgress(1);
 				nList.initString(nListReader, stringTableOffset);
 			}
@@ -184,7 +184,7 @@ public class DyldCacheLocalSymbolsInfo implements StructConverter {
 		try {
 			for (int i = 0; i < entriesCount; ++i) {
 				localSymbolsEntryList.add(new DyldCacheLocalSymbolsEntry(reader));
-				monitor.checkCanceled();
+				monitor.checkCancelled();
 				monitor.incrementProgress(1);
 			}
 		}
@@ -196,14 +196,14 @@ public class DyldCacheLocalSymbolsInfo implements StructConverter {
 
 	private void markupNList(Program program, Address localSymbolsInfoAddr, TaskMonitor monitor,
 			MessageLog log) throws CancelledException {
-		monitor.setMessage("Marking up DYLD nlist symbol table...");
+		monitor.setMessage("Marking up DYLD local symbol nlists...");
 		monitor.initialize(nlistCount);
 		try {
 			Address addr = localSymbolsInfoAddr.add(nlistOffset);
 			for (NList nlist : nlistList) {
 				Data d = program.getListing().createData(addr, nlist.toDataType());
 				addr = addr.add(d.getLength());
-				monitor.checkCanceled();
+				monitor.checkCancelled();
 				monitor.incrementProgress(1);
 			}
 		}
@@ -221,7 +221,7 @@ public class DyldCacheLocalSymbolsInfo implements StructConverter {
 			for (DyldCacheLocalSymbolsEntry localSymbolsEntry : localSymbolsEntryList) {
 				Data d = program.getListing().createData(addr, localSymbolsEntry.toDataType());
 				addr = addr.add(d.getLength());
-				monitor.checkCanceled();
+				monitor.checkCancelled();
 				monitor.incrementProgress(1);
 			}
 		}

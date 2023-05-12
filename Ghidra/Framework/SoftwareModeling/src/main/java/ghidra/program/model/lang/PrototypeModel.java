@@ -15,13 +15,17 @@
  */
 package ghidra.program.model.lang;
 
+import static ghidra.program.model.pcode.AttributeId.*;
+import static ghidra.program.model.pcode.ElementId.*;
+
+import java.io.IOException;
 import java.util.ArrayList;
 
+import ghidra.program.database.SpecExtension;
 import ghidra.program.model.address.*;
 import ghidra.program.model.data.*;
 import ghidra.program.model.listing.*;
-import ghidra.program.model.pcode.AddressXML;
-import ghidra.program.model.pcode.Varnode;
+import ghidra.program.model.pcode.*;
 import ghidra.util.SystemUtilities;
 import ghidra.util.exception.InvalidInputException;
 import ghidra.util.xml.SpecXmlUtils;
@@ -31,9 +35,6 @@ import ghidra.xml.*;
  * A function calling convention model.
  * Formal specification of how a compiler passes
  * arguments between functions.
- * 
- * 
- *
  */
 public class PrototypeModel {
 	public static final int UNKNOWN_EXTRAPOP = 0x8000;
@@ -50,15 +51,25 @@ public class PrototypeModel {
 	private Varnode[] killedbycall;	// Memory ranges definitely affected by calls
 	private Varnode[] returnaddress;	// Memory used to store the return address
 	private Varnode[] likelytrash;	// Memory likely to be meaningless on input
+	private PrototypeModel compatModel;	// The model this is an alias of
 	private AddressSet localRange;	// Range on the stack considered for local storage
 	private AddressSet paramRange;	// Range on the stack considered for parameter storage
 	private InputListType inputListType = InputListType.STANDARD;
-	private GenericCallingConvention genericCallingConvention;
 	private boolean hasThis;		// Convention has a this (auto-parameter)
 	private boolean isConstruct;		// Convention is used for object construction
 	private boolean hasUponEntry;	// Does this have an uponentry injection
 	private boolean hasUponReturn;	// Does this have an uponreturn injection
 
+	/**
+	 * Create a named alias of another PrototypeModel.
+	 * All elements of the original model are copied except:
+	 *   1) The name
+	 *   2) The generic calling convention (which is based on name)
+	 *   3) The hasThis property (which allows __thiscall to alias something else)
+	 *   4) The "fact of" the model being an alias
+	 * @param name is the name of the alias
+	 * @param model is the other PrototypeModel
+	 */
 	public PrototypeModel(String name, PrototypeModel model) {
 		this.name = name;
 		isExtension = false;
@@ -71,11 +82,11 @@ public class PrototypeModel {
 		killedbycall = model.killedbycall;
 		returnaddress = model.returnaddress;
 		likelytrash = model.likelytrash;
+		compatModel = model;
 		localRange = new AddressSet(model.localRange);
 		paramRange = new AddressSet(model.paramRange);
 		hasThis = model.hasThis || name.equals(CompilerSpec.CALLING_CONVENTION_thiscall);
 		isConstruct = model.isConstruct;
-		genericCallingConvention = GenericCallingConvention.getGenericCallingConvention(name);
 		hasUponEntry = model.hasUponEntry;
 		hasUponReturn = model.hasUponReturn;
 	}
@@ -91,17 +102,13 @@ public class PrototypeModel {
 		killedbycall = null;
 		returnaddress = null;
 		likelytrash = null;
+		compatModel = null;
 		localRange = null;
 		paramRange = null;
-		genericCallingConvention = GenericCallingConvention.unknown;
 		hasThis = false;
 		isConstruct = false;
 		hasUponEntry = false;
 		hasUponReturn = false;
-	}
-
-	public GenericCallingConvention getGenericCallingConvention() {
-		return genericCallingConvention;
 	}
 
 	/**
@@ -138,12 +145,15 @@ public class PrototypeModel {
 	 * @return list of registers/memory used to store the return address
 	 */
 	public Varnode[] getReturnAddress() {
-		if (returnaddress == null) {
-			returnaddress = new Varnode[0];
-		}
 		return returnaddress;
 	}
 
+	/**
+	 * If this returns true, it indicates this model is an artificial merge of other models.
+	 * A merged model can be used as part of the analysis process when attempting to distinguish
+	 * between different possible models for an unknown function.
+	 * @return true if this model is an artificial merge of other models
+	 */
 	public boolean isMerged() {
 		return false;
 	}
@@ -155,30 +165,58 @@ public class PrototypeModel {
 		return isExtension;
 	}
 
+	/**
+	 * @return the formal name of the model
+	 */
 	public String getName() {
 		return name;
 	}
 
+	/**
+	 * Returns the number of extra bytes popped from the stack when a function that uses
+	 * this model returns to its caller. This is usually just the number of bytes used to
+	 * store the return value, but some conventions may do additional clean up of stack parameters.
+	 * A special value of UNKNOWN_EXTRAPOP indicates that the number of bytes is unknown.  
+	 * @return the number of extra bytes popped
+	 */
 	public int getExtrapop() {
 		return extrapop;
 	}
 
+	/**
+	 * @return the number of bytes on the stack used, by this model, to store the return value
+	 */
 	public int getStackshift() {
 		return stackshift;
 	}
 
+	/**
+	 * @return true if this model has an implied "this" parameter for referencing class data
+	 */
 	public boolean hasThisPointer() {
 		return hasThis;
 	}
 
+	/**
+	 * @return true if this model is used specifically for class constructors
+	 */
 	public boolean isConstructor() {
 		return isConstruct;
 	}
 
+	/**
+	 * @return the allocation strategy for this model
+	 */
 	public InputListType getInputListType() {
 		return inputListType;
 	}
 
+	/**
+	 * Return true if this model has specific p-code injections associated with it
+	 * (either an "uponentry" or "uponreturn" payload),
+	 * which are used to decompile functions with this model. 
+	 * @return true if this model uses p-code injections
+	 */
 	public boolean hasInjection() {
 		return hasUponEntry || hasUponReturn;
 	}
@@ -335,6 +373,14 @@ public class PrototypeModel {
 	}
 
 	/**
+	 * If this is an alias of another model, return that model.  Otherwise null is returned.
+	 * @return the parent model or null
+	 */
+	public PrototypeModel getAliasParent() {
+		return compatModel;
+	}
+
+	/**
 	 * If a PrototypeModel fails to parse (from XML) a substitute model may be provided, in which
 	 * case this method returns true.  In all other cases this method returns false;
 	 * @return true if this object is a substitute for a model that didn't parse
@@ -359,78 +405,83 @@ public class PrototypeModel {
 		}
 	}
 
-	public void saveXml(StringBuilder buffer, PcodeInjectLibrary injectLibrary) {
-		buffer.append("<prototype");
-		SpecXmlUtils.encodeStringAttribute(buffer, "name", name);
+	/**
+	 * Encode this object to an output stream
+	 * @param encoder is the stream encoder
+	 * @param injectLibrary is a library containing any inject payloads associated with the model
+	 * @throws IOException for errors writing to the underlying stream
+	 */
+	public void encode(Encoder encoder, PcodeInjectLibrary injectLibrary) throws IOException {
+		if (compatModel != null) {
+			encoder.openElement(ELEM_MODELALIAS);
+			encoder.writeString(ATTRIB_NAME, name);
+			encoder.writeString(ATTRIB_PARENT, compatModel.name);
+			encoder.closeElement(ELEM_MODELALIAS);
+			return;
+		}
+		encoder.openElement(ELEM_PROTOTYPE);
+		encoder.writeString(ATTRIB_NAME, name);
 		if (extrapop != PrototypeModel.UNKNOWN_EXTRAPOP) {
-			SpecXmlUtils.encodeSignedIntegerAttribute(buffer, "extrapop", extrapop);
+			encoder.writeSignedInteger(ATTRIB_EXTRAPOP, extrapop);
 		}
 		else {
-			SpecXmlUtils.encodeStringAttribute(buffer, "extrapop", "unknown");
+			encoder.writeString(ATTRIB_EXTRAPOP, "unknown");
 		}
-		SpecXmlUtils.encodeSignedIntegerAttribute(buffer, "stackshift", stackshift);
-		GenericCallingConvention nameType = GenericCallingConvention.guessFromName(name);
-		if (nameType != genericCallingConvention) {
-			SpecXmlUtils.encodeStringAttribute(buffer, "type",
-				genericCallingConvention.getDeclarationName());
-		}
+		encoder.writeSignedInteger(ATTRIB_STACKSHIFT, stackshift);
 		if (hasThis) {
-			SpecXmlUtils.encodeStringAttribute(buffer, "hasthis", "yes");
+			encoder.writeBool(ATTRIB_HASTHIS, true);
 		}
 		if (isConstruct) {
-			SpecXmlUtils.encodeStringAttribute(buffer, "constructor", "yes");
+			encoder.writeBool(ATTRIB_CONSTRUCTOR, true);
 		}
 		if (inputListType != InputListType.STANDARD) {
-			SpecXmlUtils.encodeStringAttribute(buffer, "strategy", "register");
+			encoder.writeString(ATTRIB_STRATEGY, "register");
 		}
-		buffer.append(">\n");
-		inputParams.saveXml(buffer, true);
-		buffer.append('\n');
-		outputParams.saveXml(buffer, false);
-		buffer.append('\n');
+		inputParams.encode(encoder, true);
+		outputParams.encode(encoder, false);
 		if (hasUponEntry || hasUponReturn) {
 			InjectPayload payload =
 				injectLibrary.getPayload(InjectPayload.CALLMECHANISM_TYPE, getInjectName());
-			payload.saveXml(buffer);
+			payload.encode(encoder);
 		}
 		if (unaffected != null) {
-			buffer.append("<unaffected>\n");
-			writeVarnodes(buffer, unaffected);
-			buffer.append("</unaffected>\n");
+			encoder.openElement(ELEM_UNAFFECTED);
+			encodeVarnodes(encoder, unaffected);
+			encoder.closeElement(ELEM_UNAFFECTED);
 		}
 		if (killedbycall != null) {
-			buffer.append("<killedbycall>\n");
-			writeVarnodes(buffer, killedbycall);
-			buffer.append("</killedbycall>\n");
+			encoder.openElement(ELEM_KILLEDBYCALL);
+			encodeVarnodes(encoder, killedbycall);
+			encoder.closeElement(ELEM_KILLEDBYCALL);
 		}
 		if (likelytrash != null) {
-			buffer.append("<likelytrash>\n");
-			writeVarnodes(buffer, likelytrash);
-			buffer.append("</likelytrash>\n");
+			encoder.openElement(ELEM_LIKELYTRASH);
+			encodeVarnodes(encoder, likelytrash);
+			encoder.closeElement(ELEM_LIKELYTRASH);
 		}
 		if (returnaddress != null) {
-			buffer.append("<returnaddress>\n");
-			writeVarnodes(buffer, returnaddress);
-			buffer.append("</returnaddress>\n");
+			encoder.openElement(ELEM_RETURNADDRESS);
+			encodeVarnodes(encoder, returnaddress);
+			encoder.closeElement(ELEM_RETURNADDRESS);
 		}
 		if (localRange != null && !localRange.isEmpty()) {
-			buffer.append("<localrange>\n");
-			writeAddressSet(buffer, localRange);
-			buffer.append("</localrange>\n");
+			encoder.openElement(ELEM_LOCALRANGE);
+			encodeAddressSet(encoder, localRange);
+			encoder.closeElement(ELEM_LOCALRANGE);
 		}
 		if (paramRange != null && !paramRange.isEmpty()) {
-			buffer.append("<paramrange>\n");
-			writeAddressSet(buffer, paramRange);
-			buffer.append("</paramrange>\n");
+			encoder.openElement(ELEM_PARAMRANGE);
+			encodeAddressSet(encoder, paramRange);
+			encoder.closeElement(ELEM_PARAMRANGE);
 		}
-		buffer.append("</prototype>\n");
+		encoder.closeElement(ELEM_PROTOTYPE);
 	}
 
-	private void writeVarnodes(StringBuilder buffer, Varnode[] varnodes) {
+	private void encodeVarnodes(Encoder encoder, Varnode[] varnodes) throws IOException {
 		for (Varnode vn : varnodes) {
-			buffer.append("<varnode");
-			AddressXML.appendAttributes(buffer, vn.getAddress(), vn.getSize());
-			buffer.append("/>\n");
+			encoder.openElement(ELEM_VARNODE);
+			AddressXML.encodeAttributes(encoder, vn.getAddress(), vn.getSize());
+			encoder.closeElement(ELEM_VARNODE);
 		}
 	}
 
@@ -454,7 +505,7 @@ public class PrototypeModel {
 		return res;
 	}
 
-	private void writeAddressSet(StringBuilder buffer, AddressSet addressSet) {
+	private void encodeAddressSet(Encoder encoder, AddressSet addressSet) throws IOException {
 		AddressRangeIterator iter = addressSet.getAddressRanges();
 		while (iter.hasNext()) {
 			AddressRange addrRange = iter.next();
@@ -474,22 +525,22 @@ public class PrototypeModel {
 				if (first < 0 && last >= 0) {	// Range crosses 0
 					first &= mask;
 					// Split out the piece coming before 0
-					buffer.append("<range");
-					SpecXmlUtils.encodeStringAttribute(buffer, "space", space.getName());
-					SpecXmlUtils.encodeUnsignedIntegerAttribute(buffer, "first", first);
-					SpecXmlUtils.encodeUnsignedIntegerAttribute(buffer, "last", mask);
-					buffer.append("/>\n");
+					encoder.openElement(ELEM_RANGE);
+					encoder.writeSpace(ATTRIB_SPACE, space);
+					encoder.writeUnsignedInteger(ATTRIB_FIRST, first);
+					encoder.writeUnsignedInteger(ATTRIB_LAST, mask);
+					encoder.closeElement(ELEM_RANGE);
 					// Reset first,last to be the piece coming after 0
 					first = 0;
 				}
 				first &= mask;
 				last &= mask;
 			}
-			buffer.append("<range");
-			SpecXmlUtils.encodeStringAttribute(buffer, "space", space.getName());
-			SpecXmlUtils.encodeUnsignedIntegerAttribute(buffer, "first", first);
-			SpecXmlUtils.encodeUnsignedIntegerAttribute(buffer, "last", last);
-			buffer.append("/>\n");
+			encoder.openElement(ELEM_RANGE);
+			encoder.writeSpace(ATTRIB_SPACE, space);
+			encoder.writeUnsignedInteger(ATTRIB_FIRST, first);
+			encoder.writeUnsignedInteger(ATTRIB_LAST, last);
+			encoder.closeElement(ELEM_RANGE);
 		}
 	}
 
@@ -516,24 +567,26 @@ public class PrototypeModel {
 		return name + "@@inject_uponreturn";
 	}
 
+	/**
+	 * Restore the model from an XML stream.
+	 * @param parser is the XML parser (initialized to the start of the stream)
+	 * @param cspec is the parent compiler specification owning the model
+	 * @throws XmlParseException is there are problems parsing the XML
+	 */
 	public void restoreXml(XmlPullParser parser, CompilerSpec cspec) throws XmlParseException {
 		inputParams = null;
 		outputParams = null;
 		XmlElement protoElement = parser.start();
 		name = protoElement.getAttribute("name");
+		if (!SpecExtension.isValidFormalName(name)) {
+			throw new XmlParseException("Prototype name uses illegal characters");
+		}
 		extrapop = PrototypeModel.UNKNOWN_EXTRAPOP;
 		String extpopStr = protoElement.getAttribute("extrapop");
 		if (!extpopStr.equals("unknown")) {
 			extrapop = SpecXmlUtils.decodeInt(extpopStr);
 		}
 		stackshift = SpecXmlUtils.decodeInt(protoElement.getAttribute("stackshift"));
-		String type = protoElement.getAttribute("type");
-		if (type != null) {
-			genericCallingConvention = GenericCallingConvention.getGenericCallingConvention(type);
-		}
-		else {
-			genericCallingConvention = GenericCallingConvention.guessFromName(name);
-		}
 		hasThis = false;
 		isConstruct = false;
 		String thisString = protoElement.getAttribute("hasthis");
@@ -597,81 +650,127 @@ public class PrototypeModel {
 		parser.end(protoElement);
 	}
 
+	/**
+	 * Determine if the given address range is possible input parameter storage for this model.
+	 * If it is, "true" is returned, and additional information about the parameter's
+	 * position is passed back in the provided record.
+	 * @param loc is the starting address of the range
+	 * @param size is the size of the range in bytes
+	 * @param res is the pass-back record
+	 * @return true if the range is a possible parameter
+	 */
 	public boolean possibleInputParamWithSlot(Address loc, int size, ParamList.WithSlotRec res) {
 		return inputParams.possibleParamWithSlot(loc, size, res);
 	}
 
+	/**
+	 * Determine if the given address range is possible return value storage for this model.
+	 * If it is, "true" is returned, and additional information about the storage
+	 * position is passed back in the provided record.
+	 * @param loc is the starting address of the range
+	 * @param size is the size of the range in bytes
+	 * @param res is the pass-back record
+	 * @return true if the range is possible return value storage
+	 */
 	public boolean possibleOutputParamWithSlot(Address loc, int size, ParamList.WithSlotRec res) {
 		return outputParams.possibleParamWithSlot(loc, size, res);
 	}
 
+	/**
+	 * Assuming the model allows open ended storage of parameters on the stack,
+	 * return the byte alignment required for individual stack parameters.
+	 * @return the stack alignment in bytes
+	 */
 	public int getStackParameterAlignment() {
 		return inputParams.getStackParameterAlignment();
 	}
 
+	/**
+	 * Return the byte offset where the first input parameter on the stack is allocated.
+	 * The value is relative to the incoming stack pointer of the called function.
+	 * For normal stacks, this is the offset of the first byte in the first parameter.
+	 * For reverse stacks, this is the offset immediately after the last byte of the parameter.
+	 * @return the byte offset of the first param
+	 */
 	public Long getStackParameterOffset() {
 		return inputParams.getStackParameterOffset();
 	}
 
+	/**
+	 * Get a list of all input storage locations consisting of a single register 
+	 * @param prog is the current Program
+	 * @return a VariableStorage ojbect for each register
+	 */
 	public VariableStorage[] getPotentialInputRegisterStorage(Program prog) {
 		return inputParams.getPotentialRegisterStorage(prog);
 	}
 
-	@Override
-	public boolean equals(Object obj) {
-		PrototypeModel op2 = (PrototypeModel) obj;
-		if (!name.equals(op2.name)) {
+	/**
+	 * Determine if this PrototypeModel is equivalent to another instance
+	 * @param obj is the other instance
+	 * @return true if they are equivalent
+	 */
+	public boolean isEquivalent(PrototypeModel obj) {
+		if (getClass() != obj.getClass()) {
 			return false;
 		}
-		if (extrapop != op2.extrapop || stackshift != op2.stackshift) {
+		if (!name.equals(obj.name)) {
 			return false;
 		}
-		if (genericCallingConvention != op2.genericCallingConvention) {
+		if (extrapop != obj.extrapop || stackshift != obj.stackshift) {
 			return false;
 		}
-		if (hasThis != op2.hasThis || isConstruct != op2.isConstruct) {
+		if (hasThis != obj.hasThis || isConstruct != obj.isConstruct) {
 			return false;
 		}
-		if (hasUponEntry != op2.hasUponEntry || hasUponReturn != op2.hasUponReturn) {
+		if (hasUponEntry != obj.hasUponEntry || hasUponReturn != obj.hasUponReturn) {
 			return false;
 		}
-		if (inputListType != op2.inputListType) {
+		if (inputListType != obj.inputListType) {
 			return false;
 		}
-		if (!inputParams.equals(op2.inputParams)) {
+		if (!inputParams.isEquivalent(obj.inputParams)) {
 			return false;
 		}
-		if (!outputParams.equals(op2.outputParams)) {
+		if (!outputParams.isEquivalent(obj.outputParams)) {
 			return false;
 		}
-		if (!SystemUtilities.isArrayEqual(unaffected, op2.unaffected)) {
+		if (!SystemUtilities.isArrayEqual(unaffected, obj.unaffected)) {
 			return false;
 		}
-		if (!SystemUtilities.isArrayEqual(killedbycall, op2.killedbycall)) {
+		if (!SystemUtilities.isArrayEqual(killedbycall, obj.killedbycall)) {
 			return false;
 		}
-		if (!SystemUtilities.isArrayEqual(likelytrash, op2.likelytrash)) {
+		if (!SystemUtilities.isArrayEqual(likelytrash, obj.likelytrash)) {
 			return false;
 		}
-		if (!SystemUtilities.isEqual(localRange, op2.localRange)) {
+		String compatName = (compatModel != null) ? compatModel.getName() : "";
+		String compatNameOp2 = (obj.compatModel != null) ? obj.compatModel.getName() : "";
+		if (!compatName.equals(compatNameOp2)) {
 			return false;
 		}
-		if (!SystemUtilities.isEqual(paramRange, op2.paramRange)) {
+		if (!SystemUtilities.isEqual(localRange, obj.localRange)) {
 			return false;
 		}
-		if (!SystemUtilities.isArrayEqual(returnaddress, op2.returnaddress)) {
+		if (!SystemUtilities.isEqual(paramRange, obj.paramRange)) {
+			return false;
+		}
+		if (!SystemUtilities.isArrayEqual(returnaddress, obj.returnaddress)) {
 			return false;
 		}
 		return true;
 	}
 
 	@Override
-	public int hashCode() {
-		return name.hashCode();
-	}
-
-	@Override
 	public String toString() {
 		return getName();
+	}
+
+	/**
+	 * Set the return address
+	 * @param returnaddress return address
+	 */
+	protected void setReturnAddress(Varnode[] returnaddress) {
+		this.returnaddress = returnaddress;
 	}
 }

@@ -37,6 +37,8 @@ public class UnionDataType extends CompositeDataTypeImpl implements UnionInterna
 	 * Construct a new empty union with the given name within the
 	 * specified categry path.  An empty union will report its length as 1 and 
 	 * {@link #isNotYetDefined()} will return true.
+	 * NOTE: A constructor form which accepts a {@link DataTypeManager} should be used when possible
+	 * since there may be performance benefits during datatype resolution.
 	 * @param path the category path indicating where this data type is located.
 	 * @param name the name of the new union
 	 */
@@ -82,7 +84,9 @@ public class UnionDataType extends CompositeDataTypeImpl implements UnionInterna
 	}
 
 	/**
-	 * Construct a new UnionDataType
+	 * Construct a new UnionDataType.
+	 * NOTE: A constructor form which accepts a {@link DataTypeManager} should be used when possible
+	 * since there may be performance benefits during datatype resolution.
 	 * @param name the name of this dataType
 	 */
 	public UnionDataType(String name) {
@@ -162,7 +166,7 @@ public class UnionDataType extends CompositeDataTypeImpl implements UnionInterna
 		return length;
 	}
 
-	DataTypeComponent doAdd(DataType dataType, int length, String componentName, String comment)
+	DataTypeComponentImpl doAdd(DataType dataType, int length, String componentName, String comment)
 			throws IllegalArgumentException {
 
 		dataType = validateDataType(dataType);
@@ -549,6 +553,7 @@ public class UnionDataType extends CompositeDataTypeImpl implements UnionInterna
 					oldDt.removeParent(this);
 					dtc.setLength(len);
 					dtc.setDataType(replacementDt); 
+					dtc.invalidateSettings();
 					replacementDt.addParent(this);
 					changed = true;
 				}

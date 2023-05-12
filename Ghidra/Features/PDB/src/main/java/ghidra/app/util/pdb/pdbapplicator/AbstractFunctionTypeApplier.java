@@ -20,8 +20,11 @@ import ghidra.app.util.bin.format.pdb2.pdbreader.PdbException;
 import ghidra.app.util.bin.format.pdb2.pdbreader.RecordNumber;
 import ghidra.app.util.bin.format.pdb2.pdbreader.type.AbstractMsType;
 import ghidra.app.util.bin.format.pdb2.pdbreader.type.CallingConvention;
-import ghidra.program.model.data.*;
+import ghidra.program.model.data.DataType;
+import ghidra.program.model.data.FunctionDefinitionDataType;
+import ghidra.program.model.lang.CompilerSpec;
 import ghidra.util.exception.CancelledException;
+import ghidra.util.exception.InvalidInputException;
 
 /**
  * Applier for certain function types.
@@ -38,10 +41,10 @@ public abstract class AbstractFunctionTypeApplier extends MsTypeApplier {
 	/**
 	 * Constructor for the applicator that applies a "function" type, transforming it into a
 	 * Ghidra DataType.
-	 * @param applicator {@link PdbApplicator} for which this class is working.
+	 * @param applicator {@link DefaultPdbApplicator} for which this class is working.
 	 * @param msType {@link AbstractMsType} to processes
 	 */
-	public AbstractFunctionTypeApplier(PdbApplicator applicator, AbstractMsType msType) {
+	public AbstractFunctionTypeApplier(DefaultPdbApplicator applicator, AbstractMsType msType) {
 		super(applicator, msType);
 //		String funcName = applicator.getNextAnonymousFunctionName();
 		functionDefinition = new FunctionDefinitionDataType(
@@ -200,7 +203,7 @@ public abstract class AbstractFunctionTypeApplier extends MsTypeApplier {
 			argsListApplier.applyTo(this);
 		}
 		setCallingConvention(applicator, callingConvention, hasThisPointer);
-		DataTypeNamingUtil.setMangledAnonymousFunctionName(functionDefinition, "_func");
+		DataTypeNamingUtil.setMangledAnonymousFunctionName(functionDefinition);
 		setApplied();
 
 //		resolvedDataType = applicator.resolveHighUse(dataType);
@@ -224,11 +227,11 @@ public abstract class AbstractFunctionTypeApplier extends MsTypeApplier {
 		return true;
 	}
 
-	private void setCallingConvention(PdbApplicator applicator, CallingConvention callingConvention,
-			boolean hasThisPointer) {
-		GenericCallingConvention convention;
+	private void setCallingConvention(DefaultPdbApplicator applicator,
+			CallingConvention callingConvention, boolean hasThisPointer) {
+		String convention;
 		if (hasThisPointer) {
-			convention = GenericCallingConvention.thiscall;
+			convention = CompilerSpec.CALLING_CONVENTION_thiscall;
 		}
 		else {
 			// Since we are a member function, we will always assume a _thiscall...
@@ -236,24 +239,30 @@ public abstract class AbstractFunctionTypeApplier extends MsTypeApplier {
 			switch (callingConvention) {
 				// TODO: figure all of these out.
 				case THISCALL: // "this" passed in register (we have not yet seen this)
-					convention = GenericCallingConvention.thiscall; // Is this correct if in reg?
+					convention = CompilerSpec.CALLING_CONVENTION_thiscall; // Is this correct if in reg?
 					break;
 				case NEAR_C: // we have seen this one 
-					convention = GenericCallingConvention.cdecl;
+					convention = CompilerSpec.CALLING_CONVENTION_cdecl;
 					break;
 				case NEAR_VECTOR: // we have seen this one 
-					convention = GenericCallingConvention.vectorcall;
+					convention = CompilerSpec.CALLING_CONVENTION_vectorcall;
 					break;
 				default:
 //				applicator.getLog().appendMsg(
 //					"TODO: calling convention not implemented for value " + callingConventionVal +
 //						" in " + funcName);
 					//convention = GenericCallingConvention.cdecl;
-					convention = GenericCallingConvention.cdecl;
+					convention = CompilerSpec.CALLING_CONVENTION_cdecl;
 					break;
 			}
 		}
-		functionDefinition.setGenericCallingConvention(convention);
+		try {
+			functionDefinition.setCallingConvention(convention);
+		}
+		catch (InvalidInputException e) {
+			applicator.appendLogMsg("Failed to set calling convention `" + convention + "` for " +
+				functionDefinition.getName());
+		}
 	}
 
 }

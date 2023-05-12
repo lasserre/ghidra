@@ -50,13 +50,13 @@ model {
 					// builtBy yaccDecompiler
 		            source {
 		                srcDir "src/decompile/cpp"
-
 						include "ast.cc"
 		                include "astbuilder.cc"
 						include "astvisitor.cc"
                         include "astvisitors/typedefdeclvisitor.cc"
                         include "astvisitors/jsonastvisitor.cc"
-						include "space.cc"
+		         	 	include "marshal.cc"
+		                include "space.cc"
 		                include "float.cc"
 		                include "address.cc"
 		                include "pcoderaw.cc"
@@ -91,6 +91,7 @@ model {
 		                include "funcdata.cc"
 		                include "funcdata_block.cc"
 		                include "funcdata_varnode.cc"
+		                include "unionresolve.cc"
 		                include "funcdata_op.cc"
 		                include "pcodeinject.cc"
 		                include "heritage.cc"
@@ -156,6 +157,7 @@ model {
 					source {
 						srcDir "src/decompile/cpp"
 
+		         	 	include "marshal.cc"
 						include "space.cc"
 						include "float.cc"
 						include "address.cc"

@@ -44,7 +44,8 @@ public class StructureDataType extends CompositeDataTypeImpl implements Structur
 
 	/**
 	 * Construct a new structure with the given name and length. The root category will be used.
-	 * 
+	 * NOTE: A constructor form which accepts a {@link DataTypeManager} should be used when possible
+	 * since there may be performance benefits during datatype resolution.
 	 * @param name the name of the new structure
 	 * @param length the initial size of the structure in bytes. If 0 is specified the structure
 	 *            will report its length as 1 and {@link #isNotYetDefined()} will return true.
@@ -69,7 +70,8 @@ public class StructureDataType extends CompositeDataTypeImpl implements Structur
 
 	/**
 	 * Construct a new structure with the given name and length within the specified categry path.
-	 * 
+	 * NOTE: A constructor form which accepts a {@link DataTypeManager} should be used when possible
+	 * since there may be performance benefits during datatype resolution.
 	 * @param path the category path indicating where this data type is located.
 	 * @param name the name of the new structure
 	 * @param length the initial size of the structure in bytes. If 0 is specified the structure
@@ -417,6 +419,9 @@ public class StructureDataType extends CompositeDataTypeImpl implements Structur
 	}
 
 	private void shiftOffsets(int index, int deltaOrdinal, int deltaOffset) {
+		if (deltaOffset == 0 && deltaOrdinal == 0) {
+			return;
+		}
 		for (int i = index; i < components.size(); i++) {
 			DataTypeComponentImpl dtc = components.get(i);
 			shiftOffset(dtc, deltaOrdinal, deltaOffset);
@@ -565,7 +570,7 @@ public class StructureDataType extends CompositeDataTypeImpl implements Structur
 	 * @throws IllegalArgumentException if the specified data type is not allowed to be added to
 	 *             this composite data type or an invalid length is specified.
 	 */
-	private DataTypeComponent doAdd(DataType dataType, int length, String componentName,
+	private DataTypeComponentImpl doAdd(DataType dataType, int length, String componentName,
 			String comment, boolean packAndNotify)
 			throws IllegalArgumentException {
 
@@ -581,14 +586,9 @@ public class StructureDataType extends CompositeDataTypeImpl implements Structur
 			dtc = new DataTypeComponentImpl(DataType.DEFAULT, this, 1, numComponents, structLength);
 		}
 		else {
-
-			int offset = structLength;
-			int ordinal = numComponents;
-
 			int componentLength = getPreferredComponentLength(dataType, length);
-
-			dtc = new DataTypeComponentImpl(dataType, this, componentLength, ordinal, offset,
-				componentName, comment);
+			dtc = new DataTypeComponentImpl(dataType, this, componentLength, numComponents,
+				structLength, componentName, comment);
 			dataType.addParent(this);
 			components.add(dtc);
 		}
@@ -602,7 +602,9 @@ public class StructureDataType extends CompositeDataTypeImpl implements Structur
 		structLength += structureGrowth;
 
 		if (packAndNotify) {
-			repack(false);
+			if (isPackingEnabled()) {
+				repack(false);
+			}
 			notifySizeChanged();
 		}
 		return dtc;
@@ -1107,7 +1109,6 @@ public class StructureDataType extends CompositeDataTypeImpl implements Structur
 		struct.setDescription(getDescription());
 		struct.replaceWith(this);
 		return struct;
-
 	}
 
 	@Override
@@ -1169,7 +1170,6 @@ public class StructureDataType extends CompositeDataTypeImpl implements Structur
 		notifySizeChanged();
 	}
 
-// TODO: Rename
 	private void doReplaceWithPacked(Structure struct) {
 		// assumes components is clear and that alignment characteristics have been set
 		DataTypeComponent[] otherComponents = struct.getDefinedComponents();
@@ -1180,7 +1180,6 @@ public class StructureDataType extends CompositeDataTypeImpl implements Structur
 		}
 	}
 
-// TODO: Rename
 	private void doReplaceWithNonPacked(Structure struct) throws IllegalArgumentException {
 		// assumes components is clear and that alignment characteristics have been set.
 		if (struct.isNotYetDefined()) {
@@ -1219,7 +1218,6 @@ public class StructureDataType extends CompositeDataTypeImpl implements Structur
 			components.add(new DataTypeComponentImpl(dt, this, length, dtc.getOrdinal(),
 				dtc.getOffset(), dtc.getFieldName(), dtc.getComment()));
 		}
-		repack(false);
 	}
 
 	@Override
@@ -1319,6 +1317,7 @@ public class StructureDataType extends CompositeDataTypeImpl implements Structur
 
 		comp.getDataType().removeParent(this);
 		comp.setDataType(newDt);
+		comp.invalidateSettings();
 		newDt.addParent(this);
 
 		if (isPackingEnabled()) {
@@ -1362,6 +1361,46 @@ public class StructureDataType extends CompositeDataTypeImpl implements Structur
 			comps[i] = getComponent(i);
 		}
 		return comps;
+	}
+
+	/**
+	 * Perform component replacement(s)
+	 * @param replacedComponents ordered list of components to be replaced
+	 * @param offset offset of component replacement
+	 * @param dataType datatype of component replacement
+	 * @param length length of component replacement
+	 * @param componentName name of component replacement (may be null)
+	 * @param comment comment for component replacement (may be null)
+	 * @return new/updated component (may be null if replacement is not a defined component)
+	 */
+	private DataTypeComponent doComponentReplacement(
+			LinkedList<DataTypeComponentImpl> replacedComponents, int offset, DataType dataType,
+			int length, String componentName, String comment) {
+
+		// Attempt quick update of a single defined component if possible.
+		// A quick update requires that component characteristics including length, offset, 
+		// and alignment (if packed) not change.  All other situations generally require a
+		// repack.
+		DataTypeComponentImpl oldComponent = replacedComponents.get(0);
+		DataType oldDt = oldComponent.getDataType();
+		if (replacedComponents.size() == 1 &&
+			oldDt != DEFAULT &&
+			dataType != DEFAULT &&
+			length == oldComponent.getLength() &&
+			offset == oldComponent.getOffset() &&
+			(!isPackingEnabled() || dataType.getAlignment() == oldDt.getAlignment())) {
+
+			oldComponent.update(componentName, dataType, comment);
+			return oldComponent;
+		}
+
+		DataTypeComponent replaceComponent = replaceComponents(replacedComponents, dataType,
+			offset, length, componentName, comment);
+
+		repack(false);
+		notifySizeChanged();
+
+		return replaceComponent;
 	}
 
 	@Override
@@ -1455,18 +1494,15 @@ public class StructureDataType extends CompositeDataTypeImpl implements Structur
 			replacedComponents.add(origDtc);
 		}
 
-		DataTypeComponent replaceComponent =
-			replaceComponents(replacedComponents, dataType, offset, length, componentName, comment);
-
-		repack(false);
-		notifySizeChanged();
+		DataTypeComponent replaceComponent = doComponentReplacement(replacedComponents, offset,
+			dataType, length, componentName, comment);
 
 		return replaceComponent != null ? replaceComponent : getComponent(ordinal);
 	}
 
 	@Override
 	public DataTypeComponent replaceAtOffset(int offset, DataType dataType, int length,
-			String name, String comment) throws IllegalArgumentException {
+			String componentName, String comment) throws IllegalArgumentException {
 		if (offset < 0) {
 			throw new IllegalArgumentException("Offset cannot be negative.");
 		}
@@ -1494,7 +1530,7 @@ public class StructureDataType extends CompositeDataTypeImpl implements Structur
 			if (origDtc.getLength() == 0) {
 				if (isPackingEnabled()) {
 					// if packed: insert after zero-length component 
-					return insert(index + 1, dataType, length, name, comment);
+					return insert(index + 1, dataType, length, componentName, comment);
 				}
 				// if non-packed: replace undefined component which immediately follows the zero-length component
 				replacedComponents.add(new DataTypeComponentImpl(DataType.DEFAULT, this, 1,
@@ -1524,7 +1560,7 @@ public class StructureDataType extends CompositeDataTypeImpl implements Structur
 
 			if (isPackingEnabled()) {
 				// case 4: if replacing padding for packed struction perform insert at correct ordinal
-				return insert(index, dataType, length, name, comment);
+				return insert(index, dataType, length, componentName, comment);
 			}
 
 			// case 5: replace undefined component at offset - compute undefined component to be replaced
@@ -1543,11 +1579,8 @@ public class StructureDataType extends CompositeDataTypeImpl implements Structur
 
 		length = getPreferredComponentLength(dataType, length);
 
-		DataTypeComponent replaceComponent =
-			replaceComponents(replacedComponents, dataType, offset, length, name, comment);
-
-		repack(false);
-		notifySizeChanged();
+		DataTypeComponent replaceComponent = doComponentReplacement(replacedComponents, offset,
+			dataType, length, componentName, comment);
 
 		return replaceComponent != null ? replaceComponent : getComponentContaining(offset);
 	}

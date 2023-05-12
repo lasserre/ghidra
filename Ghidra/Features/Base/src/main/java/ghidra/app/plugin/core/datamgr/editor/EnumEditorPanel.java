@@ -28,35 +28,27 @@ import docking.widgets.OptionDialog;
 import docking.widgets.combobox.GhidraComboBox;
 import docking.widgets.label.GDLabel;
 import docking.widgets.label.GLabel;
-import docking.widgets.table.GTableCellRenderer;
-import docking.widgets.table.GTableTextCellEditor;
+import docking.widgets.table.*;
 import docking.widgets.textfield.GValidatedTextField;
 import docking.widgets.textfield.GValidatedTextField.LongField.LongValidator;
 import docking.widgets.textfield.GValidatedTextField.ValidationFailedException;
 import docking.widgets.textfield.GValidatedTextField.ValidationMessageListener;
+import generic.theme.Gui;
+import ghidra.docking.settings.Settings;
 import ghidra.program.model.data.*;
 import ghidra.program.model.listing.DataTypeArchive;
 import ghidra.program.model.listing.Program;
-import ghidra.util.InvalidNameException;
-import ghidra.util.Msg;
+import ghidra.util.*;
 import ghidra.util.table.GhidraTable;
 
-/**
- * Panel for editing enumeration data types.
- * 
- * 
- */
 class EnumEditorPanel extends JPanel {
-
-	// Normal color for selecting components in the table.
-	//private static final Color SELECTION_COLOR = Color.YELLOW.brighter().brighter();
 
 	private JTable table;
 	private JTextField nameField;
 	private JTextField descField;
 	private JLabel descLabel;
 	private JTextField categoryField;
-	private GhidraComboBox sizeComboBox;
+	private GhidraComboBox<?> sizeComboBox;
 
 	private EnumTableModel tableModel;
 	private EnumEditorProvider provider;
@@ -64,6 +56,7 @@ class EnumEditorPanel extends JPanel {
 
 	private EnumDataType originalEnumDT;
 	private EnumDataType editedEnumDT;
+	boolean showValuesAsHex = true;
 
 	EnumEditorPanel(EnumDataType enumDT, EnumEditorProvider provider) {
 		super(new BorderLayout());
@@ -89,10 +82,6 @@ class EnumEditorPanel extends JPanel {
 		return table;
 	}
 
-	/**
-	 * Get the selected row numbers in the model.
-	 * @return
-	 */
 	int[] getSelectedRows() {
 		return table.getSelectedRows();
 	}
@@ -111,9 +100,8 @@ class EnumEditorPanel extends JPanel {
 			tableModel.fireTableDataChanged();
 		}
 
-		// invoke later because the key press on the table causes the selection
-		// to change
-		SwingUtilities.invokeLater(() -> {
+		// invoke later because the key press on the table causes the selection to change
+		Swing.runLater(() -> {
 			try {
 				if (table.isEditing()) {
 					return; // don't change the selection if a new edit is in progress
@@ -142,6 +130,7 @@ class EnumEditorPanel extends JPanel {
 		if (objectDataTypeManager != providerDataTypeManager) {
 			return; // The editor isn't associated with the restored domain object.
 		}
+
 		String objectType = "domain object";
 		if (domainObject instanceof Program) {
 			objectType = "program";
@@ -149,6 +138,7 @@ class EnumEditorPanel extends JPanel {
 		else if (domainObject instanceof DataTypeArchive) {
 			objectType = "data type archive";
 		}
+
 		if (tableModel.hasChanges()) {
 			if (OptionDialog.showYesNoDialogWithNoAsDefaultButton(this, "Reload Enum Editor?",
 				"The " + objectType + " \"" + objectDataTypeManager.getName() +
@@ -156,12 +146,13 @@ class EnumEditorPanel extends JPanel {
 					"\" may have changed outside this editor.\n" +
 					"Do you want to discard edits and reload the Enum?") == OptionDialog.OPTION_TWO) {
 
-				// no
+				// 'No'; do not discard
 				categoryField.setText(provider.getCategoryText());
-				return; // Don't reload.
+				return; // don't reload
 			}
 		}
-		// Reloading the enum.
+
+		// reload the enum
 		setFieldInfo(editedEnumDT);
 		tableModel.setEnum(editedEnumDT, false);
 	}
@@ -218,6 +209,7 @@ class EnumEditorPanel extends JPanel {
 		else if (otherDesc != null && !otherDesc.equals(descr)) {
 			doUpdate = true;
 		}
+
 		if (doUpdate) {
 			editedEnumDT.setDescription(otherDesc);
 			descField.getDocument().removeDocumentListener(docListener);
@@ -248,18 +240,16 @@ class EnumEditorPanel extends JPanel {
 		}
 	}
 
-	/**
-	 * Add new entry for the enum.
-	 */
 	void addEntry() {
 		stopCellEditing();
-		final int newRow = tableModel.addEntry(table.getSelectedRow());
+		int newRow = tableModel.addEntry(table.getSelectedRow());
 		if (newRow < 0) {
 			Msg.showError(this, this, "Enum is full",
 				"All possible Enum values have already been used");
 			return;
 		}
-		SwingUtilities.invokeLater(() -> {
+
+		Swing.runLater(() -> {
 			table.setRowSelectionInterval(newRow, newRow);
 			table.editCellAt(newRow, EnumTableModel.NAME_COL);
 			Rectangle r = table.getCellRect(newRow, 0, true);
@@ -307,15 +297,26 @@ class EnumEditorPanel extends JPanel {
 		table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
 		add(sp, BorderLayout.CENTER);
 
-		EnumCellRenderer cellRenderer = new EnumCellRenderer();
 		table.setRowHeight(table.getRowHeight() + 4);
 		table.setDefaultEditor(String.class, new EnumStringCellEditor());
 		table.getColumnModel()
-				.getColumn(EnumTableModel.VALUE_COL)
-				.setCellEditor(
-					new EnumLongCellEditor());
-		table.setDefaultRenderer(String.class, cellRenderer);
+			.getColumn(EnumTableModel.VALUE_COL)
+			.setCellEditor(
+				new EnumLongCellEditor());
+		table.setDefaultRenderer(String.class, new GTableCellRenderer());
+		table.setDefaultRenderer(Long.class, new EnumValueRenderer());
 		add(createInfoPanel(), BorderLayout.SOUTH);
+	}
+
+	private String getValueAsString(long value) {
+		if (showValuesAsHex) {
+			int length = editedEnumDT.getLength();
+			if (editedEnumDT.isSigned()) {
+				return NumericUtilities.toSignedHexString(value);
+			}
+			return NumericUtilities.toHexString(value, length);
+		}
+		return Long.toString(value);
 
 	}
 
@@ -416,7 +417,7 @@ class EnumEditorPanel extends JPanel {
 		categoryField.setEditable(false);
 		categoryField.setName("Category");
 
-		sizeComboBox = new GhidraComboBox(new Integer[] { 1, 2, 4, 8 });
+		sizeComboBox = new GhidraComboBox<>(new Integer[] { 1, 2, 4, 8 });
 		sizeComboBox.setName("Size");
 		sizeComboBox.addItemListener(e -> {
 			Integer length = (Integer) sizeComboBox.getSelectedItem();
@@ -444,37 +445,20 @@ class EnumEditorPanel extends JPanel {
 
 	private boolean validateNewLength(Integer length) {
 		EnumDataType enuum = tableModel.getEnum();
-		String[] names = enuum.getNames();
-		for (String name : names) {
-			long value = enuum.getValue(name);
-			if (tableModel.isValueTooBigForLength(value, length)) {
-				vetoSizeChange(length, enuum.getLength(), value);
-				return false;
-			}
+		int minLength = enuum.getMinimumPossibleLength();
+		if (length < minLength) {
+			vetoSizeChange(length, minLength, enuum.getLength());
+			return false;
 		}
 		return true;
 	}
 
-	private boolean validateNewValue(Long value) {
-		EnumDataType enuum = tableModel.getEnum();
-		int length = enuum.getLength();
-		return !tableModel.isValueTooBigForLength(value, length);
-	}
-
-	private void vetoSizeChange(final int newLength, final int currentLength, final long badValue) {
-		SwingUtilities.invokeLater(() -> {
-			setStatusMessage("Enum size of " + newLength + " cannot contain the value " + "0x" +
-				Long.toHexString(badValue));
-			sizeComboBox.setSelectedItem(new Integer(currentLength));
+	private void vetoSizeChange(int newLength, int minLength, int currentLength) {
+		Swing.runLater(() -> {
+			setStatusMessage(
+				"Enum size of " + newLength + " is smaller than minimum enum size of " + minLength);
+			sizeComboBox.setSelectedItem(Integer.valueOf(currentLength));
 		});
-	}
-
-	public String getValidValuesMessage() {
-		EnumDataType enuum = tableModel.getEnum();
-		int length = enuum.getLength();
-		long maxValue = length == 8 ? -1 : (1L << (8 * length)) - 1;
-		return "Valid values are from 0x0 to 0x" + Long.toHexString(maxValue);
-
 	}
 
 	private void setFieldInfo(EnumDataType enuum) {
@@ -488,16 +472,20 @@ class EnumEditorPanel extends JPanel {
 		categoryField.setText(provider.getCategoryText());
 	}
 
-	private void focus(final JTextField field) {
-		SwingUtilities.invokeLater(() -> {
+	private void focus(JTextField field) {
+		Swing.runLater(() -> {
 			field.requestFocusInWindow();
 			field.selectAll();
 		});
 	}
 
+	void setHexDisplayMode(boolean showHex) {
+		showValuesAsHex = showHex;
+		tableModel.fireTableDataChanged();
+	}
 //==================================================================================================
 // Inner Classes
-//==================================================================================================	
+//==================================================================================================
 
 	private class EnumTable extends GhidraTable {
 		EnumTable(TableModel model) {
@@ -507,12 +495,29 @@ class EnumEditorPanel extends JPanel {
 	}
 
 	public class RangeValidator extends LongValidator {
+		private long min;
+		private long max;
+
+		public void setOriginalValue(long originalLong) {
+			EnumDataType enuum = tableModel.getEnum();
+			EnumDataType copy = (EnumDataType) enuum.copy(enuum.getDataTypeManager());
+			String name = copy.getName(originalLong);
+			copy.remove(name);
+			min = copy.getMinPossibleValue();
+			max = copy.getMaxPossibleValue();
+		}
+
 		@Override
-		public void validateLong(long oldLong, long newLong) throws ValidationFailedException {
-			if (!validateNewValue(newLong)) {
-				throw new ValidationFailedException(getValidValuesMessage());
+		public void validateLong(long oldValue, long newValue) throws ValidationFailedException {
+			if (newValue < min || newValue > max) {
+				String minValue = getValueAsString(min);
+				String maxValue = getValueAsString(max);
+				String message =
+					"Valid values are in the range (" + minValue + ", " + maxValue + ")";
+				throw new ValidationFailedException(message);
 			}
 		}
+
 	}
 
 	public class StatusBarValidationMessageListener implements ValidationMessageListener {
@@ -551,7 +556,6 @@ class EnumEditorPanel extends JPanel {
 		private KeyListener editingKeyListener = new KeyAdapter() {
 			@Override
 			public void keyPressed(KeyEvent e) {
-				int keycode = e.getKeyCode();
 
 				if (!table.isEditing()) {
 					return;
@@ -559,10 +563,9 @@ class EnumEditorPanel extends JPanel {
 
 				int row = table.getEditingRow();
 				int col = table.getEditingColumn();
-
 				int rowCount = table.getRowCount();
 				int columnCount = table.getColumnCount();
-
+				int keycode = e.getKeyCode();
 				switch (keycode) {
 					case KeyEvent.VK_TAB:
 						if (e.isShiftDown()) {
@@ -600,10 +603,20 @@ class EnumEditorPanel extends JPanel {
 
 				e.consume();
 
+				scrollToCell(row, col);
 				table.setRowSelectionInterval(row, row);
 				table.editCellAt(row, col);
 			}
 		};
+
+		private void scrollToCell(int row, int col) {
+			if (table.getAutoscrolls()) {
+				Rectangle cellRect = table.getCellRect(row, col, false);
+				if (cellRect != null) {
+					table.scrollRectToVisible(cellRect);
+				}
+			}
+		}
 	}
 
 	private class EnumStringCellEditor extends EnumCellEditor {
@@ -613,15 +626,46 @@ class EnumEditorPanel extends JPanel {
 	}
 
 	private class EnumLongCellEditor extends EnumCellEditor {
+		private RangeValidator validator;
+
 		public EnumLongCellEditor() {
 			super(new GValidatedTextField.LongField(8));
 			GValidatedTextField f = (GValidatedTextField) getComponent();
-			f.addValidator(new RangeValidator());
+			validator = new RangeValidator();
+			f.addValidator(validator);
 			f.addValidationMessageListener(new StatusBarValidationMessageListener());
+		}
+
+		@Override
+		public Component getTableCellEditorComponent(JTable table1, Object value,
+				boolean isSelected, int row, int column) {
+			Long longValue = (Long) value;
+			validator.setOriginalValue(longValue);
+			String s = getValueAsString(longValue);
+			return super.getTableCellEditorComponent(table1, s, isSelected, row, column);
+		}
+
+	}
+
+	private class EnumValueRenderer extends GTableCellRenderer {
+		EnumValueRenderer() {
+			setFont(Gui.getFont("font.monospaced"));
+		}
+
+		@Override
+		public Component getTableCellRendererComponent(GTableCellRenderingData data) {
+			JLabel renderer = (JLabel) super.getTableCellRendererComponent(data);
+			renderer.setHorizontalAlignment(SwingConstants.RIGHT);
+			return renderer;
+		}
+
+		@Override
+		protected String formatNumber(Number value, Settings settings) {
+			if (value instanceof Long longValue) {
+				return getValueAsString(longValue);
+			}
+			return "";
 		}
 	}
 
-	private class EnumCellRenderer extends GTableCellRenderer {
-		// Might just be kruft, now...
-	}
 }

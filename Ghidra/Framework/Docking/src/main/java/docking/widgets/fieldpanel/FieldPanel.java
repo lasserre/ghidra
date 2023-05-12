@@ -38,8 +38,9 @@ import docking.widgets.fieldpanel.listener.*;
 import docking.widgets.fieldpanel.support.*;
 import docking.widgets.indexedscrollpane.IndexScrollListener;
 import docking.widgets.indexedscrollpane.IndexedScrollable;
-import ghidra.util.Msg;
-import ghidra.util.SystemUtilities;
+import generic.theme.GColor;
+import generic.theme.GThemeDefaults.Colors.Messages;
+import ghidra.util.*;
 
 public class FieldPanel extends JPanel
 		implements IndexedScrollable, LayoutModelListener, ChangeListener {
@@ -51,7 +52,7 @@ public class FieldPanel extends JPanel
 	private boolean inFocus;
 
 	protected BackgroundColorModel backgroundColorModel =
-		new DefaultBackgroundColorModel(Color.WHITE);
+		new DefaultBackgroundColorModel(new GColor("color.bg.fieldpanel"));
 	protected PaintContext paintContext = new PaintContext();
 
 	private AnchoredLayoutHandler layoutHandler;
@@ -392,6 +393,7 @@ public class FieldPanel extends JPanel
 
 	/**
 	 * Returns the default background color.
+	 * 
 	 * @return the default background color.
 	 * @see #getBackground()
 	 */
@@ -414,7 +416,6 @@ public class FieldPanel extends JPanel
 	 */
 	public void setBackgroundColor(Color c) {
 		backgroundColorModel.setDefaultBackgroundColor(c);
-		paintContext.setDefaultBackgroundColor(c);
 	}
 
 	public Color getBackgroundColor(BigInteger index) {
@@ -433,6 +434,7 @@ public class FieldPanel extends JPanel
 	/**
 	 *
 	 * Returns the foreground color.
+	 * 
 	 * @return the foreground color.
 	 */
 	public Color getForegroundColor() {
@@ -441,6 +443,7 @@ public class FieldPanel extends JPanel
 
 	/**
 	 * Returns the color used as the background for selected items.
+	 * 
 	 * @return the color used as the background for selected items.
 	 */
 	public Color getSelectionColor() {
@@ -449,6 +452,7 @@ public class FieldPanel extends JPanel
 
 	/**
 	 * Returns the color color used as the background for highlighted items.
+	 * 
 	 * @return the color color used as the background for highlighted items.
 	 */
 	public Color getHighlightColor() {
@@ -457,6 +461,7 @@ public class FieldPanel extends JPanel
 
 	/**
 	 * Returns the cursor color when this field panel is focused.
+	 * 
 	 * @return the cursor color when this field panel is focused.
 	 */
 	public Color getFocusedCursorColor() {
@@ -465,6 +470,7 @@ public class FieldPanel extends JPanel
 
 	/**
 	 * Returns the cursor color when this field panel is not focused.
+	 * 
 	 * @return the cursor color when this field panel is not focused.
 	 */
 	public Color getNonFocusCursorColor() {
@@ -495,6 +501,7 @@ public class FieldPanel extends JPanel
 
 	/**
 	 * Returns the point in pixels of where the cursor is located.
+	 * 
 	 * @return the point in pixels of where the cursor is located.
 	 */
 	public Point getCursorPoint() {
@@ -542,6 +549,7 @@ public class FieldPanel extends JPanel
 
 	/**
 	 * Adds a selection listener that will be notified while the selection is being created
+	 * 
 	 * @param listener the listener to be notified
 	 */
 	public void addLiveFieldSelectionListener(FieldSelectionListener listener) {
@@ -550,6 +558,7 @@ public class FieldPanel extends JPanel
 
 	/**
 	 * Removes the selection listener from being notified when the selection is being created
+	 * 
 	 * @param listener the listener to be removed from being notified
 	 */
 	public void removeLiveFieldSelectionListener(FieldSelectionListener listener) {
@@ -691,6 +700,7 @@ public class FieldPanel extends JPanel
 
 	/**
 	 * Returns the current selection.
+	 * 
 	 * @return the current selection.
 	 */
 	public FieldSelection getSelection() {
@@ -699,6 +709,7 @@ public class FieldPanel extends JPanel
 
 	/**
 	 * Returns the current highlight (marked area).
+	 * 
 	 * @return the current highlight (marked area).
 	 */
 	public FieldSelection getHighlight() {
@@ -711,12 +722,22 @@ public class FieldPanel extends JPanel
 	 * @param sel the selection to set.
 	 */
 	public void setSelection(FieldSelection sel) {
+		setSelection(sel, EventTrigger.API_CALL);
+	}
+
+	/**
+	 * Sets the current selection.
+	 *
+	 * @param sel the selection to set.
+	 * @param trigger the cause of the change
+	 */
+	public void setSelection(FieldSelection sel, EventTrigger trigger) {
 		if (!selectionHandler.isSelectionOn()) {
 			return;
 		}
 		selection = new FieldSelection(sel);
 		repaint();
-		notifySelectionChanged(EventTrigger.API_CALL);
+		notifySelectionChanged(trigger);
 	}
 
 	/**
@@ -774,6 +795,7 @@ public class FieldPanel extends JPanel
 
 	/**
 	 * Returns the state of the cursor. True if on, false if off.
+	 * 
 	 * @return the state of the cursor. True if on, false if off.
 	 */
 	public boolean isCursorOn() {
@@ -871,6 +893,7 @@ public class FieldPanel extends JPanel
 	 * that layout. For example, if the layout is completely displayed, yPos will be 0. If part of
 	 * the layout is off the top off the screen, then yPos will have a negative value (indicating
 	 * that it begins above the displayable part of the screen.
+	 * 
 	 * @return the position
 	 */
 	public ViewerPosition getViewerPosition() {
@@ -1057,6 +1080,7 @@ public class FieldPanel extends JPanel
 
 	/**
 	 * Returns the offset of the cursor from the top of the screen
+	 * 
 	 * @return the offset of the cursor from the top of the screen
 	 */
 	public int getCursorOffset() {
@@ -1118,20 +1142,13 @@ public class FieldPanel extends JPanel
 		Color highlightColor = paintContext.getHighlightColor();
 		Color mixedColor = paintContext.getSelectedHighlightColor();
 		if (!isDefault) {
-			selectionColor = blend(selectionColor, backgroundColor);
-			highlightColor = blend(highlightColor, backgroundColor);
-			mixedColor = blend(mixedColor, backgroundColor);
+			selectionColor = ColorUtils.addColors(selectionColor, backgroundColor);
+			highlightColor = ColorUtils.addColors(highlightColor, backgroundColor);
+			mixedColor = ColorUtils.addColors(mixedColor, backgroundColor);
 		}
 
 		return LayoutColorMapFactory.getLayoutColorMap(layoutIndex, selection, highlight,
 			backgroundColor, selectionColor, highlightColor, mixedColor);
-	}
-
-	private Color blend(Color primary, Color secondary) {
-		int red = (primary.getRed() * 3 + secondary.getRed()) / 4;
-		int green = (primary.getGreen() * 3 + secondary.getGreen()) / 4;
-		int blue = (primary.getBlue() * 3 + secondary.getBlue()) / 4;
-		return new Color(red, green, blue);
 	}
 
 	private void paintLayoutBackground(Graphics g, Rectangle rect, AnchoredLayout layout,
@@ -1161,7 +1178,7 @@ public class FieldPanel extends JPanel
 		Color defaultBackgroundColor = backgroundColorModel.getDefaultBackgroundColor();
 		g.setColor(defaultBackgroundColor);
 		g.fillRect(r.x, layout.getYPos() - layout.getHeight(), r.width, layout.getHeight());
-		g.setColor(Color.RED);
+		g.setColor(Messages.ERROR);
 		GraphicsUtils.drawString(this, g, "Error Painting Field", r.x, layout.getYPos());
 		Msg.error(this, "Unexpected Exception: " + e.getMessage(), e);
 	}
@@ -1214,8 +1231,7 @@ public class FieldPanel extends JPanel
 		if (layout == null) {
 			return null;
 		}
-		Rectangle r =
-			layout.getCursorRect(location.fieldNum, location.row, location.col);
+		Rectangle r = layout.getCursorRect(location.fieldNum, location.row, location.col);
 		return r.getLocation();
 	}
 
@@ -1253,6 +1269,7 @@ public class FieldPanel extends JPanel
 
 	/**
 	 * Finds the layout containing the given y position.
+	 * 
 	 * @param y the y position.
 	 * @return the layout.
 	 */

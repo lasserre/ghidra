@@ -15,9 +15,8 @@
  */
 package ghidra.app.plugin.core.debug.gui.listing;
 
-import static ghidra.app.plugin.core.debug.gui.DebuggerResources.*;
+import static ghidra.app.plugin.core.debug.gui.DebuggerResources.GROUP_TRANSIENT_VIEWS;
 
-import java.awt.Color;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -39,14 +38,12 @@ import ghidra.app.plugin.core.debug.gui.action.NoneLocationTrackingSpec;
 import ghidra.app.services.*;
 import ghidra.app.util.viewer.format.FormatManager;
 import ghidra.app.util.viewer.listingpanel.ListingPanel;
-import ghidra.framework.options.AutoOptions;
 import ghidra.framework.options.SaveState;
-import ghidra.framework.options.annotation.AutoOptionDefined;
-import ghidra.framework.options.annotation.HelpInfo;
 import ghidra.framework.plugintool.*;
 import ghidra.framework.plugintool.annotation.AutoServiceConsumed;
 import ghidra.framework.plugintool.util.PluginStatus;
 import ghidra.program.model.address.*;
+import ghidra.program.model.listing.Program;
 import ghidra.program.util.ProgramLocation;
 import ghidra.program.util.ProgramSelection;
 import ghidra.trace.model.program.TraceProgramView;
@@ -63,22 +60,22 @@ import utilities.util.SuppressableCallback.Suppression;
 	packageName = DebuggerPluginPackage.NAME,
 	status = PluginStatus.RELEASED,
 	eventsConsumed = {
-		// ProgramSelectionPluginEvent.class, // TODO: Later or remove
 		// ProgramHighlightPluginEvent.class, // TODO: Later or remove
 		ProgramOpenedPluginEvent.class, // For auto-open log cleanup
 		ProgramClosedPluginEvent.class, // For marker set cleanup
+		ProgramActivatedPluginEvent.class, // To track the static program for sync
 		ProgramLocationPluginEvent.class, // For static listing sync
+		ProgramSelectionPluginEvent.class, // For static listing sync
 		TraceActivatedPluginEvent.class, // Trace/thread activation and register tracking
 		TraceClosedPluginEvent.class,
 	},
 	eventsProduced = {
 		ProgramLocationPluginEvent.class,
-		// ProgramSelectionPluginEvent.class, 
+		ProgramSelectionPluginEvent.class,
 		TraceLocationPluginEvent.class,
 		TraceSelectionPluginEvent.class
 	},
 	servicesRequired = {
-		DebuggerModelService.class, // For memory capture
 		DebuggerStaticMappingService.class, // For static listing sync. TODO: Optional?
 		DebuggerEmulationService.class, // TODO: Optional?
 		ProgramManager.class, // For static listing sync
@@ -129,36 +126,15 @@ public class DebuggerListingPlugin extends AbstractCodeBrowserPlugin<DebuggerLis
 	@SuppressWarnings("unused")
 	private AutoService.Wiring autoServiceWiring;
 
-	@AutoOptionDefined(
-		name = OPTION_NAME_COLORS_STALE_MEMORY,
-		description = "Color of memory addresses whose content is not known in the view's " +
-			"snap",
-		help = @HelpInfo(anchor = "colors"))
-	private Color staleMemoryColor = DEFAULT_COLOR_BACKGROUND_STALE;
-	@AutoOptionDefined( //
-		name = OPTION_NAME_COLORS_ERROR_MEMORY, //
-		description = "Color of memory addresses whose content could not be read in the " +
-			"view's snap", //
-		help = @HelpInfo(anchor = "colors"))
-	private Color errorMemoryColor = DEFAULT_COLOR_BACKGROUND_ERROR;
-	// NOTE: Static programs are marked via markerSet. Dynamic are marked via custom color model
-	@AutoOptionDefined( //
-		name = OPTION_NAME_COLORS_TRACKING_MARKERS, //
-		description = "Background color for locations referred to by a tracked register", //
-		help = @HelpInfo(anchor = "colors"))
-	private Color trackingColor = DEFAULT_COLOR_REGISTER_MARKERS;
-	@SuppressWarnings("unused")
-	private AutoOptions.Wiring autoOptionsWiring;
-
-	//private final SuppressableCallback<Void> cbGoTo = new SuppressableCallback<>();
 	private final SuppressableCallback<Void> cbProgramLocationEvents = new SuppressableCallback<>();
+	private final SuppressableCallback<Void> cbProgramSelectionEvents =
+		new SuppressableCallback<>();
 
 	private DebuggerCoordinates current = DebuggerCoordinates.NOWHERE;
 
 	public DebuggerListingPlugin(PluginTool tool) {
 		super(tool);
 		autoServiceWiring = AutoService.wireServicesProvidedAndConsumed(this);
-		autoOptionsWiring = AutoOptions.wireOptions(this);
 
 		createActions();
 	}
@@ -168,7 +144,7 @@ public class DebuggerListingPlugin extends AbstractCodeBrowserPlugin<DebuggerLis
 			ListingPanel listingPanel) {
 		MultiBlendedListingBackgroundColorModel colorModel =
 			new MultiBlendedListingBackgroundColorModel();
-		colorModel.addModel(new MemoryStateListingBackgroundColorModel(this, listingPanel));
+		colorModel.addModel(new MemoryStateListingBackgroundColorModel(listingPanel));
 		colorModel.addModel(new CursorBackgroundColorModel(this, listingPanel));
 		return colorModel;
 	}
@@ -242,7 +218,7 @@ public class DebuggerListingPlugin extends AbstractCodeBrowserPlugin<DebuggerLis
 		// TODO Nothing, yet
 	}
 
-	protected boolean heedLocationEvent(ProgramLocationPluginEvent ev) {
+	protected boolean heedLocationEvent(PluginEvent ev) {
 		PluginEvent trigger = ev.getTriggerEvent();
 		/*Msg.debug(this, "Location event");
 		Msg.debug(this, "   Program: " + ev.getProgram());
@@ -268,6 +244,10 @@ public class DebuggerListingPlugin extends AbstractCodeBrowserPlugin<DebuggerLis
 		return true;
 	}
 
+	protected boolean heedSelectionEvent(PluginEvent ev) {
+		return heedLocationEvent(ev);
+	}
+
 	@Override
 	public void processEvent(PluginEvent event) {
 		if (event instanceof ProgramLocationPluginEvent) {
@@ -278,6 +258,15 @@ public class DebuggerListingPlugin extends AbstractCodeBrowserPlugin<DebuggerLis
 				}
 			});
 		}
+		if (event instanceof ProgramSelectionPluginEvent) {
+			cbProgramSelectionEvents.invoke(() -> {
+				ProgramSelectionPluginEvent ev = (ProgramSelectionPluginEvent) event;
+				if (heedSelectionEvent(ev)) {
+					connectedProvider.staticProgramSelectionChanged(ev.getProgram(),
+						ev.getSelection());
+				}
+			});
+		}
 		if (event instanceof ProgramOpenedPluginEvent) {
 			ProgramOpenedPluginEvent ev = (ProgramOpenedPluginEvent) event;
 			allProviders(p -> p.programOpened(ev.getProgram()));
@@ -285,6 +274,10 @@ public class DebuggerListingPlugin extends AbstractCodeBrowserPlugin<DebuggerLis
 		if (event instanceof ProgramClosedPluginEvent) {
 			ProgramClosedPluginEvent ev = (ProgramClosedPluginEvent) event;
 			allProviders(p -> p.programClosed(ev.getProgram()));
+		}
+		if (event instanceof ProgramActivatedPluginEvent) {
+			ProgramActivatedPluginEvent ev = (ProgramActivatedPluginEvent) event;
+			allProviders(p -> p.staticProgramActivated(ev.getActiveProgram()));
 		}
 		if (event instanceof TraceActivatedPluginEvent) {
 			TraceActivatedPluginEvent ev = (TraceActivatedPluginEvent) event;
@@ -309,6 +302,13 @@ public class DebuggerListingPlugin extends AbstractCodeBrowserPlugin<DebuggerLis
 			tool.firePluginEvent(new ProgramLocationPluginEvent(getName(), staticLoc,
 				staticLoc.getProgram()));
 			//goToService.goTo(staticLoc);
+		}
+	}
+
+	void fireStaticSelectionEvent(Program staticProg, ProgramSelection staticSel) {
+		assert Swing.isSwingThread();
+		try (Suppression supp = cbProgramSelectionEvents.suppress(null)) {
+			tool.firePluginEvent(new ProgramSelectionPluginEvent(getName(), staticSel, staticProg));
 		}
 	}
 
@@ -359,11 +359,9 @@ public class DebuggerListingPlugin extends AbstractCodeBrowserPlugin<DebuggerLis
 		if (!result) {
 			return false;
 		}
-		//cbGoTo.invoke(() -> {
 		DebuggerListingProvider provider = connectedProvider;
-		provider.doSyncToStatic(location);
+		provider.doAutoSyncCursorIntoStatic(location);
 		provider.doCheckCurrentModuleMissing();
-		//});
 		return true;
 	}
 
@@ -446,8 +444,7 @@ public class DebuggerListingPlugin extends AbstractCodeBrowserPlugin<DebuggerLis
 				provider.readConfigState(providerState); // Yes, config
 			}
 			else {
-				provider.setTrackingSpec(
-					LocationTrackingSpec.fromConfigName(NoneLocationTrackingSpec.CONFIG_NAME));
+				provider.setTrackingSpec(NoneLocationTrackingSpec.INSTANCE);
 			}
 		}
 	}

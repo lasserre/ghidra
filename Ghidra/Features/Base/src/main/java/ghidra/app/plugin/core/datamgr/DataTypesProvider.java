@@ -37,7 +37,10 @@ import docking.widgets.PopupWindow;
 import docking.widgets.textpane.GHtmlTextPane;
 import docking.widgets.tree.*;
 import docking.widgets.tree.support.GTreeSelectionEvent.EventOrigin;
+import generic.theme.GIcon;
+import generic.theme.GThemeDefaults.Colors;
 import ghidra.app.plugin.core.datamgr.actions.*;
+import ghidra.app.plugin.core.datamgr.actions.associate.*;
 import ghidra.app.plugin.core.datamgr.archive.*;
 import ghidra.app.plugin.core.datamgr.tree.*;
 import ghidra.app.plugin.core.datamgr.util.DataTypeUtils;
@@ -54,12 +57,10 @@ import ghidra.program.model.listing.DataTypeArchive;
 import ghidra.program.model.listing.Program;
 import ghidra.util.*;
 import ghidra.util.task.SwingUpdateManager;
-import resources.ResourceManager;
 import util.HistoryList;
 
 public class DataTypesProvider extends ComponentProviderAdapter {
 
-	private static final String DATA_TYPES_ICON = "images/dataTypes.png";
 	private static final String TITLE = "Data Type Manager";
 	private static final String POINTER_FILTER_STATE = "PointerFilterState";
 	private static final String ARRAY_FILTER_STATE = "ArrayFilterState";
@@ -98,11 +99,20 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 	private boolean includeDataMembersInFilter;
 
 	public DataTypesProvider(DataTypeManagerPlugin plugin, String providerName) {
+		this(plugin, providerName, false);
+	}
+
+	public DataTypesProvider(DataTypeManagerPlugin plugin, String providerName,
+			boolean isTransient) {
 		super(plugin.getTool(), providerName, plugin.getName(), DataTypesActionContext.class);
 		this.plugin = plugin;
 
+		if (isTransient) {
+			setTransient();
+		}
+
 		setTitle(TITLE);
-		setIcon(ResourceManager.loadImage(DATA_TYPES_ICON));
+		setIcon(new GIcon("icon.plugin.datatypes.provider"));
 		addToToolbar();
 
 		navigationHistory.setAllowDuplicates(true);
@@ -148,6 +158,7 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 		addLocalAction(new CutAction(plugin));
 		addLocalAction(new CopyAction(plugin));
 		addLocalAction(new PasteAction(plugin));
+		addLocalAction(new ReplaceDataTypeAction(plugin));
 		addLocalAction(new DeleteAction(plugin));
 		addLocalAction(new DeleteArchiveAction(plugin));
 		addLocalAction(new RenameAction(plugin));
@@ -169,6 +180,10 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 		addLocalAction(new LockArchiveAction(plugin)); // Archive
 		addLocalAction(new UnlockArchiveAction(plugin)); // Archive
 
+		// Arch group
+		addLocalAction(new SetArchiveArchitectureAction(plugin)); // Archive
+		addLocalAction(new ClearArchiveArchitectureAction(plugin)); // Archive
+
 		// Repository group : version control actions
 		addVersionControlActions(); // Archive
 
@@ -181,8 +196,7 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 		addLocalAction(new FindDataTypesBySizeAction(plugin, "2"));
 		addLocalAction(new FindStructuresByOffsetAction(plugin, "3"));
 		addLocalAction(new FindStructuresBySizeAction(plugin, "4"));
-		includeDataMembersInSearchAction =
-			new IncludeDataTypesInFilterAction(plugin, this, "5");
+		includeDataMembersInSearchAction = new IncludeDataTypesInFilterAction(plugin, this, "5");
 		addLocalAction(includeDataMembersInSearchAction);
 
 		addLocalAction(new ApplyFunctionDataTypesAction(plugin)); // Tree
@@ -220,6 +234,7 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 		// key binding only
 		addLocalAction(new ClearCutAction(plugin)); // Common
 
+		addLocalAction(new AssociateDataTypeAction(plugin));
 		addLocalAction(new CommitSingleDataTypeAction(plugin));
 		addLocalAction(new UpdateSingleDataTypeAction(plugin));
 		addLocalAction(new RevertDataTypeAction(plugin));
@@ -356,7 +371,10 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 
 	@Override // overridden to handle special logic in plugin
 	public void closeComponent() {
-		plugin.closeProvider(this);
+		super.closeComponent();
+		if (isTransient()) {
+			dispose();
+		}
 	}
 
 	private void buildComponent() {
@@ -441,6 +459,7 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 		previewPane = new GHtmlTextPane();
 		previewPane.setEditable(false);
 		previewPane.setBorder(BorderFactory.createLoweredBevelBorder());
+		previewPane.setBackground(Colors.BACKGROUND);
 
 		// This listener responds to the user hovering/clicking the preview's hyperlinks
 		previewPane.addHyperlinkListener(event -> {
@@ -607,8 +626,15 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 		ArchiveNode archiveNode = dataTypeNode.getArchiveNode();
 
 		if (archiveNode instanceof ProjectArchiveNode && !archiveNode.isModifiable()) {
-			Msg.showInfo(getClass(), archiveGTree, "Archive Not Checked Out",
-				"You must checkout this archive before you may edit data types.");
+			ProjectArchiveNode projectArchive = (ProjectArchiveNode) archiveNode;
+			if (projectArchive.getDomainFile().isReadOnly()) {
+				Msg.showInfo(getClass(), archiveGTree, "Read-Only Archive",
+					"You may not edit data type within a read-only project archive.");
+			}
+			else {
+				Msg.showInfo(getClass(), archiveGTree, "Archive Not Checked Out",
+					"You must checkout this archive before you may edit data types.");
+			}
 			return;
 		}
 
@@ -778,6 +804,25 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 		gTree.setSelectedNode(dataTypeNode);
 		gTree.scrollPathToVisible(dataTypeNode.getTreePath());
 		contextChanged();
+	}
+
+	/**
+	 * Returns a list of all the data types selected in the data types tree
+	 * @return a list of all the data types selected in the data types tree
+	 */
+	public List<DataType> getSelectedDataTypes() {
+		List<DataType> selectedDataTypes = new ArrayList<>();
+		DataTypeArchiveGTree gTree = getGTree();
+		for (TreePath path : gTree.getSelectionPaths()) {
+			Object node = path.getLastPathComponent();
+			if (node instanceof DataTypeNode) {
+				DataType dataType = ((DataTypeNode) node).getDataType();
+				if (dataType != null) {
+					selectedDataTypes.add(dataType);
+				}
+			}
+		}
+		return selectedDataTypes;
 	}
 
 	// this is a callback from the action--we need this to prevent callbacks, as the other

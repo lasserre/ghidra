@@ -15,15 +15,13 @@
  */
 package ghidra.app.util.bin.format.elf.relocation;
 
-import ghidra.app.util.bin.format.elf.AVR8_ElfRelocationConstants;
-import ghidra.app.util.bin.format.elf.ElfConstants;
-import ghidra.app.util.bin.format.elf.ElfHeader;
-import ghidra.app.util.bin.format.elf.ElfRelocation;
-import ghidra.app.util.bin.format.elf.ElfSymbol;
+import ghidra.app.util.bin.format.elf.*;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.mem.Memory;
 import ghidra.program.model.mem.MemoryAccessException;
+import ghidra.program.model.reloc.RelocationResult;
+import ghidra.program.model.reloc.Relocation.Status;
 import ghidra.util.exception.NotFoundException;
 
 public class AVR8_ElfRelocationHandler extends ElfRelocationHandler {
@@ -34,7 +32,8 @@ public class AVR8_ElfRelocationHandler extends ElfRelocationHandler {
 	}
 
 	@Override
-	public void relocate(ElfRelocationContext elfRelocationContext, ElfRelocation relocation,
+	public RelocationResult relocate(ElfRelocationContext elfRelocationContext,
+			ElfRelocation relocation,
 			Address relocationAddress) throws MemoryAccessException, NotFoundException {
 
 		Program program = elfRelocationContext.getProgram();
@@ -47,35 +46,29 @@ public class AVR8_ElfRelocationHandler extends ElfRelocationHandler {
 		long addend = relocation.getAddend(); // will be 0 for REL case
 
 		ElfHeader elf = elfRelocationContext.getElfHeader();
-		if ((symbolIndex == 0) && (elf.e_machine() == ElfConstants.EM_AVR)) {
-			// System.out.println("ZERO_SYMBOL_TYPE = " + type + ", Offset = " + offset + ",
-			// Addend = " + addend);
-		}
-		else if (symbolIndex == 0) {
-			return;
-		}
 
 		// WARNING: offset is in bytes
 		//     be careful, word address potentially with byte indexes
 		long offset = relocationAddress.getOffset();
 
-		ElfSymbol sym = elfRelocationContext.getSymbol(symbolIndex);
+		ElfSymbol sym = elfRelocationContext.getSymbol(symbolIndex); // may be null
 		// WARNING: symbolValue here is not in bytes.
 		// it is an addressable word offset for the symbols address space
 		long symbolValue = elfRelocationContext.getSymbolValue(sym);
-		String symbolName = sym.getNameAsString();
+		String symbolName = elfRelocationContext.getSymbolName(symbolIndex);
 
 		int oldValue = memory.getShort(relocationAddress);
 
 		if (elf.e_machine() != ElfConstants.EM_AVR) {
-			return;
+			return RelocationResult.FAILURE;
 		}
 
 		int newValue = 0;
+		int byteLength = 2; // most relocations affect 2-bytes (change if different)
 
 		switch (type) {
 			case AVR8_ElfRelocationConstants.R_AVR_NONE:
-				break;
+				return RelocationResult.SKIPPED;
 
 			case AVR8_ElfRelocationConstants.R_AVR_32:
 				newValue = (((int) symbolValue + (int) addend) & 0xffffffff);
@@ -89,12 +82,12 @@ public class AVR8_ElfRelocationHandler extends ElfRelocationHandler {
 				if ((newValue & 1) == 1) {
 					markAsError(program, relocationAddress, type, symbolName,
 						"relocation out of range", elfRelocationContext.getLog());
-					return;
+					return RelocationResult.FAILURE;
 				}
 				if (newValue > ((1 << 7) - 1) || (newValue < -(1 << 7))) {
 					markAsError(program, relocationAddress, type, symbolName, "relocation overflow",
 						elfRelocationContext.getLog());
-					return;
+					return RelocationResult.FAILURE;
 				}
 				newValue = (oldValue & 0xfc07) | (((newValue >> 1) << 3) & 0x3f8);
 				memory.setShort(relocationAddress, (short) newValue);
@@ -107,7 +100,7 @@ public class AVR8_ElfRelocationHandler extends ElfRelocationHandler {
 				if ((newValue & 1) == 1) {
 					markAsError(program, relocationAddress, type, symbolName,
 						"relocation out of range", elfRelocationContext.getLog());
-					return;
+					return RelocationResult.FAILURE;
 				}
 				newValue >>= 1;
 
@@ -179,7 +172,7 @@ public class AVR8_ElfRelocationHandler extends ElfRelocationHandler {
 				if ((newValue & 1) == 1) {
 					markAsError(program, relocationAddress, type, symbolName,
 						"relocation out of range", elfRelocationContext.getLog());
-					return;
+					return RelocationResult.FAILURE;
 				}
 				newValue >>= 1;
 				newValue = (oldValue & 0xf0f0) | (newValue & 0xf) | ((newValue << 4) & 0xf00);
@@ -191,7 +184,7 @@ public class AVR8_ElfRelocationHandler extends ElfRelocationHandler {
 				if ((newValue & 1) == 1) {
 					markAsError(program, relocationAddress, type, symbolName,
 						"relocation out of range", elfRelocationContext.getLog());
-					return;
+					return RelocationResult.FAILURE;
 				}
 				newValue >>= 1;
 				newValue = (newValue >> 8) & 0xff;
@@ -204,7 +197,7 @@ public class AVR8_ElfRelocationHandler extends ElfRelocationHandler {
 				if ((newValue & 1) == 1) {
 					markAsError(program, relocationAddress, type, symbolName,
 						"relocation out of range", elfRelocationContext.getLog());
-					return;
+					return RelocationResult.FAILURE;
 				}
 				newValue >>= 1;
 				newValue = (newValue >> 16) & 0xff;
@@ -218,7 +211,7 @@ public class AVR8_ElfRelocationHandler extends ElfRelocationHandler {
 				if ((newValue & 1) == 1) {
 					markAsError(program, relocationAddress, type, symbolName,
 						"relocation out of range", elfRelocationContext.getLog());
-					return;
+					return RelocationResult.FAILURE;
 				}
 				newValue >>= 1;
 				newValue = (oldValue & 0xf0f0) | (newValue & 0xf) | ((newValue << 4) & 0xf00);
@@ -231,7 +224,7 @@ public class AVR8_ElfRelocationHandler extends ElfRelocationHandler {
 				if ((newValue & 1) == 1) {
 					markAsError(program, relocationAddress, type, symbolName,
 						"relocation out of range", elfRelocationContext.getLog());
-					return;
+					return RelocationResult.FAILURE;
 				}
 				newValue >>= 1;
 				newValue = (newValue >> 8) & 0xff;
@@ -245,7 +238,7 @@ public class AVR8_ElfRelocationHandler extends ElfRelocationHandler {
 				if ((newValue & 1) == 1) {
 					markAsError(program, relocationAddress, type, symbolName,
 						"relocation out of range", elfRelocationContext.getLog());
-					return;
+					return RelocationResult.FAILURE;
 				}
 				newValue >>= 1;
 				newValue = (newValue >> 16) & 0xff;
@@ -259,7 +252,7 @@ public class AVR8_ElfRelocationHandler extends ElfRelocationHandler {
 				if ((newValue & 1) == 1) {
 					markAsError(program, relocationAddress, type, symbolName,
 						"relocation out of range", elfRelocationContext.getLog());
-					return;
+					return RelocationResult.FAILURE;
 				}
 				newValue >>= 1;
 
@@ -267,6 +260,7 @@ public class AVR8_ElfRelocationHandler extends ElfRelocationHandler {
 					oldValue | ((newValue & 0x10000) | ((newValue << 3) & 0x1f00000)) >> 16;
 				memory.setShort(relocationAddress, (short) (hiValue & 0xffff));
 				memory.setShort(relocationAddress.add(2), (short) (newValue & 0xffff));
+				byteLength = 4;
 				break;
 
 			case AVR8_ElfRelocationConstants.R_AVR_LDI: /* data/eeprom */
@@ -275,6 +269,7 @@ public class AVR8_ElfRelocationHandler extends ElfRelocationHandler {
 				if ((newValue & 0xffff) > 255) {
 					markAsError(program, relocationAddress, type, symbolName,
 						"relocation out of range", elfRelocationContext.getLog());
+					// continue to apply
 				}
 
 				newValue = (newValue >> 8) & 0xff;
@@ -288,6 +283,7 @@ public class AVR8_ElfRelocationHandler extends ElfRelocationHandler {
 				if (((newValue & 0xffff) > 63) || (newValue < 0)) {
 					markAsError(program, relocationAddress, type, symbolName,
 						"relocation out of range", elfRelocationContext.getLog());
+					// continue to apply
 				}
 
 				newValue = (oldValue & 0xd3f8) | (newValue & 7) | ((newValue & (3 << 3)) << 7) |
@@ -301,6 +297,7 @@ public class AVR8_ElfRelocationHandler extends ElfRelocationHandler {
 				if (((newValue & 0xffff) > 63) || (newValue < 0)) {
 					markAsError(program, relocationAddress, type, symbolName,
 						"relocation out of range", elfRelocationContext.getLog());
+					// continue to apply
 				}
 
 				newValue = (oldValue & 0xff30) | (newValue & 0xF) | ((newValue & 0x30) << 2);
@@ -320,6 +317,7 @@ public class AVR8_ElfRelocationHandler extends ElfRelocationHandler {
 				if (((newValue & 0xffff) < 0x40) || (newValue & 0xFFFF) > 0xbf) {
 					markAsError(program, relocationAddress, type, symbolName,
 						"relocation out of range", elfRelocationContext.getLog());
+					// continue to apply
 				}
 
 				newValue = newValue & 0x7f;
@@ -333,6 +331,7 @@ public class AVR8_ElfRelocationHandler extends ElfRelocationHandler {
 				if ((newValue & 0xffff) > 0x3f) {
 					markAsError(program, relocationAddress, type, symbolName,
 						"relocation out of range", elfRelocationContext.getLog());
+					// continue to apply
 				}
 
 				newValue = (oldValue & 0xf9f0) | ((newValue & 0x30) << 5) | (newValue & 0x0f);
@@ -345,6 +344,7 @@ public class AVR8_ElfRelocationHandler extends ElfRelocationHandler {
 				if ((newValue & 0xffff) > 0x1f) {
 					markAsError(program, relocationAddress, type, symbolName,
 						"relocation out of range", elfRelocationContext.getLog());
+					// continue to apply
 				}
 
 				newValue = (oldValue & 0xff07) | ((newValue & 0x1f) << 3);
@@ -362,8 +362,9 @@ public class AVR8_ElfRelocationHandler extends ElfRelocationHandler {
 			default:
 				markAsUnhandled(program, relocationAddress, type, symbolIndex, symbolName,
 					elfRelocationContext.getLog());
-				break;
+				return RelocationResult.UNSUPPORTED;
 		}
+		return new RelocationResult(Status.APPLIED, byteLength);
 	}
 
 }

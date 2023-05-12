@@ -15,16 +15,14 @@
  */
 package ghidra.app.plugin.core.debug.gui.breakpoint;
 
-import static ghidra.app.plugin.core.debug.gui.AbstractGhidraHeadedDebuggerGUITest.waitForPass;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
+import static ghidra.app.plugin.core.debug.gui.AbstractGhidraHeadedDebuggerGUITest.*;
+import static org.junit.Assert.*;
 
 import java.util.Set;
 
 import org.junit.*;
 
-import com.google.common.collect.Range;
-
+import db.Transaction;
 import generic.Unique;
 import ghidra.app.plugin.core.debug.gui.AbstractGhidraHeadedDebuggerGUITest.TestDebuggerTargetTraceMapper;
 import ghidra.app.plugin.core.debug.service.breakpoint.DebuggerLogicalBreakpointServicePlugin;
@@ -43,11 +41,9 @@ import ghidra.program.model.address.Address;
 import ghidra.program.model.listing.Program;
 import ghidra.program.util.ProgramLocation;
 import ghidra.test.ToyProgramBuilder;
-import ghidra.trace.model.DefaultTraceLocation;
-import ghidra.trace.model.Trace;
+import ghidra.trace.model.*;
 import ghidra.trace.model.breakpoint.TraceBreakpoint;
 import ghidra.util.Msg;
-import ghidra.util.database.UndoableTransaction;
 import ghidra.util.task.TaskMonitor;
 import help.screenshot.GhidraScreenShotGenerator;
 
@@ -116,9 +112,9 @@ public class DebuggerBreakpointsPluginScreenShots extends GhidraScreenShotGenera
 		mb.createTestProcessesAndThreads();
 
 		TraceRecorder recorder1 = modelService.recordTarget(mb.testProcess1,
-			new TestDebuggerTargetTraceMapper(mb.testProcess1));
+			new TestDebuggerTargetTraceMapper(mb.testProcess1), ActionSource.AUTOMATIC);
 		TraceRecorder recorder3 = modelService.recordTarget(mb.testProcess3,
-			new TestDebuggerTargetTraceMapper(mb.testProcess3));
+			new TestDebuggerTargetTraceMapper(mb.testProcess3), ActionSource.AUTOMATIC);
 		Trace trace1 = recorder1.getTrace();
 		Trace trace3 = recorder3.getTrace();
 
@@ -130,15 +126,27 @@ public class DebuggerBreakpointsPluginScreenShots extends GhidraScreenShotGenera
 		mb.testProcess1.addRegion("echo:.data", mb.rng(0x00600000, 0x00600fff), "rw");
 		mb.testProcess3.addRegion("echo:.text", mb.rng(0x7fac0000, 0x7fac0fff), "rx");
 
-		try (UndoableTransaction tid = UndoableTransaction.start(trace1, "Add mapping", true)) {
+		try (Transaction tx = trace1.openTransaction("Add mapping")) {
 			DebuggerStaticMappingUtils.addMapping(
-				new DefaultTraceLocation(trace1, null, Range.atLeast(0L), addr(trace1, 0x00400000)),
+				new DefaultTraceLocation(trace1, null, Lifespan.nowOn(0), addr(trace1, 0x00400000)),
 				new ProgramLocation(program, addr(program, 0x00400000)), 0x00210000, false);
 		}
-		try (UndoableTransaction tid = UndoableTransaction.start(trace3, "Add mapping", true)) {
+		try (Transaction tx = trace3.openTransaction("Add mapping")) {
 			DebuggerStaticMappingUtils.addMapping(
-				new DefaultTraceLocation(trace3, null, Range.atLeast(0L), addr(trace3, 0x7fac0000)),
+				new DefaultTraceLocation(trace3, null, Lifespan.nowOn(0), addr(trace3, 0x7fac0000)),
 				new ProgramLocation(program, addr(program, 0x00400000)), 0x00010000, false);
+		}
+		waitForSwing();
+
+		try (Transaction tx = program.openTransaction("Add breakpoint")) {
+			program.getBookmarkManager()
+					.setBookmark(addr(program, 0x00401234),
+						LogicalBreakpoint.BREAKPOINT_ENABLED_BOOKMARK_TYPE, "SW_EXECUTE;1",
+						"before connect");
+			program.getBookmarkManager()
+					.setBookmark(addr(program, 0x00604321),
+						LogicalBreakpoint.BREAKPOINT_ENABLED_BOOKMARK_TYPE, "WRITE;4",
+						"write version");
 		}
 
 		TargetBreakpointSpecContainer bc1 =
@@ -159,28 +167,19 @@ public class DebuggerBreakpointsPluginScreenShots extends GhidraScreenShotGenera
 			trace3.getBreakpointManager()
 					.getBreakpointsAt(recorder3.getSnap(), addr(trace3, 0x7fac1234))));
 
-		try (UndoableTransaction tid = UndoableTransaction.start(program, "Add breakpoint", true)) {
-			program.getBookmarkManager()
-					.setBookmark(addr(program, 0x00401234),
-						LogicalBreakpoint.BREAKPOINT_ENABLED_BOOKMARK_TYPE, "SW_EXECUTE;1", "");
-			program.getBookmarkManager()
-					.setBookmark(addr(program, 0x00402345),
-						LogicalBreakpoint.BREAKPOINT_DISABLED_BOOKMARK_TYPE, "SW_EXECUTE;1", "");
-		}
-
 		waitForPass(() -> {
 			Set<LogicalBreakpoint> allBreakpoints = breakpointService.getAllBreakpoints();
-			assertEquals(3, allBreakpoints.size());
+			assertEquals(2, allBreakpoints.size());
 		});
 		waitForPass(() -> {
-			assertFalse(bpt.isEnabled());
+			assertFalse(bpt.isEnabled(0));
 		});
 		/**
 		 * TODO: Might be necessary to debounce and wait for service callbacks to settle. Sometimes,
 		 * there are 3 for just a moment, and then additional callbacks mess things up.
 		 */
 		waitForPass(() -> {
-			assertEquals(3, provider.breakpointTable.getRowCount());
+			assertEquals(2, provider.breakpointTable.getRowCount());
 			assertEquals(3, provider.locationTable.getRowCount());
 		});
 

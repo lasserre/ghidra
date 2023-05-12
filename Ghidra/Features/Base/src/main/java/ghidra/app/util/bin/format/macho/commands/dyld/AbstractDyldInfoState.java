@@ -21,6 +21,7 @@ import ghidra.app.util.bin.format.macho.MachHeader;
 import ghidra.app.util.bin.format.macho.commands.*;
 import ghidra.program.model.address.*;
 import ghidra.program.model.listing.Program;
+import ghidra.program.model.reloc.Relocation.Status;
 import ghidra.program.model.symbol.Symbol;
 import ghidra.program.model.symbol.SymbolIterator;
 import ghidra.util.DataConverter;
@@ -69,6 +70,9 @@ abstract public class AbstractDyldInfoState {
 		program.getMemory().getBytes(address, originalBytes);
 
 		program.getMemory().setBytes(address, bytes);
+
+		program.getRelocationTable()
+				.add(address, Status.APPLIED_OTHER, type, null, bytes.length, symbolName);
 
 		//ReferenceManager referenceManager = program.getReferenceManager();
 		//Reference reference = referenceManager.addMemoryReference( address, symbol.getAddress(), RefType.READ, SourceType.IMPORTED, 0 );
@@ -147,7 +151,7 @@ abstract public class AbstractDyldInfoState {
 			header.getLoadCommands(FileSetEntryCommand.class);
 		for (FileSetEntryCommand fileSetEntryCommand : fileSetEntries) {
 			if (fileSetEntryCommand.getFileOffset() == segment.getFileOffset()) {
-				return fileSetEntryCommand.getFileSetEntryName();
+				return fileSetEntryCommand.getFileSetEntryId().getString();
 			}
 		}
 		return segment.getSegmentName();

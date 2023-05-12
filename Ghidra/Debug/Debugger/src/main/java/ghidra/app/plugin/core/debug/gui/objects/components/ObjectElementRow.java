@@ -17,10 +17,11 @@ package ghidra.app.plugin.core.debug.gui.objects.components;
 
 import java.util.*;
 
+import ghidra.app.plugin.core.debug.gui.objects.DebuggerObjectsPlugin;
 import ghidra.app.plugin.core.debug.gui.objects.DebuggerObjectsProvider;
+import ghidra.dbg.DebuggerObjectModel.RefreshBehavior;
 import ghidra.dbg.target.TargetMethod;
 import ghidra.dbg.target.TargetObject;
-import ghidra.util.Msg;
 
 public class ObjectElementRow {
 
@@ -30,10 +31,11 @@ public class ObjectElementRow {
 
 	public ObjectElementRow(TargetObject ref, DebuggerObjectsProvider provider) {
 		this.to = ref;
-		to.fetchAttributes(true).thenAccept(attributes -> {
+		to.fetchAttributes(RefreshBehavior.REFRESH_ALWAYS).thenAccept(attributes -> {
 			map = attributes;
 		}).exceptionally(ex -> {
-			Msg.error(this, "Failed to fetch attributes");
+			DebuggerObjectsPlugin plugin = provider.getPlugin();
+			plugin.objectError("Failed to fetch attributes");
 			return null;
 		});
 	}

@@ -17,9 +17,6 @@ package ghidra.app.plugin.core.equate;
 
 import static org.junit.Assert.*;
 
-import java.awt.Rectangle;
-import java.util.*;
-
 import javax.swing.JLabel;
 import javax.swing.JTable;
 import javax.swing.table.TableCellRenderer;
@@ -40,7 +37,6 @@ import ghidra.program.util.OperandFieldLocation;
 import ghidra.program.util.ProgramLocation;
 import ghidra.test.*;
 import ghidra.util.table.GhidraTable;
-import util.CollectionUtils;
 
 /**
  * Tests for the equate table plugin.
@@ -81,7 +77,7 @@ public class EquateTablePluginTest extends AbstractGhidraHeadedIntegrationTest {
 	}
 
 	private Program buildProgram() throws Exception {
-		ToyProgramBuilder builder = new ToyProgramBuilder("notepad", true);
+		ToyProgramBuilder builder = new ToyProgramBuilder("sample", true);
 		builder.createMemory("test", "0x01006000", 0x1000);
 
 		builder.createEquate("0x010060f0", "ANOTHER_ONE", 1, 0);
@@ -115,16 +111,6 @@ public class EquateTablePluginTest extends AbstractGhidraHeadedIntegrationTest {
 	}
 
 	@Test
-	public void testEquateTableView() throws Exception {
-		// verify that the equate table shows the equates and the references	
-		assertNotNull(refsTable);
-		assertNotNull(refsModel);
-		assertEquals(1, refsModel.getRowCount());
-
-		checkTableValues();
-	}
-
-	@Test
 	public void testShowReferences() {
 		setRowSelection(equatesTable, 1, 1);// this triggers the refs table to update
 		waitForSwing();
@@ -137,7 +123,7 @@ public class EquateTablePluginTest extends AbstractGhidraHeadedIntegrationTest {
 
 	@Test
 	public void testRefsNavigation() {
-		// select a row in the refs table; the browser should go there	
+		// select a row in the refs table; the browser should go there
 
 		setRowSelection(equatesTable, 1, 1);
 
@@ -271,7 +257,7 @@ public class EquateTablePluginTest extends AbstractGhidraHeadedIntegrationTest {
 		assertTrue(pluginAction.isEnabled());
 		performAction(pluginAction, false);
 
-		OptionDialog d = waitForDialogComponent(tool.getToolFrame(), OptionDialog.class, 2000);
+		OptionDialog d = waitForDialogComponent(OptionDialog.class);
 		assertNotNull(d);
 		assertEquals("Delete Equate?", d.getTitle());
 
@@ -307,7 +293,7 @@ public class EquateTablePluginTest extends AbstractGhidraHeadedIntegrationTest {
 		assertTrue(pluginAction.isEnabled());
 		performAction(pluginAction, false);
 
-		OptionDialog d = waitForDialogComponent(tool.getToolFrame(), OptionDialog.class, 2000);
+		OptionDialog d = waitForDialogComponent(OptionDialog.class);
 		assertNotNull(d);
 		assertEquals("Delete Equate?", d.getTitle());
 
@@ -328,7 +314,7 @@ public class EquateTablePluginTest extends AbstractGhidraHeadedIntegrationTest {
 
 //==================================================================================================
 // Private methods
-//==================================================================================================	
+//==================================================================================================
 
 	private void setRowSelection(JTable table, int rowStart, int rowEnd) {
 		waitForSwing();
@@ -368,37 +354,6 @@ public class EquateTablePluginTest extends AbstractGhidraHeadedIntegrationTest {
 	private void redo() throws Exception {
 		redo(program);
 		waitForProgram(program);
-	}
-
-	private void checkTableValues() throws Exception {
-		Iterator<Equate> iter = et.getEquates();
-		List<Equate> list = CollectionUtils.asList(iter);
-
-		Collections.sort(list, (e1, e2) -> e1.getName().compareTo(e2.getName()));
-		assertEquals(list.size(), equatesModel.getRowCount());
-
-		TableCellRenderer nameRenderer = getRenderer(EquateTableModel.NAME_COL);
-		TableCellRenderer valueRenderer = getRenderer(EquateTableModel.VALUE_COL);
-		TableCellRenderer refCountRenderer = getRenderer(EquateTableModel.REFS_COL);
-
-		for (int i = 0; i < list.size(); i++) {
-
-			Equate eq = list.get(i);
-			Rectangle rect = equatesTable.getCellRect(i, EquateTableModel.NAME_COL, true);
-			runSwing(() -> equatesTable.scrollRectToVisible(rect));
-
-			String value = getRenderedValue(nameRenderer, i, EquateTableModel.NAME_COL);
-			assertEquals("Name not equal at index: " + i, eq.getName(), value);
-
-			// The value column is default-rendered as hex
-			value = getRenderedValue(valueRenderer, i, EquateTableModel.VALUE_COL);
-			assertEquals("Value not equal at index: " + i, Long.toHexString(eq.getValue()) + "h",
-				value);
-
-			value = getRenderedValue(refCountRenderer, i, EquateTableModel.REFS_COL);
-			assertEquals("Reference count not equal at index: " + i,
-				Integer.toString(eq.getReferenceCount()), value);
-		}
 	}
 
 	private String getRenderedValue(TableCellRenderer renderer, int row, int column) {

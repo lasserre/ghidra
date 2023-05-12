@@ -22,14 +22,15 @@ import javax.swing.*;
 import javax.swing.table.TableColumn;
 
 import docking.DialogComponentProvider;
-import docking.help.Help;
-import docking.help.HelpService;
 import docking.widgets.table.*;
+import generic.theme.GColor;
 import ghidra.app.util.GenericHelpTopics;
 import ghidra.framework.plugintool.PluginConfigurationModel;
 import ghidra.framework.plugintool.PluginTool;
 import ghidra.framework.plugintool.util.PluginDescription;
 import ghidra.util.HelpLocation;
+import help.Help;
+import help.HelpService;
 
 /**
  * Dialog that displays plugins in a tabular format, allowing users to install or uninstall them. The
@@ -37,6 +38,11 @@ import ghidra.util.HelpLocation;
  *
  */
 public class PluginInstallerDialog extends DialogComponentProvider {
+
+	private static final Color FG_COLOR_HAS_DEPENDENTS =
+		new GColor("color.fg.plugin.installer.table.has.dependents");
+	private static final Color FG_COLOR_HAS_DEPENDENTS_SELECTED =
+		new GColor("color.fg.plugin.installer.table.has.dependents.selected");
 
 	private PluginTool tool;
 	private PluginConfigurationModel model;
@@ -48,22 +54,19 @@ public class PluginInstallerDialog extends DialogComponentProvider {
 
 	/**
 	 * Constructs a new provider.
-	 * 
+	 *
 	 * @param title the title of the provider
 	 * @param tool the current tool
+	 * @param model the plugin configuration model
 	 * @param pluginDescriptions the list of plugins to display in the dialog
 	 */
-	public PluginInstallerDialog(String title, PluginTool tool,
+	public PluginInstallerDialog(String title, PluginTool tool, PluginConfigurationModel model,
 			List<PluginDescription> pluginDescriptions) {
 		super(title, true, false, true, false);
 
 		this.tool = tool;
-
-		if (model == null) {
-			model = new PluginConfigurationModel(tool);
-		}
-
 		this.pluginDescriptions = pluginDescriptions;
+		this.model = model;
 
 		addWorkPanel(getWorkPanel());
 		addOKButton();
@@ -90,7 +93,7 @@ public class PluginInstallerDialog extends DialogComponentProvider {
 	 * Returns the details panel.
 	 * <p>
 	 * Note: This is primarily for test access
-	 * 
+	 *
 	 * @return the details panel
 	 */
 	PluginDetailsPanel getDetailsPanel() {
@@ -101,20 +104,13 @@ public class PluginInstallerDialog extends DialogComponentProvider {
 	 * Returns the filter panel.
 	 * <p>
 	 * Note: This is primarily for test access
-	 * 
+	 *
 	 * @return the filter panel
 	 */
 	GTableFilterPanel<PluginDescription> getFilterPanel() {
 		return tableFilterPanel;
 	}
 
-	/**
-	 * Returns the plugin configuration model.
-	 * <p>
-	 * Note: This is primarily for test access
-	 * 
-	 * @return the plugin configuration model
-	 */
 	PluginConfigurationModel getModel() {
 		return model;
 	}
@@ -127,7 +123,7 @@ public class PluginInstallerDialog extends DialogComponentProvider {
 		JPanel mainPanel = new JPanel();
 		mainPanel.setLayout(new BorderLayout());
 
-		detailsPanel = new PluginDetailsPanel(model);
+		detailsPanel = new PluginDetailsPanel(tool, model);
 		JPanel pluginTablePanel = createPluginTablePanel(detailsPanel);
 
 		final JSplitPane splitPane =
@@ -174,12 +170,10 @@ public class PluginInstallerDialog extends DialogComponentProvider {
 
 		table.getColumnModel()
 				.getColumn(PluginInstallerTableModel.NAME_COL)
-				.setCellRenderer(
-					new NameCellRenderer());
+				.setCellRenderer(new NameCellRenderer());
 		table.getColumnModel()
 				.getColumn(PluginInstallerTableModel.STATUS_COL)
-				.setCellRenderer(
-					new StatusCellRenderer());
+				.setCellRenderer(new StatusCellRenderer());
 
 		HelpService help = Help.getHelpService();
 		help.registerHelp(table, new HelpLocation(GenericHelpTopics.TOOL, "PluginDialog"));
@@ -237,14 +231,13 @@ public class PluginInstallerDialog extends DialogComponentProvider {
 	}
 
 	/**
-	 * Renderer for the plugin name column. 
+	 * Renderer for the plugin name column.
 	 */
 	private class NameCellRenderer extends GTableCellRenderer {
 
 		NameCellRenderer() {
 			defaultFont = getFont();
-			boldFont = new Font(defaultFont.getName(), defaultFont.getStyle() | Font.BOLD,
-				defaultFont.getSize());
+			boldFont = defaultFont.deriveFont(defaultFont.getStyle() | Font.BOLD);
 			setBorder(BorderFactory.createEmptyBorder(0, 5, 0, 0));
 		}
 
@@ -265,7 +258,7 @@ public class PluginInstallerDialog extends DialogComponentProvider {
 
 			if (isSelected) {
 				if (hasDependents) {
-					renderer.setForeground(Color.pink);
+					renderer.setForeground(FG_COLOR_HAS_DEPENDENTS_SELECTED);
 					renderer.setFont(boldFont);
 				}
 				else {
@@ -276,7 +269,7 @@ public class PluginInstallerDialog extends DialogComponentProvider {
 			else {
 				// set color to red if other plugins depend on this plugin
 				if (hasDependents) {
-					renderer.setForeground(Color.red);
+					renderer.setForeground(FG_COLOR_HAS_DEPENDENTS);
 					renderer.setFont(boldFont);
 				}
 				else {

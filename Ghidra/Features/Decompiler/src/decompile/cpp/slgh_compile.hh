@@ -15,12 +15,20 @@
  */
 /// \file slgh_compile.hh
 /// \brief High-level control of the sleigh compilation process
+#ifndef __SLGH_COMPILE_HH__
+#define __SLGH_COMPILE_HH__
 
 #include "sleighbase.hh"
 #include "pcodecompile.hh"
 #include "filemanage.hh"
 #include <iostream>
 #include <sstream>
+
+namespace ghidra {
+
+using std::cout;
+using std::cerr;
+using std::out_of_range;
 
 /// \brief A helper class to associate a \e named Constructor section with its symbol scope
 ///
@@ -246,7 +254,7 @@ public:
 /// parser.
 class SleighPcode : public PcodeCompile {
   SleighCompile *compiler;			///< The main SLEIGH parser
-  virtual uintb allocateTemp(void);
+  virtual uint4 allocateTemp(void);
   virtual const Location *getLocation(SleighSymbol *sym) const;
   virtual void reportError(const Location* loc, const string &msg);
   virtual void reportWarning(const Location* loc, const string &msg);
@@ -332,7 +340,7 @@ public:
   void reportWarning(const Location *loc, const string &msg);	///< Issue a warning message with a source location
   int4 numErrors(void) const { return errors; }			///< Return the current number of fatal errors
 
-  uintb getUniqueAddr(void);					///< Get the next available temporary register offset
+  uint4 getUniqueAddr(void);					///< Get the next available temporary register offset
 
   /// \brief Set whether unnecessary truncation and extension operators generate warnings individually
   ///
@@ -446,3 +454,6 @@ public:
 
 extern SleighCompile *slgh;		///< A global reference to the SLEIGH compiler accessible to the parse functions
 extern int yydebug;			///< Debug state for the SLEIGH parse functions
+
+} // End namespace ghidra
+#endif

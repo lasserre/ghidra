@@ -26,8 +26,6 @@ import javax.swing.event.ChangeListener;
 
 import docking.*;
 import docking.action.*;
-import docking.help.Help;
-import docking.help.HelpService;
 import docking.menu.ActionState;
 import docking.menu.MultiStateDockingAction;
 import docking.widgets.EventTrigger;
@@ -37,13 +35,15 @@ import docking.widgets.fieldpanel.internal.FieldPanelCoordinator;
 import docking.widgets.fieldpanel.listener.FieldLocationListener;
 import docking.widgets.fieldpanel.support.FieldLocation;
 import docking.widgets.fieldpanel.support.ViewerPosition;
+import generic.theme.GIcon;
+import generic.theme.GThemeDefaults.Colors.Palette;
 import ghidra.GhidraOptions;
 import ghidra.app.nav.Navigatable;
 import ghidra.app.plugin.core.codebrowser.MarkerServiceBackgroundColorModel;
 import ghidra.app.plugin.core.codebrowser.hover.*;
 import ghidra.app.plugin.core.marker.MarkerManager;
 import ghidra.app.services.*;
-import ghidra.app.util.HighlightProvider;
+import ghidra.app.util.ListingHighlightProvider;
 import ghidra.app.util.SymbolPath;
 import ghidra.app.util.viewer.format.*;
 import ghidra.app.util.viewer.util.*;
@@ -61,8 +61,8 @@ import ghidra.program.util.*;
 import ghidra.util.*;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.task.TaskMonitor;
-import resources.Icons;
-import resources.ResourceManager;
+import help.Help;
+import help.HelpService;
 
 /**
  * Panel that displays two listings for comparison.
@@ -71,6 +71,8 @@ import resources.ResourceManager;
 public class ListingCodeComparisonPanel
 		extends CodeComparisonPanel<ListingComparisonFieldPanelCoordinator> implements
 		FormatModelListener, CodeFormatService, ListingDiffChangeListener, OptionsChangeListener {
+
+	private static final Color FG_COLOR_TITLE = Palette.DARK_GRAY;
 
 	private static final String DUAL_LISTING_HEADER_SHOWING = "DUAL_LISTING_HEADER_SHOWING";
 	private static final String DUAL_LISTING_SIDE_BY_SIDE = "DUAL_LISTING_SIDE_BY_SIDE";
@@ -85,21 +87,23 @@ public class ListingCodeComparisonPanel
 	private static final String DIFF_NAVIGATE_GROUP = "A2_DiffNavigate";
 	private static final String HOVER_GROUP = "A5_Hovers";
 	private static final String PROPERTIES_GROUP = "B1_Properties";
-	private static final Icon NEXT_DIFF_ICON =
-		ResourceManager.loadImage("images/view-sort-ascending.png");
-	private static final Icon PREVIOUS_DIFF_ICON =
-		ResourceManager.loadImage("images/view-sort-descending.png");
-	private static final Icon bothIcon = ResourceManager.loadImage("images/text_list_bullets.png");
-	private static final Icon unmatchedIcon = Icons.NAVIGATE_ON_INCOMING_EVENT_ICON;
-	private static final Icon diffsIcon =
-		ResourceManager.loadImage("images/table_relationship.png");
+
+	//@formatter:off
+	private static final Icon NEXT_DIFF_ICON = new GIcon("icon.base.util.listingcompare.diff.next");
+	private static final Icon PREVIOUS_DIFF_ICON = new GIcon("icon.base.util.listingcompare.previous.next");
+	private static final Icon BOTH_VIEWS_ICON = new GIcon("icon.base.util.listingcompare.area.markers.all");
+	private static final Icon UNMATCHED_ICON = new GIcon("icon.base.util.listingcompare.area.markers.unmatched");
+	private static final Icon DIFF_ICON = new GIcon("icon.base.util.listingcompare.area.markers.diff");
+	private static final Icon CURSOR_LOC_ICON = new GIcon("icon.base.util.listingcompare.cursor");
+	//@formatter:on
+
+	private static final Icon HOVER_ON_ICON = new GIcon("icon.base.util.listingcompare.hover.on");
+	private static final Icon HOVER_OFF_ICON = new GIcon("icon.base.util.listingcompare.hover.off");
+
 	private static final String ALL_AREA_MARKERS = "All Area Markers";
 	private static final String UNMATCHED_AREA_MARKERS = "Unmatched Area Markers";
 	private static final String DIFF_AREA_MARKERS = "Diff Area Markers";
 	private String nextPreviousAreaType;
-
-	private static final Icon HOVER_ON_ICON = ResourceManager.loadImage("images/hoverOn.gif");
-	private static final Icon HOVER_OFF_ICON = ResourceManager.loadImage("images/hoverOff.gif");
 
 	private ListingPanel[] listingPanels = new ListingPanel[2];
 	private ListingDiff listingDiff;
@@ -116,8 +120,6 @@ public class ListingCodeComparisonPanel
 	private MarkerSet[] diffMarkers = new MarkerSet[2];
 	private MarkerSet[] currentCursorMarkers = new MarkerSet[2];
 	private static final Color CURSOR_LINE_COLOR = GhidraOptions.DEFAULT_CURSOR_LINE_COLOR;
-	private ImageIcon CURSOR_LOC_ICON =
-		ResourceManager.loadImage("images/cursor_arrow_flipped.gif");
 	private Color cursorHighlightColor;
 	private boolean isShowingEntireListing;
 	private boolean isSideBySide = true;
@@ -149,11 +151,12 @@ public class ListingCodeComparisonPanel
 	FunctionNameListingHover functionNameHoverService;
 	private String leftTitle;
 	private String rightTitle;
-	private ListingCodeComparisonOptions comparisonOptions = new ListingCodeComparisonOptions();
+	private ListingCodeComparisonOptions comparisonOptions;
 	private Address[] coordinatorLockedAddresses;
 
 	/**
 	 * Creates a comparison panel with two listings.
+	 * 
 	 * @param owner the owner of this panel
 	 * @param tool the tool displaying this panel
 	 */
@@ -208,9 +211,6 @@ public class ListingCodeComparisonPanel
 		Color diffCodeUnitsBackgroundColor = comparisonOptions.getDiffCodeUnitsBackgroundColor();
 		diffMarkers[LEFT].setMarkerColor(diffCodeUnitsBackgroundColor);
 		diffMarkers[RIGHT].setMarkerColor(diffCodeUnitsBackgroundColor);
-		// Force a refresh by setting the program. This updates the colors in the navigation popup.
-		markerManagers[LEFT].setProgram(getLeftProgram());
-		markerManagers[RIGHT].setProgram(getRightProgram());
 	}
 
 	@Override
@@ -280,6 +280,7 @@ public class ListingCodeComparisonPanel
 	/**
 	 * Sets the coordinator for the two listings within this code comparison panel. It coordinates
 	 * their scrolling and location synchronization.
+	 * 
 	 * @param listingFieldPanelCoordinator the coordinator for the two listings
 	 */
 	@Override
@@ -303,39 +304,41 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Adds the indicated highlight providers for the left and right listing panels.
+	 * 
 	 * @param leftHighlightProvider the highlight provider for the left side's listing.
 	 * @param rightHighlightProvider the highlight provider for the right side's listing.
 	 */
-	public void addHighlightProviders(HighlightProvider leftHighlightProvider,
-			HighlightProvider rightHighlightProvider) {
+	public void addHighlightProviders(ListingHighlightProvider leftHighlightProvider,
+			ListingHighlightProvider rightHighlightProvider) {
 		addLeftHighlightProvider(leftHighlightProvider);
 		addRightHighlightProvider(rightHighlightProvider);
 	}
 
-	private void addLeftHighlightProvider(HighlightProvider leftHighlightProvider) {
+	private void addLeftHighlightProvider(ListingHighlightProvider leftHighlightProvider) {
 		listingPanels[LEFT].getFormatManager().addHighlightProvider(leftHighlightProvider);
 	}
 
-	private void addRightHighlightProvider(HighlightProvider rightHighlightProvider) {
+	private void addRightHighlightProvider(ListingHighlightProvider rightHighlightProvider) {
 		listingPanels[RIGHT].getFormatManager().addHighlightProvider(rightHighlightProvider);
 	}
 
 	/**
 	 * Removes the indicated highlight providers from the left and right listing panels.
+	 * 
 	 * @param leftHighlightProvider the highlight provider for the left side's listing.
 	 * @param rightHighlightProvider the highlight provider for the right side's listing.
 	 */
-	public void removeHighlightProviders(HighlightProvider leftHighlightProvider,
-			HighlightProvider rightHighlightProvider) {
+	public void removeHighlightProviders(ListingHighlightProvider leftHighlightProvider,
+			ListingHighlightProvider rightHighlightProvider) {
 		removeLeftHighlightProvider(leftHighlightProvider);
 		removeRightHighlightProvider(rightHighlightProvider);
 	}
 
-	private void removeLeftHighlightProvider(HighlightProvider leftHighlightProvider) {
+	private void removeLeftHighlightProvider(ListingHighlightProvider leftHighlightProvider) {
 		listingPanels[LEFT].getFormatManager().removeHighlightProvider(leftHighlightProvider);
 	}
 
-	private void removeRightHighlightProvider(HighlightProvider rightHighlightProvider) {
+	private void removeRightHighlightProvider(ListingHighlightProvider rightHighlightProvider) {
 		listingPanels[RIGHT].getFormatManager().removeHighlightProvider(rightHighlightProvider);
 	}
 
@@ -425,6 +428,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Sets a listener for program location changes for the left side's listing panel.
+	 * 
 	 * @param programLocationListener the listener
 	 */
 	public void setLeftProgramLocationListener(ProgramLocationListener programLocationListener) {
@@ -433,6 +437,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Sets a listener for program location changes for the right side's listing panel.
+	 * 
 	 * @param programLocationListener the listener
 	 */
 	public void setRightProgramLocationListener(ProgramLocationListener programLocationListener) {
@@ -660,7 +665,7 @@ public class ListingCodeComparisonPanel
 		public NextPreviousAreaMarkerAction(String owner) {
 			super("Dual Listing Next/Previous Area Marker", owner);
 
-			ToolBarData toolBarData = new ToolBarData(diffsIcon, DIFF_NAVIGATE_GROUP);
+			ToolBarData toolBarData = new ToolBarData(DIFF_ICON, DIFF_NAVIGATE_GROUP);
 			setToolBarData(toolBarData);
 
 			HelpLocation helpLocation =
@@ -668,16 +673,14 @@ public class ListingCodeComparisonPanel
 			setHelpLocation(helpLocation);
 			setDescription("Set Navigate Next/Previous Area Marker options");
 
-			setPerformActionOnPrimaryButtonClick(false);
-
 			ActionState<String> allAreaMarkers =
-				new ActionState<>(ALL_AREA_MARKERS, bothIcon, ALL_AREA_MARKERS);
+				new ActionState<>(ALL_AREA_MARKERS, BOTH_VIEWS_ICON, ALL_AREA_MARKERS);
 			allAreaMarkers.setHelpLocation(helpLocation);
 			ActionState<String> unmatchedAreaMarkers =
-				new ActionState<>(UNMATCHED_AREA_MARKERS, unmatchedIcon, UNMATCHED_AREA_MARKERS);
+				new ActionState<>(UNMATCHED_AREA_MARKERS, UNMATCHED_ICON, UNMATCHED_AREA_MARKERS);
 			unmatchedAreaMarkers.setHelpLocation(helpLocation);
 			ActionState<String> diffAreaMarkers =
-				new ActionState<>(DIFF_AREA_MARKERS, diffsIcon, DIFF_AREA_MARKERS);
+				new ActionState<>(DIFF_AREA_MARKERS, DIFF_ICON, DIFF_AREA_MARKERS);
 			diffAreaMarkers.setHelpLocation(helpLocation);
 
 			addActionState(allAreaMarkers);
@@ -832,10 +835,11 @@ public class ListingCodeComparisonPanel
 	}
 
 	/**
-	 * Sets whether or not the entire programs are displayed in the listings or only
-	 * the addresses in the limited set.
-	 * @param show if true, the entire program will be shown. Otherwise the listings will only
-	 * show the limited addresses.
+	 * Sets whether or not the entire programs are displayed in the listings or only the addresses
+	 * in the limited set.
+	 * 
+	 * @param show if true, the entire program will be shown. Otherwise the listings will only show
+	 *            the limited addresses.
 	 */
 	public void showEntireListing(boolean show) {
 		try {
@@ -865,6 +869,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Determines if the listing's layout field header is currently showing.
+	 * 
 	 * @return true if the header is showing.
 	 */
 	public boolean isHeaderShowing() {
@@ -873,6 +878,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Shows or hides the listing's layout field header.
+	 * 
 	 * @param show true means show the field header. false means hide the header.
 	 */
 	public void setHeaderShowing(boolean show) {
@@ -891,6 +897,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Sets whether or not the listings are displayed side by side.
+	 * 
 	 * @param sideBySide if true, the listings are side by side, otherwise one is above the other.
 	 */
 	public void showSideBySide(boolean sideBySide) {
@@ -934,6 +941,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Gets the function loaded in the left listing panel.
+	 * 
 	 * @return the function or null
 	 */
 	@Override
@@ -943,6 +951,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Gets the function loaded in the right listing panel.
+	 * 
 	 * @return the function or null
 	 */
 	@Override
@@ -991,8 +1000,8 @@ public class ListingCodeComparisonPanel
 	}
 
 	/**
-	 * Establishes the location and display of the arrow cursor. This method should be called
-	 * after the function comparison window is loaded with functions, data, etc.
+	 * Establishes the location and display of the arrow cursor. This method should be called after
+	 * the function comparison window is loaded with functions, data, etc.
 	 */
 	private void loadCursorArrow() {
 		int focusedSide = currProgramIndex;
@@ -1024,8 +1033,9 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Gets an equivalent left side program location when given a right side program location or
-	 * vice versa. The intent of this method is to translate a location from one side of the
-	 * dual listing to an equivalent location for the other side if possible.
+	 * vice versa. The intent of this method is to translate a location from one side of the dual
+	 * listing to an equivalent location for the other side if possible.
+	 * 
 	 * @param leftOrRight LEFT or RIGHT indicating which side's program location is needed.
 	 * @param programLocation the program location for the other side.
 	 * @return a program location for the desired side. Otherwise, null.
@@ -1160,16 +1170,17 @@ public class ListingCodeComparisonPanel
 	}
 
 	/**
-	 * Infers a desired byte address based on the specified <code>byteAddress</code> as well 
-	 * as the <code>address</code> and <code>desiredAddress</code> that were matched.
+	 * Infers a desired byte address based on the specified <code>byteAddress</code> as well as the
+	 * <code>address</code> and <code>desiredAddress</code> that were matched.
+	 * 
 	 * @param address matches up with the <code>desiredAddress</code> from the other function/data.
 	 * @param desiredAddress matches up with the <code>address</code> from the other function/data.
 	 * @param byteAddress the byte address that is associated with <code>address</code>
 	 * @param program the program for the <code>address</code> and <code>byteAddress</code>.
-	 * @param desiredProgram the program for the <code>desiredAddress</code> and 
-	 * <code>desiredByteAddress</code>.
+	 * @param desiredProgram the program for the <code>desiredAddress</code> and
+	 *            <code>desiredByteAddress</code>.
 	 * @return the desired byte address that matches up with the indicated <code>byteAddress</code>
-	 * or null if it can't be determined.
+	 *         or null if it can't be determined.
 	 */
 	private Address inferDesiredByteAddress(Address address, Address desiredAddress,
 			Address byteAddress, Program program, Program desiredProgram) {
@@ -1189,21 +1200,21 @@ public class ListingCodeComparisonPanel
 	}
 
 	/**
-	 * This infers the desired byte address within Data based on the code units at 
-	 * <code>codeUnitAddress</code> and <code>desiredCodeUnitAddress</code>.
-	 * The inferred address will be at an offset from the <code>desiredCodeUnitAddress</code> 
-	 * that is the same distance the <code>byteAddress</code> is from the <code>codeUnitAddress</code>.
+	 * This infers the desired byte address within Data based on the code units at
+	 * <code>codeUnitAddress</code> and <code>desiredCodeUnitAddress</code>. The inferred address
+	 * will be at an offset from the <code>desiredCodeUnitAddress</code> that is the same distance
+	 * the <code>byteAddress</code> is from the <code>codeUnitAddress</code>.
 	 * 
-	 * @param codeUnitAddress matches up with the <code>desiredCodeUnitAddress</code> from 
-	 * the other data.
-	 * @param desiredCodeUnitAddress matches up with the <code>codeUnitAddress</code> from 
-	 * the other data.
+	 * @param codeUnitAddress matches up with the <code>desiredCodeUnitAddress</code> from the other
+	 *            data.
+	 * @param desiredCodeUnitAddress matches up with the <code>codeUnitAddress</code> from the other
+	 *            data.
 	 * @param byteAddress the byte address that is associated with <code>codeUnitAddress</code>
 	 * @param program the program for the <code>codeUnitAddress</code> and <code>byteAddress</code>.
-	 * @param desiredProgram the program for the <code>desiredCodeUnitAddress</code> and 
-	 * <code>desiredByteAddress</code>.
-	 * @return the desired byte address within the data that matches up with the indicated 
-	 * <code>byteAddress</code> or null if it can't be determined.
+	 * @param desiredProgram the program for the <code>desiredCodeUnitAddress</code> and
+	 *            <code>desiredByteAddress</code>.
+	 * @return the desired byte address within the data that matches up with the indicated
+	 *         <code>byteAddress</code> or null if it can't be determined.
 	 */
 	private Address inferDesiredDataAddress(Address codeUnitAddress, Address desiredCodeUnitAddress,
 			Address byteAddress, Program program, Program desiredProgram) {
@@ -1229,19 +1240,19 @@ public class ListingCodeComparisonPanel
 	}
 
 	/**
-	 * This infers the desired byte address within a function based on the code units at 
-	 * <code>address</code> and <code>desiredAddress</code>.
-	 * If the inferred address would be beyond the last byte of the code unit then it 
-	 * will get set to the last byte of the code unit at the <code>desiredAddress</code>.
+	 * This infers the desired byte address within a function based on the code units at
+	 * <code>address</code> and <code>desiredAddress</code>. If the inferred address would be beyond
+	 * the last byte of the code unit then it will get set to the last byte of the code unit at the
+	 * <code>desiredAddress</code>.
 	 * 
 	 * @param address matches up with the <code>desiredAddress</code> from the other function.
 	 * @param desiredAddress matches up with the <code>address</code> from the other function.
 	 * @param byteAddress the byte address that is associated with <code>address</code>
 	 * @param program the program for the <code>address</code> and <code>byteAddress</code>.
-	 * @param desiredProgram the program for the <code>desiredAddress</code> and 
-	 * <code>desiredByteAddress</code>.
-	 * @return the desired byte address within the data that matches up with the indicated 
-	 * <code>byteAddress</code> or null if it can't be determined.
+	 * @param desiredProgram the program for the <code>desiredAddress</code> and
+	 *            <code>desiredByteAddress</code>.
+	 * @return the desired byte address within the data that matches up with the indicated
+	 *         <code>byteAddress</code> or null if it can't be determined.
 	 */
 	private Address inferDesiredFunctionAddress(Address address, Address desiredAddress,
 			Address byteAddress, Program program, Program desiredProgram) {
@@ -1270,6 +1281,7 @@ public class ListingCodeComparisonPanel
 	 * Gets an equivalent left side variable location when given a right side variable location or
 	 * vice versa. The intent of this method is to translate a variable location from one side of
 	 * the dual listing to an equivalent variable location for the other side if possible.
+	 * 
 	 * @param leftOrRight LEFT or RIGHT indicating which side's variable location is needed.
 	 * @param variableLocation the variable location for the other side.
 	 * @return a variable location for the desired side. Otherwise, null.
@@ -1396,7 +1408,7 @@ public class ListingCodeComparisonPanel
 
 			String programStr =
 				HTMLUtilities.friendlyEncodeHTML(program.getDomainFile().getPathname());
-			String specialProgramStr = HTMLUtilities.colorString(Color.DARK_GRAY, programStr);
+			String specialProgramStr = HTMLUtilities.colorString(FG_COLOR_TITLE, programStr);
 			buf.append(specialProgramStr);
 			buf.append(padStr);
 		}
@@ -1431,7 +1443,7 @@ public class ListingCodeComparisonPanel
 
 			String programStr =
 				HTMLUtilities.friendlyEncodeHTML(program.getDomainFile().getPathname());
-			String specialProgramStr = HTMLUtilities.colorString(Color.DARK_GRAY, programStr);
+			String specialProgramStr = HTMLUtilities.colorString(FG_COLOR_TITLE, programStr);
 			buf.append(specialProgramStr);
 			buf.append(padStr);
 		}
@@ -1451,7 +1463,7 @@ public class ListingCodeComparisonPanel
 		String padStr = HTMLUtilities.spaces(4);
 		buf.append(padStr);
 		String programStr = HTMLUtilities.friendlyEncodeHTML(program.getDomainFile().getPathname());
-		String specialProgramStr = HTMLUtilities.colorString(Color.DARK_GRAY, programStr);
+		String specialProgramStr = HTMLUtilities.colorString(FG_COLOR_TITLE, programStr);
 		buf.append(specialProgramStr);
 		buf.append(padStr);
 		return HTMLUtilities.wrapAsHTML(buf.toString());
@@ -1549,9 +1561,8 @@ public class ListingCodeComparisonPanel
 		if (programs[LEFT] != null) {
 			AddressIndexMap indexMap = listingPanels[LEFT].getAddressIndexMap();
 			listingPanels[LEFT].getFieldPanel()
-					.setBackgroundColorModel(
-						new MarkerServiceBackgroundColorModel(markerManagers[LEFT], indexMap));
-			markerManagers[LEFT].setProgram(programs[LEFT]);
+					.setBackgroundColorModel(new MarkerServiceBackgroundColorModel(
+						markerManagers[LEFT], programs[LEFT], indexMap));
 			unmatchedCodeMarkers[LEFT] =
 				markerManagers[LEFT].createAreaMarker("Listing1 Unmatched Code",
 					"Instructions that are not matched to an instruction in the other function.",
@@ -1564,10 +1575,8 @@ public class ListingCodeComparisonPanel
 		if (programs[RIGHT] != null) {
 			AddressIndexMap rightIndexMap = listingPanels[RIGHT].getAddressIndexMap();
 			listingPanels[RIGHT].getFieldPanel()
-					.setBackgroundColorModel(
-						new MarkerServiceBackgroundColorModel(markerManagers[RIGHT],
-							rightIndexMap));
-			markerManagers[RIGHT].setProgram(programs[RIGHT]);
+					.setBackgroundColorModel(new MarkerServiceBackgroundColorModel(
+						markerManagers[RIGHT], programs[RIGHT], rightIndexMap));
 			unmatchedCodeMarkers[RIGHT] =
 				markerManagers[RIGHT].createAreaMarker("Listing2 Unmatched Code",
 					"Instructions that are not matched to an instruction in the other function.",
@@ -1665,10 +1674,10 @@ public class ListingCodeComparisonPanel
 		}
 
 		indexMaps[LEFT] = new AddressIndexMap(addressSets[LEFT]);
-		markerManagers[LEFT].getOverviewProvider().setAddressIndexMap(indexMaps[LEFT]);
+		markerManagers[LEFT].getOverviewProvider().setProgram(getLeftProgram(), indexMaps[LEFT]);
 		listingPanels[LEFT].getFieldPanel()
-				.setBackgroundColorModel(
-					new MarkerServiceBackgroundColorModel(markerManagers[LEFT], indexMaps[LEFT]));
+				.setBackgroundColorModel(new MarkerServiceBackgroundColorModel(markerManagers[LEFT],
+					programs[LEFT], indexMaps[LEFT]));
 	}
 
 	private void updateRightAddressSet(Function rightFunction) {
@@ -1682,10 +1691,10 @@ public class ListingCodeComparisonPanel
 		}
 
 		indexMaps[RIGHT] = new AddressIndexMap(addressSets[RIGHT]);
-		markerManagers[RIGHT].getOverviewProvider().setAddressIndexMap(indexMaps[RIGHT]);
+		markerManagers[RIGHT].getOverviewProvider().setProgram(getRightProgram(), indexMaps[RIGHT]);
 		listingPanels[RIGHT].getFieldPanel()
-				.setBackgroundColorModel(
-					new MarkerServiceBackgroundColorModel(markerManagers[RIGHT], indexMaps[RIGHT]));
+				.setBackgroundColorModel(new MarkerServiceBackgroundColorModel(
+					markerManagers[RIGHT], programs[RIGHT], indexMaps[RIGHT]));
 	}
 
 	@Override
@@ -1725,6 +1734,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Sets the cursor location in the left and right listing at the specified functions.
+	 * 
 	 * @param leftFunction the function in the left listing panel.
 	 * @param rightFunction the function in the right listing panel.
 	 */
@@ -1735,6 +1745,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Sets the cursor in the left side's listing to the specified location.
+	 * 
 	 * @param program the left side's program
 	 * @param location the location
 	 */
@@ -1746,6 +1757,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Sets the cursor in the right side's listing to the specified location.
+	 * 
 	 * @param program the right side's program
 	 * @param location the location
 	 */
@@ -1865,6 +1877,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Sets the title for the left side's listing.
+	 * 
 	 * @param leftTitle the title
 	 */
 	public void setLeftTitle(String leftTitle) {
@@ -1874,6 +1887,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Sets the title for the right side's listing.
+	 * 
 	 * @param rightTitle the title
 	 */
 	public void setRightTitle(String rightTitle) {
@@ -1883,6 +1897,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Sets the component displayed in the top of this panel.
+	 * 
 	 * @param comp the component.
 	 */
 	public void setTopComponent(JComponent comp) {
@@ -1901,6 +1916,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Sets the component displayed in the bottom of this panel.
+	 * 
 	 * @param comp the component.
 	 */
 	public void setBottomComponent(JComponent comp) {
@@ -1920,6 +1936,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Gets the program from the left or right side that has or last had focus.
+	 * 
 	 * @return the program from the side of this panel with focus or null
 	 */
 	public Program getFocusedProgram() {
@@ -1928,6 +1945,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Gets the program in the left listing panel.
+	 * 
 	 * @return the left program or null
 	 */
 	@Override
@@ -1937,6 +1955,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Gets the program in the right listing panel.
+	 * 
 	 * @return the right program or null
 	 */
 	@Override
@@ -1946,6 +1965,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Gets the addresses in the left listing panel.
+	 * 
 	 * @return the addresses
 	 */
 	@Override
@@ -1955,6 +1975,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Gets the addresses in the right listing panel.
+	 * 
 	 * @return the addresses
 	 */
 	@Override
@@ -1964,6 +1985,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Get the left or right listing panel that has or last had focus.
+	 * 
 	 * @return the listing panel with focus.
 	 */
 	public ListingPanel getFocusedListingPanel() {
@@ -1972,6 +1994,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Get the left side's listing panel.
+	 * 
 	 * @return the left panel
 	 */
 	public ListingPanel getLeftPanel() {
@@ -1980,6 +2003,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Get the right side's listing panel.
+	 * 
 	 * @return the right panel
 	 */
 	public ListingPanel getRightPanel() {
@@ -1988,6 +2012,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Go to the indicated address in the listing that last had focus.
+	 * 
 	 * @param addr the cursor should go to this address
 	 * @return true if the location changed
 	 */
@@ -1997,9 +2022,10 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Go to the indicated location in the listing that last had focus.
+	 * 
 	 * @param loc the cursor should go to this location.
 	 * @param centerOnScreen true indicates that the location should be centered in the listing's
-	 * viewport.
+	 *            viewport.
 	 * @return true if the location changed
 	 */
 	public boolean goTo(ProgramLocation loc, boolean centerOnScreen) {
@@ -2106,7 +2132,9 @@ public class ListingCodeComparisonPanel
 	}
 
 	/**
-	 * Adds the indicated button press listener to both listing panels in this code comparison panel.
+	 * Adds the indicated button press listener to both listing panels in this code comparison
+	 * panel.
+	 * 
 	 * @param listener the listener
 	 */
 	public void addButtonPressedListener(ButtonPressedListener listener) {
@@ -2129,11 +2157,13 @@ public class ListingCodeComparisonPanel
 	/**
 	 * Gets the indicated (LEFT or RIGHT) side's address that is equivalent to the other side's
 	 * address.
+	 * 
 	 * @param leftOrRight LEFT or RIGHT indicating which side's address is needed.
 	 * @param otherSidesAddress the address for the other side. If leftOrRight = LEFT, then this
-	 * should be a right side address. If leftOrRight = RIGHT, then this should be a left side address.
+	 *            should be a right side address. If leftOrRight = RIGHT, then this should be a left
+	 *            side address.
 	 * @return an address for the indicated side (LEFT or RIGHT) that is equivalent to the other
-	 * side's address that is specified. Otherwise, null.
+	 *         side's address that is specified. Otherwise, null.
 	 */
 	private Address getAddress(int leftOrRight, Address otherSidesAddress) {
 		if (isFunctionCompare()) {
@@ -2146,11 +2176,12 @@ public class ListingCodeComparisonPanel
 	}
 
 	/**
-	 * Gets an address in the program indicated by <code>leftOrRight</code> that matches the 
+	 * Gets an address in the program indicated by <code>leftOrRight</code> that matches the
 	 * <code>otherSidesAddress</code> that is an address in a function in the other program.
+	 * 
 	 * @param leftOrRight indicates whether to get the address from the LEFT or RIGHT program.
-	 * @param otherSidesAddress address in the other program that is equivalent to the 
-	 * desired address.
+	 * @param otherSidesAddress address in the other program that is equivalent to the desired
+	 *            address.
 	 * @return the matching address in the indicated program or null.
 	 */
 	private Address getFunctionAddress(int leftOrRight, Address otherSidesAddress) {
@@ -2198,6 +2229,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Is this panel currently comparing a function match?
+	 * 
 	 * @return true if comparing functions.
 	 */
 	private boolean isFunctionCompare() {
@@ -2208,6 +2240,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Is this panel currently comparing a data match?
+	 * 
 	 * @return true if comparing data.
 	 */
 	private boolean isDataCompare() {
@@ -2218,6 +2251,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Gets the left side address that is equivalent to the indicated right side address.
+	 * 
 	 * @param rightByteAddress the right side address
 	 * @return the left side address or null.
 	 */
@@ -2230,6 +2264,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Gets the right side address that is equivalent to the indicated left side address.
+	 * 
 	 * @param leftByteAddress the left side address
 	 * @return the right side address or null.
 	 */
@@ -2242,6 +2277,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Gets the left side function's entry point address.
+	 * 
 	 * @return the left side function's entry point address or null.
 	 */
 	private Address getLeftFunctionAddress() {
@@ -2253,6 +2289,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Gets the right side function's entry point address.
+	 * 
 	 * @return the right side function's entry point address or null.
 	 */
 	private Address getRightFunctionAddress() {
@@ -2264,6 +2301,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Gets the left side data's minimum address.
+	 * 
 	 * @return the left side data's minimum address or null.
 	 */
 	private Address getLeftDataAddress() {
@@ -2275,6 +2313,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Gets the right side data's minimum address.
+	 * 
 	 * @return the right side data's minimum address or null.
 	 */
 	private Address getRightDataAddress() {
@@ -2383,6 +2422,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Gets the left or right listing panel that contains the indicated field panel.
+	 * 
 	 * @param fieldPanel the field panel
 	 * @return the listing panel or null.
 	 */
@@ -2403,6 +2443,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Disable mouse navigation from within this dual listing panel.
+	 * 
 	 * @param enabled false disables navigation
 	 */
 	@Override
@@ -2450,6 +2491,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Gets the maximum offset based on the larger data that is passed to this method.
+	 * 
 	 * @param leftData the left view's data
 	 * @param rightData the right view's data
 	 * @return the maximum offset (one less than the larger data item's size).
@@ -2468,10 +2510,11 @@ public class ListingCodeComparisonPanel
 	}
 
 	/**
-	 * Gets the ending address to be displayed. It tries to get an ending address that is
-	 * maxOffset number of bytes beyond the minAddress without leaving the memory block
-	 * that contains the minAddress. If the maxOffset is beyond the end of the block then
-	 * the end of the block is returned. For an externalAddress the minAddress is returned.
+	 * Gets the ending address to be displayed. It tries to get an ending address that is maxOffset
+	 * number of bytes beyond the minAddress without leaving the memory block that contains the
+	 * minAddress. If the maxOffset is beyond the end of the block then the end of the block is
+	 * returned. For an externalAddress the minAddress is returned.
+	 * 
 	 * @param program the program containing the data
 	 * @param maxOffset the max offset
 	 * @param minAddress the minimum address of the data
@@ -2497,8 +2540,8 @@ public class ListingCodeComparisonPanel
 	}
 
 	/**
-	 * Clears the address correlation being used with the ListingDiff and the dual listing
-	 * field panel coordinator.
+	 * Clears the address correlation being used with the ListingDiff and the dual listing field
+	 * panel coordinator.
 	 */
 	private void clearCorrelation() {
 		correlator = null;
@@ -2518,6 +2561,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Gets the data loaded in the left listing panel.
+	 * 
 	 * @return the data or null
 	 */
 	@Override
@@ -2527,6 +2571,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Gets the data loaded in the right listing panel.
+	 * 
 	 * @return the data or null
 	 */
 	@Override
@@ -2562,6 +2607,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Displays the indicated text int the tool's status area.
+	 * 
 	 * @param text the message to display
 	 */
 	void setStatusInfo(String text) {
@@ -2623,8 +2669,9 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Gets the GoToService that is used for either the left listing or the right listing.
-	 * @param isLeftSide true means get the GoToService for the left side listing.
-	 * false means get it for the right side listing.
+	 * 
+	 * @param isLeftSide true means get the GoToService for the left side listing. false means get
+	 *            it for the right side listing.
 	 * @return the goToService
 	 */
 	GoToService getGoToService(boolean isLeftSide) {
@@ -2663,9 +2710,10 @@ public class ListingCodeComparisonPanel
 	}
 
 	/**
-	 * Gets a marker margin or overview margin context object if the mouse event occurred on one
-	 * of the GUI components for the indicated listing panel's marker margin (left edge of listing)
-	 * or overview margin (right edge of listing).
+	 * Gets a marker margin or overview margin context object if the mouse event occurred on one of
+	 * the GUI components for the indicated listing panel's marker margin (left edge of listing) or
+	 * overview margin (right edge of listing).
+	 * 
 	 * @param lp The listing panel to check
 	 * @param event the mouse event
 	 * @return a marker margin context object if the event was on a margin.
@@ -2735,6 +2783,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Restores this panel to the indicated saved configuration state.
+	 * 
 	 * @param prefix identifier to prepend to any save state names to make them unique.
 	 * @param saveState the configuration state to restore
 	 */
@@ -2745,6 +2794,7 @@ public class ListingCodeComparisonPanel
 
 	/**
 	 * Saves the current configuration state of this panel.
+	 * 
 	 * @param prefix identifier to prepend to any save state names to make them unique.
 	 * @param saveState the new configuration state
 	 */

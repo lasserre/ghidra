@@ -20,8 +20,6 @@ import java.lang.reflect.Field;
 import java.util.*;
 import java.util.concurrent.locks.ReadWriteLock;
 
-import com.google.common.collect.*;
-
 import db.*;
 import ghidra.program.model.address.*;
 import ghidra.program.model.data.DataType;
@@ -36,12 +34,13 @@ import ghidra.trace.database.map.*;
 import ghidra.trace.database.map.DBTraceAddressSnapRangePropertyMapTree.AbstractDBTraceAddressSnapRangePropertyMapData;
 import ghidra.trace.database.map.DBTraceAddressSnapRangePropertyMapTree.TraceAddressSnapRangeQuery;
 import ghidra.trace.database.space.DBTraceSpaceKey;
-import ghidra.trace.database.thread.DBTraceThread;
 import ghidra.trace.database.thread.DBTraceThreadManager;
+import ghidra.trace.model.Lifespan;
 import ghidra.trace.model.Trace;
 import ghidra.trace.model.Trace.TraceFunctionTagChangeType;
 import ghidra.trace.model.Trace.TraceSymbolChangeType;
 import ghidra.trace.model.symbol.*;
+import ghidra.trace.model.thread.TraceThread;
 import ghidra.trace.util.TraceChangeRecord;
 import ghidra.util.LockHold;
 import ghidra.util.database.*;
@@ -58,11 +57,6 @@ import ghidra.util.task.TaskMonitor;
  * TODO: See if CALL-type references produce dynamic labels or functions.
  */
 public class DBTraceSymbolManager implements TraceSymbolManager, DBTraceManager {
-	protected static final byte DEFAULT_CALLING_CONVENTION_ID = -1;
-	protected static final byte UNKNOWN_CALLING_CONVENTION_ID = -2;
-
-	protected static final String DEFAULT_CALLING_CONVENTION_NAME = "default";
-	protected static final String UNKNOWN_CALLING_CONVENTION_NAME = "unknown";
 
 	private static final long TYPE_MASK = 0xFF;
 	private static final int TYPE_SHIFT = 64 - 8;
@@ -96,32 +90,6 @@ public class DBTraceSymbolManager implements TraceSymbolManager, DBTraceManager 
 		@Override
 		protected Long getRecordValue() {
 			return symbolID;
-		}
-	}
-
-	@DBAnnotatedObjectInfo(version = 0)
-	public static class DBTraceCallingConventionEntry extends DBAnnotatedObject {
-		static final String TABLE_NAME = "CallingConventions";
-
-		static final String NAME_COLUMN_NAME = "Name";
-
-		@DBAnnotatedColumn(NAME_COLUMN_NAME)
-		static DBObjectColumn NAME_COLUMN;
-
-		@DBAnnotatedField(column = NAME_COLUMN_NAME)
-		String name;
-
-		public DBTraceCallingConventionEntry(DBCachedObjectStore<?> store, DBRecord record) {
-			super(store, record);
-		}
-
-		public void setName(String name) {
-			this.name = name;
-			update(NAME_COLUMN);
-		}
-
-		public String getName() {
-			return name;
 		}
 	}
 
@@ -411,6 +379,8 @@ public class DBTraceSymbolManager implements TraceSymbolManager, DBTraceManager 
 			}
 		};
 
+		public static final List<MySymbolTypes> VALUES = List.of(values());
+
 		abstract boolean isValidParent(DBTraceNamespaceSymbol parent);
 
 		boolean isNoFunctionAncestor(DBTraceNamespaceSymbol parent) {
@@ -430,9 +400,6 @@ public class DBTraceSymbolManager implements TraceSymbolManager, DBTraceManager 
 	protected final DBTraceOverlaySpaceAdapter overlayAdapter;
 
 	protected final DBTraceAddressSnapRangePropertyMap<Long, DBTraceSymbolIDEntry> idMap;
-
-	protected final DBCachedObjectStore<DBTraceCallingConventionEntry> callingConventionStore;
-	protected final BiMap<String, Byte> callingConventionMap = HashBiMap.create();
 
 	protected final DBCachedObjectStore<DBTraceFunctionTag> tagStore;
 	protected final DBCachedObjectIndex<String, DBTraceFunctionTag> tagsByName;
@@ -489,11 +456,6 @@ public class DBTraceSymbolManager implements TraceSymbolManager, DBTraceManager 
 		idMap = new DBTraceAddressSnapRangePropertyMap<>("SymbolIDs", dbh, openMode, lock, monitor,
 			baseLanguage, trace, threadManager, DBTraceSymbolIDEntry.class,
 			DBTraceSymbolIDEntry::new);
-
-		callingConventionStore =
-			factory.getOrCreateCachedStore(DBTraceCallingConventionEntry.TABLE_NAME,
-				DBTraceCallingConventionEntry.class, DBTraceCallingConventionEntry::new, true);
-		loadCallingConventions();
 
 		tagStore = factory.getOrCreateCachedStore(DBTraceFunctionTag.TABLE_NAME,
 			DBTraceFunctionTag.class, (s, r) -> new DBTraceFunctionTag(this, s, r), true);
@@ -566,9 +528,7 @@ public class DBTraceSymbolManager implements TraceSymbolManager, DBTraceManager 
 		if (ptrSize != dataTypeManager.getDataOrganization().getPointerSize()) {
 			return dataTypeManager.getPointer(formal, ptrSize);
 		}
-		else {
-			return dataTypeManager.getPointer(formal);
-		}
+		return dataTypeManager.getPointer(formal);
 	}
 
 	protected <T extends AbstractDBTraceSymbolSingleTypeView<?>> T putInMap(T view) {
@@ -604,25 +564,6 @@ public class DBTraceSymbolManager implements TraceSymbolManager, DBTraceManager 
 		return (symbolID >> KEY_SHIFT) & KEY_MASK;
 	}
 
-	protected void loadCallingConventions() {
-		// NOTE: Should already own write lock
-		for (DBTraceCallingConventionEntry ent : callingConventionStore.asMap().values()) {
-			// NOTE: No need to check. Only called on new or invalidate.
-			callingConventionMap.put(ent.name, (byte) ent.getKey());
-		}
-	}
-
-	protected byte doRecordCallingConvention(String name) {
-		DBTraceCallingConventionEntry ent = callingConventionStore.create();
-		ent.setName(name);
-		return (byte) ent.getKey();
-	}
-
-	protected byte findOrRecordCallingConvention(String name) {
-		// NOTE: Must already have write lock
-		return callingConventionMap.computeIfAbsent(name, this::doRecordCallingConvention);
-	}
-
 	protected int findOrRecordVariableStorage(VariableStorage storage) {
 		DBTraceVariableStorageEntry entry = storageByStorage.getOne(storage);
 		if (entry == null) {
@@ -641,9 +582,6 @@ public class DBTraceSymbolManager implements TraceSymbolManager, DBTraceManager 
 	public void invalidateCache(boolean all) {
 		try (LockHold hold = LockHold.lock(lock.writeLock())) {
 			idMap.invalidateCache(all);
-			callingConventionStore.invalidateCache();
-			callingConventionMap.clear();
-			loadCallingConventions();
 
 			for (AbstractDBTraceSymbolSingleTypeView<?> view : symbolViews.values()) {
 				view.invalidateCache();
@@ -661,14 +599,10 @@ public class DBTraceSymbolManager implements TraceSymbolManager, DBTraceManager 
 		// DataTypes of Function returns, params, locals, globalRegs
 	}
 
-	protected void assertValidThreadAddress(DBTraceThread thread, Address address) {
+	protected void assertValidThreadAddress(TraceThread thread, Address address) {
 		if (thread != null && address.isMemoryAddress()) {
 			throw new IllegalArgumentException(
 				"Memory addresses cannot be associated with a thread");
-		}
-		if (thread == null && address.getAddressSpace().isRegisterSpace()) {
-			throw new IllegalArgumentException(
-				"Register addresses must be associated with a thread");
 		}
 	}
 
@@ -886,7 +820,7 @@ public class DBTraceSymbolManager implements TraceSymbolManager, DBTraceManager 
 
 	protected boolean doDeleteSymbol(AbstractDBTraceSymbol symbol) {
 		byte typeID = symbol.getSymbolType().getID();
-		DBTraceThread thread = symbol.getThread();
+		TraceThread thread = symbol.getThread();
 		AbstractDBTraceSymbol deleted = symbolViews.get(typeID).store.deleteKey(symbol.getKey());
 		if (deleted == null) {
 			return false;
@@ -901,21 +835,21 @@ public class DBTraceSymbolManager implements TraceSymbolManager, DBTraceManager 
 		return true;
 	}
 
-	protected void putID(Range<Long> lifespan, DBTraceThread thread, Address address, long id) {
+	protected void putID(Lifespan lifespan, TraceThread thread, Address address, long id) {
 		idMap.get(DBTraceSpaceKey.create(address.getAddressSpace(), thread, 0), true)
 				.put(address, lifespan, id);
 		// TODO: Add to ancestors' too?
 		// NOTE: Might be hard to remove because of overlaps
 	}
 
-	protected void putID(Range<Long> lifespan, DBTraceThread thread, AddressRange rng, long id) {
+	protected void putID(Lifespan lifespan, TraceThread thread, AddressRange rng, long id) {
 		idMap.get(DBTraceSpaceKey.create(rng.getAddressSpace(), thread, 0), true)
 				.put(rng, lifespan, id);
 		// TODO: Add to ancestors' too?
 		// NOTE: Might be hard to remove because of overlaps
 	}
 
-	protected void delID(DBTraceThread thread, AddressSpace addressSpace, long id) {
+	protected void delID(TraceThread thread, AddressSpace addressSpace, long id) {
 		DBTraceAddressSnapRangePropertyMapSpace<Long, DBTraceSymbolIDEntry> space =
 			idMap.get(DBTraceSpaceKey.create(addressSpace, thread, 0), false);
 		if (space == null) {
@@ -928,8 +862,8 @@ public class DBTraceSymbolManager implements TraceSymbolManager, DBTraceManager 
 		}
 	}
 
-	protected void assertNotDuplicate(AbstractDBTraceSymbol exclude, Range<Long> lifespan,
-			DBTraceThread thread, Address address, String name, DBTraceNamespaceSymbol parent)
+	protected void assertNotDuplicate(AbstractDBTraceSymbol exclude, Lifespan lifespan,
+			TraceThread thread, Address address, String name, DBTraceNamespaceSymbol parent)
 			throws DuplicateNameException {
 		if (address.isMemoryAddress()) {
 			for (AbstractDBTraceSymbol duplicate : labelsAndFunctions.getIntersecting(lifespan,

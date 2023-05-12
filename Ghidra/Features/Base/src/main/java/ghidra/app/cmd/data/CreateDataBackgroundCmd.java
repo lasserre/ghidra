@@ -18,7 +18,8 @@ package ghidra.app.cmd.data;
 import ghidra.framework.cmd.BackgroundCommand;
 import ghidra.framework.model.DomainObject;
 import ghidra.program.model.address.*;
-import ghidra.program.model.data.*;
+import ghidra.program.model.data.DataType;
+import ghidra.program.model.data.DataUtilities;
 import ghidra.program.model.listing.*;
 import ghidra.program.model.util.CodeUnitInsertionException;
 import ghidra.util.Swing;
@@ -125,23 +126,51 @@ public class CreateDataBackgroundCmd extends BackgroundCommand {
 		return true;
 	}
 
+	private static Address alignAddress(Address addr, int alignment) {
+		if (addr == null) {
+			return null;
+		}
+		long mod = addr.getOffset() % alignment;
+		if (mod == 0) {
+			return addr;
+		}
+		try {
+			return addr.addNoWrap(alignment - mod);
+		}
+		catch (AddressOverflowException e) {
+			// ignore
+		}
+		return null;
+	}
+
 	private void createData(Address start, Address end, DataType dataType, Program p,
-			TaskMonitor monitor)
-			throws AddressOverflowException, CodeUnitInsertionException, DataTypeConflictException {
+			TaskMonitor monitor) throws CodeUnitInsertionException {
+
+		int alignment = 1;
+		if (newDataType.getLength() != newDataType.getAlignedLength()) {
+			// datatypes whose length does not match their aligned-length must
+			// be properly aligned to account for padding (e.g., x86-32 80-bit floats)
+			alignment = newDataType.getAlignment();
+		}
+
+		int initialProgress = bytesApplied;
 
 		Listing listing = p.getListing();
 		listing.clearCodeUnits(start, end, false);
-		int length = (int) end.subtract(start) + 1;
-		while (start.compareTo(end) <= 0) {
+		Address nextAddr = alignAddress(start, alignment);
+		int length = (int) end.subtract(nextAddr) + 1;
+		while (nextAddr != null && nextAddr.compareTo(end) <= 0) {
 			if (monitor.isCancelled()) {
 				return;
 			}
 
-			Data d = listing.createData(start, dataType, length);
-			int dataLen = d.getLength();
-			start = start.addNoWrap(dataLen);
-			length -= dataLen;
-			bytesApplied += dataLen;
+			Data d = listing.createData(nextAddr, dataType, length);
+			Address maxDataAddr = d.getMaxAddress();
+			bytesApplied = initialProgress + (int) maxDataAddr.subtract(start) + 1;
+			nextAddr = alignAddress(maxDataAddr.next(), alignment);
+			if (nextAddr != null) {
+				length = (int) end.subtract(nextAddr) + 1;
+			}
 
 			monitor.setProgress(bytesApplied);
 			if (++numDataCreated % 10000 == 0) {

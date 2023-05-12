@@ -30,10 +30,11 @@ public class LocalOptimizedSymbolApplier extends MsSymbolApplier {
 
 	/**
 	 * Constructor
-	 * @param applicator the {@link PdbApplicator} for which we are working.
+	 * @param applicator the {@link DefaultPdbApplicator} for which we are working.
 	 * @param iter the Iterator containing the symbol sequence being processed
 	 */
-	public LocalOptimizedSymbolApplier(PdbApplicator applicator, AbstractMsSymbolIterator iter) {
+	public LocalOptimizedSymbolApplier(DefaultPdbApplicator applicator,
+			AbstractMsSymbolIterator iter) {
 		super(applicator, iter);
 		AbstractMsSymbol abstractSymbol = iter.next();
 		if (!(abstractSymbol instanceof AbstractLocalSymbolInOptimizedCodeMsSymbol)) {
@@ -68,7 +69,7 @@ public class LocalOptimizedSymbolApplier extends MsSymbolApplier {
 		symbol.getTypeRecordNumber();
 		while (iter.hasNext() &&
 			(iter.peek() instanceof AbstractDefinedSingleAddressRangeMsSymbol)) {
-			applicator.checkCanceled();
+			applicator.checkCancelled();
 			DefinedSingleAddressRangeSymbolApplier rangeApplier =
 				new DefinedSingleAddressRangeSymbolApplier(applicator, iter);
 			rangeApplier.applyTo(this);

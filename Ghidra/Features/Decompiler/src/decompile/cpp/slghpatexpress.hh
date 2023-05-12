@@ -13,10 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef __SLGHPATEXPRESS__
-#define __SLGHPATEXPRESS__
+#ifndef __SLGHPATEXPRESS_HH__
+#define __SLGHPATEXPRESS_HH__
 
 #include "slghpattern.hh"
+
+namespace ghidra {
 
 class TokenPattern {
   Pattern *pattern;
@@ -162,6 +164,19 @@ public:
   virtual intb minValue(void) const { return (intb)0; }
   virtual intb maxValue(void) const { return (intb)0; }
   virtual void saveXml(ostream &s) const { s << "<end_exp/>"; }
+  virtual void restoreXml(const Element *el,Translate *trans) {}
+};
+
+class Next2InstructionValue : public PatternValue {
+public:
+  Next2InstructionValue(void) {}
+  virtual intb getValue(ParserWalker &walker) const {
+    return (intb)AddrSpace::byteToAddress(walker.getN2addr().getOffset(),walker.getN2addr().getSpace()->getWordSize()); }
+  virtual TokenPattern genMinPattern(const vector<TokenPattern> &ops) const { return TokenPattern(); }
+  virtual TokenPattern genPattern(intb val) const { return TokenPattern(); }
+  virtual intb minValue(void) const { return (intb)0; }
+  virtual intb maxValue(void) const { return (intb)0; }
+  virtual void saveXml(ostream &s) const { s << "<next2_exp/>"; }
   virtual void restoreXml(const Element *el,Translate *trans) {}
 };
 
@@ -471,4 +486,5 @@ public:
   virtual void operandOrder(Constructor *ct,vector<OperandSymbol *> &order) const;
 };
 
+} // End namespace ghidra
 #endif

@@ -15,10 +15,11 @@
  */
 package ghidra.app.plugin.core.codebrowser;
 
-import javax.swing.ImageIcon;
+import javax.swing.Icon;
 
 import docking.action.builder.ActionBuilder;
 import docking.tool.ToolConstants;
+import generic.theme.GIcon;
 import ghidra.GhidraOptions;
 import ghidra.app.CorePluginPackage;
 import ghidra.app.plugin.PluginCategoryNames;
@@ -38,7 +39,6 @@ import ghidra.util.datastruct.Accumulator;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.table.*;
 import ghidra.util.task.TaskMonitor;
-import resources.ResourceManager;
 
 /**
  * Plugin for adding some basic selection actions for Code Browser Listings.
@@ -55,6 +55,7 @@ import resources.ResourceManager;
 //@formatter:on
 public class CodeBrowserSelectionPlugin extends Plugin {
 
+	private static final String SELECT_GROUP = "Select Group";
 	private static final String SELECTION_LIMIT_OPTION_NAME = "Table From Selection Limit";
 
 	public CodeBrowserSelectionPlugin(PluginTool tool) {
@@ -65,7 +66,7 @@ public class CodeBrowserSelectionPlugin extends Plugin {
 	private void createActions() {
 		new ActionBuilder("Select All", getName())
 				.menuPath(ToolConstants.MENU_SELECTION, "&All in View")
-				.menuGroup("Select Group", "a")
+				.menuGroup(SELECT_GROUP, "a")
 				.keyBinding("ctrl A")
 				.supportsDefaultToolContext(true)
 				.helpLocation(new HelpLocation(HelpTopics.SELECTION, "Select All"))
@@ -76,7 +77,7 @@ public class CodeBrowserSelectionPlugin extends Plugin {
 
 		new ActionBuilder("Clear Selection", getName())
 				.menuPath(ToolConstants.MENU_SELECTION, "&Clear Selection")
-				.menuGroup("Select Group", "b")
+				.menuGroup(SELECT_GROUP, "b")
 				.supportsDefaultToolContext(true)
 				.helpLocation(new HelpLocation(HelpTopics.SELECTION, "Clear Selection"))
 				.withContext(CodeViewerActionContext.class)
@@ -87,13 +88,15 @@ public class CodeBrowserSelectionPlugin extends Plugin {
 
 		new ActionBuilder("Select Complement", getName())
 				.menuPath(ToolConstants.MENU_SELECTION, "&Complement")
-				.menuGroup("Select Group", "c")
+				.menuGroup(SELECT_GROUP, "c")
 				.supportsDefaultToolContext(true)
 				.helpLocation(new HelpLocation(HelpTopics.SELECTION, "Select Complement"))
 				.withContext(CodeViewerActionContext.class)
 				.inWindow(ActionBuilder.When.CONTEXT_MATCHES)
 				.onAction(c -> ((CodeViewerProvider) c.getComponentProvider()).selectComplement())
 				.buildAndInstall(tool);
+
+		tool.addAction(new MarkAndSelectionAction(getName(), SELECT_GROUP, "d"));
 
 		new ActionBuilder("Create Table From Selection", getName())
 				.menuPath(ToolConstants.MENU_SELECTION, "Create Table From Selection")
@@ -104,6 +107,7 @@ public class CodeBrowserSelectionPlugin extends Plugin {
 				.inWindow(ActionBuilder.When.CONTEXT_MATCHES)
 				.onAction(c -> createTable((CodeViewerProvider) c.getComponentProvider()))
 				.buildAndInstall(tool);
+
 	}
 
 	private void createTable(CodeViewerProvider componentProvider) {
@@ -125,7 +129,7 @@ public class CodeBrowserSelectionPlugin extends Plugin {
 
 		GhidraProgramTableModel<Address> model = createTableModel(program, codeUnits, selection);
 		String title = "Selection Table";
-		ImageIcon markerIcon = ResourceManager.loadImage("images/searchm_obj.gif");
+		Icon markerIcon = new GIcon("icon.plugin.codebrowser.cursor.marker");
 		TableComponentProvider<Address> tableProvider =
 			tableService.showTableWithMarkers(title + " " + model.getName(), "Selection",
 				model, PluginConstants.SEARCH_HIGHLIGHT_COLOR, markerIcon, title, null);
@@ -172,7 +176,7 @@ public class CodeBrowserSelectionPlugin extends Plugin {
 							"\".");
 					break;
 				}
-				monitor.checkCanceled();
+				monitor.checkCancelled();
 				CodeUnit cu = iterator.next();
 				accumulator.add(cu.getMinAddress());
 				monitor.incrementProgress(cu.getLength());

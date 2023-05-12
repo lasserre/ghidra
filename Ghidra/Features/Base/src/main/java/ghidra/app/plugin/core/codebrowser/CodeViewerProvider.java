@@ -20,6 +20,7 @@ import java.awt.Point;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
 import java.awt.dnd.*;
+import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.*;
 
@@ -36,16 +37,18 @@ import docking.widgets.fieldpanel.FieldPanel;
 import docking.widgets.fieldpanel.HoverHandler;
 import docking.widgets.fieldpanel.internal.FieldPanelCoordinator;
 import docking.widgets.fieldpanel.support.*;
+import generic.theme.GIcon;
 import ghidra.app.nav.*;
 import ghidra.app.plugin.core.clipboard.CodeBrowserClipboardProvider;
 import ghidra.app.plugin.core.codebrowser.actions.*;
 import ghidra.app.plugin.core.codebrowser.hover.ListingHoverService;
 import ghidra.app.services.*;
 import ghidra.app.util.*;
-import ghidra.app.util.viewer.field.FieldFactory;
+import ghidra.app.util.viewer.field.ListingField;
 import ghidra.app.util.viewer.format.*;
 import ghidra.app.util.viewer.listingpanel.*;
 import ghidra.app.util.viewer.multilisting.MultiListingLayoutModel;
+import ghidra.app.util.viewer.options.ListingDisplayOptionsEditor;
 import ghidra.app.util.viewer.util.FieldNavigator;
 import ghidra.framework.options.SaveState;
 import ghidra.framework.plugintool.NavigatableComponentProviderAdapter;
@@ -55,7 +58,6 @@ import ghidra.program.model.listing.*;
 import ghidra.program.util.*;
 import ghidra.util.HelpLocation;
 import ghidra.util.Swing;
-import resources.ResourceManager;
 
 public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 		implements ProgramLocationListener, ProgramSelectionListener, Draggable, Droppable,
@@ -66,18 +68,18 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 	private static final String TITLE = NAME + ": ";
 
 	private static final Icon LISTING_FORMAT_EXPAND_ICON =
-		ResourceManager.loadImage("images/field.header.down.png");
+		new GIcon("icon.plugin.codebrowser.format.expand");
 	private static final Icon LISTING_FORMAT_COLLAPSE_ICON =
-		ResourceManager.loadImage("images/field.header.up.png");
+		new GIcon("icon.plugin.codebrowser.format.collapse");
 
-	private static final Icon HOVER_ON_ICON = ResourceManager.loadImage("images/hoverOn.gif");
-	private static final Icon HOVER_OFF_ICON = ResourceManager.loadImage("images/hoverOff.gif");
+	private static final Icon HOVER_ON_ICON = new GIcon("icon.plugin.codebrowser.hover.on");
+	private static final Icon HOVER_OFF_ICON = new GIcon("icon.plugin.codebrowser.hover.off");
 	private static final String HOVER_MODE = "Hover Mode";
 
 	private static final String DIVIDER_LOCATION = "DividerLocation";
 
 	private ImageIcon navigatableIcon;
-	private Map<Program, HighlightProvider> programHighlighterMap = new HashMap<>();
+	private Map<Program, ListingHighlightProvider> programHighlighterMap = new HashMap<>();
 	private ProgramHighlighterProvider highlighterAdapter;
 
 	private ListingPanel listingPanel;
@@ -99,6 +101,8 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 	private CoordinatedListingPanelListener coordinatedListingPanelListener;
 	private FormatManager formatMgr;
 	private FieldPanelCoordinator coordinator;
+
+	private FocusingMouseListener focusingMouseListener;
 
 	private CodeBrowserClipboardProvider codeViewerClipboardProvider;
 	private ClipboardService clipboardService;
@@ -125,9 +129,9 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 		// note: the owner has not changed, just the name; remove sometime after version 10
 		String owner = plugin.getName();
 		ComponentProvider.registerProviderNameOwnerChange(OLD_NAME, owner, NAME, owner);
-
+		registerAdjustableFontId(ListingDisplayOptionsEditor.DEFAULT_FONT_ID);
 		setConnected(isConnected);
-		setIcon(ResourceManager.loadImage("images/Browser.gif"));
+		setIcon(new GIcon("icon.plugin.codebrowser.provider"));
 		if (!isConnected) {
 			setTransient();
 		}
@@ -140,7 +144,7 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 		listingPanel = new ListingPanel(formatMgr);
 		listingPanel.enablePropertyBasedColorModel(true);
 		decorationPanel = new ListingPanelContainer(listingPanel, isConnected);
-		ListingHighlightProvider listingHighlighter =
+		ListingMiddleMouseHighlightProvider listingHighlighter =
 			createListingHighlighter(listingPanel, tool, decorationPanel);
 		highlighterAdapter = new ProgramHighlighterProvider(listingHighlighter);
 		listingPanel.addHighlightProvider(highlighterAdapter);
@@ -168,7 +172,7 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 
 	@Override
 	public boolean isSnapshot() {
-		// we are a snapshot when we are 'disconnected' 
+		// we are a snapshot when we are 'disconnected'
 		return !isConnected();
 	}
 
@@ -183,17 +187,17 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 	 * TODO: Remove or rename this to something that accommodates redirecting writes, e.g., to a
 	 * debug target process, particularly for assembly, which may involve code unit modification
 	 * after a successful write, reported asynchronously :/ .
-	 * 
+	 *
 	 * @return true if this listing represents a read-only view
 	 */
 	public boolean isReadOnly() {
 		return false;
 	}
 
-	private ListingHighlightProvider createListingHighlighter(ListingPanel panel,
+	private ListingMiddleMouseHighlightProvider createListingHighlighter(ListingPanel panel,
 			PluginTool pluginTool, Component repaintComponent) {
-		ListingHighlightProvider listingHighlighter =
-			new ListingHighlightProvider(pluginTool, repaintComponent);
+		ListingMiddleMouseHighlightProvider listingHighlighter =
+			new ListingMiddleMouseHighlightProvider(pluginTool, repaintComponent);
 		panel.addButtonPressedListener(listingHighlighter);
 		return listingHighlighter;
 	}
@@ -394,14 +398,14 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 	}
 
 	@Override
-	public void removeHighlightProvider(HighlightProvider highlightProvider,
+	public void removeHighlightProvider(ListingHighlightProvider highlightProvider,
 			Program highlightProgram) {
 		programHighlighterMap.remove(highlightProgram);
 		updateHighlightProvider();
 	}
 
 	@Override
-	public void setHighlightProvider(HighlightProvider highlightProvider,
+	public void setHighlightProvider(ListingHighlightProvider highlightProvider,
 			Program highlightProgram) {
 		programHighlighterMap.put(highlightProgram, highlightProvider);
 		updateHighlightProvider();
@@ -524,7 +528,10 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 	}
 
 	@Override
-	public void programSelectionChanged(ProgramSelection selection) {
+	public void programSelectionChanged(ProgramSelection selection, EventTrigger trigger) {
+		if (trigger != EventTrigger.GUI_ACTION) {
+			return;
+		}
 		doSetSelection(selection);
 	}
 
@@ -707,7 +714,7 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 
 	/**
 	 * Extension point to specify titles when dual panels are active
-	 * 
+	 *
 	 * @param panelProgram the program assigned to the panel whose title is requested
 	 * @return the title of the panel for the given program
 	 */
@@ -754,7 +761,7 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 	public void clearPanel() {
 		if (otherPanel != null) {
 			removeHoverServices(otherPanel);
-			programSelectionChanged(new ProgramSelection());
+			programSelectionChanged(new ProgramSelection(), EventTrigger.GUI_ACTION);
 			FieldPanel fp = listingPanel.getFieldPanel();
 			FieldLocation loc = fp.getCursorLocation();
 			ViewerPosition vp = fp.getViewerPosition();
@@ -993,11 +1000,68 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 		return null;
 	}
 
+	/**
+	 * Add the {@link AddressSetDisplayListener} to the listing panel
+	 *
+	 * @param listener the listener to add
+	 */
+	public void addDisplayListener(AddressSetDisplayListener listener) {
+		listingPanel.addDisplayListener(listener);
+	}
+
+	/**
+	 * Remove the {@link AddressSetDisplayListener} from the listing panel
+	 *
+	 * @param listener the listener to remove
+	 */
+	public void removeDisplayListener(AddressSetDisplayListener listener) {
+		listingPanel.removeDisplayListener(listener);
+	}
+
+	private synchronized void createFocusingMouseListener() {
+		if (focusingMouseListener == null) {
+			focusingMouseListener = new FocusingMouseListener();
+		}
+	}
+
+	public void addOverviewProvider(OverviewProvider overviewProvider) {
+		createFocusingMouseListener();
+		JComponent component = overviewProvider.getComponent();
+
+		// just in case we get repeated calls
+		component.removeMouseListener(focusingMouseListener);
+		component.addMouseListener(focusingMouseListener);
+		overviewProvider.setNavigatable(this);
+		getListingPanel().addOverviewProvider(overviewProvider);
+	}
+
+	public void addMarginProvider(MarginProvider marginProvider) {
+		createFocusingMouseListener();
+		JComponent component = marginProvider.getComponent();
+
+		// just in case we get repeated calls
+		component.removeMouseListener(focusingMouseListener);
+		component.addMouseListener(focusingMouseListener);
+		getListingPanel().addMarginProvider(marginProvider);
+	}
+
+	public void removeOverviewProvider(OverviewProvider overviewProvider) {
+		JComponent component = overviewProvider.getComponent();
+		component.removeMouseListener(focusingMouseListener);
+		getListingPanel().removeOverviewProvider(overviewProvider);
+	}
+
+	public void removeMarginProvider(MarginProvider marginProvider) {
+		JComponent component = marginProvider.getComponent();
+		component.removeMouseListener(focusingMouseListener);
+		getListingPanel().removeMarginProvider(marginProvider);
+	}
+
 //==================================================================================================
 // Inner Classes
 //==================================================================================================
 
-	class ToggleHeaderAction extends ToggleDockingAction {
+	private class ToggleHeaderAction extends ToggleDockingAction {
 		ToggleHeaderAction() {
 			super("Toggle Header", plugin.getName());
 			setEnabled(true);
@@ -1031,7 +1095,7 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 			setHover(isSelected());
 		}
 
-		void setHover(boolean enabled) {
+		private void setHover(boolean enabled) {
 			getToolBarData().setIcon(enabled ? HOVER_ON_ICON : HOVER_OFF_ICON);
 			setHoverEnabled(enabled);
 		}
@@ -1041,23 +1105,23 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 	 * A class that allows clients to install transient highlighters while keeping the middle-mouse
 	 * highlighting on at the same time.
 	 */
-	private class ProgramHighlighterProvider implements HighlightProvider {
+	private class ProgramHighlighterProvider implements ListingHighlightProvider {
 
-		private final ListingHighlightProvider listingHighlighter;
+		private final ListingMiddleMouseHighlightProvider listingHighlighter;
 
-		ProgramHighlighterProvider(ListingHighlightProvider listingHighlighter) {
+		ProgramHighlighterProvider(ListingMiddleMouseHighlightProvider listingHighlighter) {
 			this.listingHighlighter = listingHighlighter;
 		}
 
 		@Override
-		public Highlight[] getHighlights(String text, Object obj,
-				Class<? extends FieldFactory> fieldFactoryClass, int cursorTextOffset) {
+		public Highlight[] createHighlights(String text, ListingField field, int cursorTextOffset) {
 
 			List<Highlight> list = new ArrayList<>();
-			HighlightProvider currentExternalHighligter = programHighlighterMap.get(program);
+			ListingHighlightProvider currentExternalHighligter =
+				programHighlighterMap.get(program);
 			if (currentExternalHighligter != null) {
-				Highlight[] highlights = currentExternalHighligter.getHighlights(text, obj,
-					fieldFactoryClass, cursorTextOffset);
+				Highlight[] highlights = currentExternalHighligter.createHighlights(text, field,
+					cursorTextOffset);
 				for (Highlight highlight : highlights) {
 					list.add(highlight);
 				}
@@ -1066,7 +1130,7 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 			// always call the listing highlighter last so the middle-mouse highlight will always
 			// be on top of other highlights
 			Highlight[] highlights =
-				listingHighlighter.getHighlights(text, obj, fieldFactoryClass, cursorTextOffset);
+				listingHighlighter.createHighlights(text, field, cursorTextOffset);
 			for (Highlight highlight : highlights) {
 				list.add(highlight);
 			}
@@ -1075,21 +1139,10 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 		}
 	}
 
-	/**
-	 * Add the {@link AddressSetDisplayListener} to the listing panel
-	 * 
-	 * @param listener the listener to add
-	 */
-	public void addDisplayListener(AddressSetDisplayListener listener) {
-		listingPanel.addDisplayListener(listener);
-	}
-
-	/**
-	 * Remove the {@link AddressSetDisplayListener} from the listing panel
-	 * 
-	 * @param listener the listener to remove
-	 */
-	public void removeDisplayListener(AddressSetDisplayListener listener) {
-		listingPanel.removeDisplayListener(listener);
+	private class FocusingMouseListener extends MouseAdapter {
+		@Override
+		public void mousePressed(MouseEvent e) {
+			getListingPanel().getFieldPanel().requestFocus();
+		}
 	}
 }

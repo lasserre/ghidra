@@ -69,8 +69,14 @@ public class DataTypeNode extends DataTypeTreeNode {
 		if (getClass() != o.getClass()) {
 			return false;
 		}
+
 		DataTypeNode otherNode = (DataTypeNode) o;
-		return dataType.equals(otherNode.dataType) && name.equals(otherNode.name);
+		CategoryPath otherPath = otherNode.getDataType().getCategoryPath();
+		CategoryPath path = dataType.getCategoryPath();
+		if (!path.equals(otherPath)) {
+			return false;
+		}
+		return name.equals(otherNode.name);
 	}
 
 	@Override
@@ -162,6 +168,7 @@ public class DataTypeNode extends DataTypeTreeNode {
 	/**
 	 * Returns true if this dataType node uses and editor that is different than Java's default
 	 * editor.
+	 * 
 	 * @return true if this dataType node has a custom editor.
 	 */
 	public boolean hasCustomEditor() {
@@ -194,7 +201,7 @@ public class DataTypeNode extends DataTypeTreeNode {
 	@Override
 	public void setNodeCut(boolean isCut) {
 		this.isCut = isCut;
-		fireNodeChanged(getParent(), this);
+		fireNodeChanged();
 	}
 
 	@Override
@@ -204,11 +211,7 @@ public class DataTypeNode extends DataTypeTreeNode {
 
 	@Override
 	public boolean canPaste(List<GTreeNode> pastedNodes) {
-		if (pastedNodes.size() != 1) {
-			return false;
-		}
-		GTreeNode pastedNode = pastedNodes.get(0);
-		return pastedNode instanceof DataTypeNode;
+		return isModifiable();
 	}
 
 	@Override
@@ -238,12 +241,12 @@ public class DataTypeNode extends DataTypeTreeNode {
 	}
 
 	public void dataTypeStatusChanged() {
-		fireNodeChanged(getParent(), this);
+		fireNodeChanged();
 	}
 
 	public void dataTypeChanged() {
 		toolTipText = null;
-		fireNodeChanged(getParent(), this);
+		fireNodeChanged();
 		GTree tree = getTree();
 		if (tree != null) {
 			tree.repaint(); // need to repaint in case related datatypes changes mod status.
@@ -252,12 +255,12 @@ public class DataTypeNode extends DataTypeTreeNode {
 
 	@Override
 	public String getDisplayText() {
-		// note: we have to check the name each time, as the optional underlying 
+		// note: we have to check the name each time, as the optional underlying
 		//       source archive may have changed.
 		String currentDisplayText = getCurrentDisplayText();
 		if (!displayText.equals(currentDisplayText)) {
 			displayText = currentDisplayText;
-			fireNodeChanged(getParent(), this);
+			fireNodeChanged();
 		}
 		return displayText;
 	}

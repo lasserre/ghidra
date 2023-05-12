@@ -20,6 +20,7 @@ import java.awt.event.ActionListener;
 import javax.swing.*;
 
 import docking.action.*;
+import docking.widgets.table.GTable;
 import ghidra.framework.plugintool.Plugin;
 import ghidra.framework.plugintool.PluginTool;
 import ghidra.util.HelpLocation;
@@ -45,7 +46,7 @@ abstract public class CompositeEditorTableAction extends DockingAction implement
 	public static final String EDIT_ACTION_PREFIX = "Editor: ";
 
 	public CompositeEditorTableAction(CompositeEditorProvider provider, String name, String group,
-			String[] popupPath, String[] menuPath, ImageIcon icon) {
+			String[] popupPath, String[] menuPath, Icon icon) {
 		super(name, provider.plugin.getName(), KeyBindingType.SHARED);
 		this.provider = provider;
 		model = provider.getModel();
@@ -79,12 +80,18 @@ abstract public class CompositeEditorTableAction extends DockingAction implement
 		if (provider == null) {
 			return; // must have been disposed
 		}
+
 		JTable table = ((CompositeEditorPanel) provider.getComponent()).getTable();
-		if (table.isEditing()) {
-			table.getEditorComponent().requestFocus();
+		if (!table.isEditing()) {
+			table.requestFocus();
+			return;
+		}
+
+		if (table instanceof GTable gTable) {
+			gTable.requestTableEditorFocus();
 		}
 		else {
-			table.requestFocus();
+			table.getEditorComponent().requestFocus();
 		}
 	}
 

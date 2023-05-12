@@ -19,13 +19,12 @@ import java.util.*;
 
 import org.junit.*;
 
+import db.Transaction;
 import ghidra.app.plugin.core.debug.service.modules.DebuggerStaticMappingServicePlugin;
 import ghidra.app.plugin.core.debug.service.tracemgr.DebuggerTraceManagerServicePlugin;
 import ghidra.app.plugin.core.progmgr.ProgramManagerPlugin;
-import ghidra.app.services.DebuggerStaticMappingService.ModuleMapEntry;
-import ghidra.app.services.DebuggerStaticMappingService.ModuleMapProposal;
-import ghidra.app.services.DebuggerTraceManagerService;
-import ghidra.app.services.ProgramManager;
+import ghidra.app.services.*;
+import ghidra.app.services.ModuleMapProposal.ModuleMapEntry;
 import ghidra.framework.model.DomainFolder;
 import ghidra.program.database.ProgramBuilder;
 import ghidra.program.model.address.Address;
@@ -33,7 +32,6 @@ import ghidra.program.model.listing.Program;
 import ghidra.test.ToyProgramBuilder;
 import ghidra.trace.database.ToyDBTraceBuilder;
 import ghidra.trace.model.modules.TraceModule;
-import ghidra.util.database.UndoableTransaction;
 import ghidra.util.task.TaskMonitor;
 import help.screenshot.GhidraScreenShotGenerator;
 
@@ -78,7 +76,7 @@ public class DebuggerStaticMappingPluginScreenShots extends GhidraScreenShotGene
 	@Test
 	public void testCaptureDebuggerStaticMappingPlugin() throws Throwable {
 		DomainFolder root = tool.getProject().getProjectData().getRootFolder();
-		try (UndoableTransaction tid = tb.startTransaction()) {
+		try (Transaction tx = tb.startTransaction()) {
 			long snap = tb.trace.getTimeManager().createSnapshot("First").getKey();
 
 			TraceModule bin = tb.trace.getModuleManager()
@@ -96,7 +94,7 @@ public class DebuggerStaticMappingPluginScreenShots extends GhidraScreenShotGene
 		progEcho = createDefaultProgram("bash", ProgramBuilder._X64, this);
 		progLibC = createDefaultProgram("libc.so.6", ProgramBuilder._X64, this);
 
-		try (UndoableTransaction tid = UndoableTransaction.start(progEcho, "Add memory", true)) {
+		try (Transaction tx = progEcho.openTransaction("Add memory")) {
 			progEcho.setImageBase(addr(progEcho, 0x00400000), true);
 			progEcho.getMemory()
 					.createInitializedBlock(".text", addr(progEcho, 0x00400000), 0x10000, (byte) 0,
@@ -106,7 +104,7 @@ public class DebuggerStaticMappingPluginScreenShots extends GhidraScreenShotGene
 						TaskMonitor.DUMMY, false);
 		}
 
-		try (UndoableTransaction tid = UndoableTransaction.start(progLibC, "Add memory", true)) {
+		try (Transaction tx = progLibC.openTransaction("Add memory")) {
 			progLibC.setImageBase(addr(progLibC, 0x00400000), true);
 			progLibC.getMemory()
 					.createInitializedBlock(".text", addr(progLibC, 0x00400000), 0x10000, (byte) 0,
@@ -126,11 +124,11 @@ public class DebuggerStaticMappingPluginScreenShots extends GhidraScreenShotGene
 		programManager.openProgram(progEcho);
 		programManager.openProgram(progLibC);
 
-		try (UndoableTransaction tid = tb.startTransaction()) {
+		try (Transaction tx = tb.startTransaction()) {
 			Map<TraceModule, ModuleMapProposal> proposal =
 				mappingService.proposeModuleMaps(tb.trace.getModuleManager().getAllModules(),
 					List.of(programManager.getAllOpenPrograms()));
-			Collection<ModuleMapEntry> entries = ModuleMapProposal.flatten(proposal.values());
+			Collection<ModuleMapEntry> entries = MapProposal.flatten(proposal.values());
 			mappingService.addModuleMappings(entries, TaskMonitor.DUMMY, false);
 		}
 

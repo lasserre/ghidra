@@ -15,11 +15,10 @@
  */
 package ghidra.plugin.importer;
 
-import java.util.*;
-
 import java.awt.Window;
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.*;
 
 import docking.widgets.OptionDialog;
 import ghidra.app.plugin.core.help.AboutDomainObjectUtils;
@@ -34,7 +33,6 @@ import ghidra.formats.gfilesystem.*;
 import ghidra.framework.main.AppInfo;
 import ghidra.framework.main.FrontEndTool;
 import ghidra.framework.model.*;
-import ghidra.framework.options.Options;
 import ghidra.framework.plugintool.PluginTool;
 import ghidra.plugins.importer.batch.BatchImportDialog;
 import ghidra.program.model.lang.LanguageCompilerSpecPair;
@@ -84,41 +82,6 @@ public class ImporterUtilities {
 			}
 		}
 		return CollectionUtils.asList(pairs);
-	}
-
-	/**
-	 * Ensure that a {@link Program}'s metadata includes its import origin.
-	 *
-	 * @param program imported {@link Program} to modify
-	 * @param fsrl {@link FSRL} of the import source.
-	 * @param monitor {@link TaskMonitor} to use when accessing filesystem stuff.
-	 * @throws CancelledException if user cancels
-	 * @throws IOException if IO error
-	 */
-	public static void setProgramProperties(Program program, FSRL fsrl, TaskMonitor monitor)
-			throws CancelledException, IOException {
-
-		Objects.requireNonNull(monitor);
-
-		int id = program.startTransaction("setImportProperties");
-		try {
-			fsrl = fsService.getFullyQualifiedFSRL(fsrl, monitor);
-
-			Options propertyList = program.getOptions(Program.PROGRAM_INFO);
-			if (!propertyList.contains(ProgramMappingService.PROGRAM_SOURCE_FSRL)) {
-				propertyList.setString(ProgramMappingService.PROGRAM_SOURCE_FSRL, fsrl.toString());
-			}
-			String md5 = program.getExecutableMD5();
-			if ((md5 == null || md5.isEmpty()) && fsrl.getMD5() != null) {
-				program.setExecutableMD5(fsrl.getMD5());
-			}
-		}
-		finally {
-			program.endTransaction(id, true);
-		}
-		if (program.canSave()) {
-			program.save("Added import properties", monitor);
-		}
 	}
 
 	/**
@@ -347,8 +310,19 @@ public class ImporterUtilities {
 					doFSImportHelper((GFileSystemProgramProvider) refdFile.fsRef.getFilesystem(),
 						gfile, destFolder, consumer, monitor);
 				if (program != null) {
-					doPostImportProcessing(tool, programManager, fsrl, Arrays.asList(program),
-						consumer, "", monitor);
+					LoadResults<? extends DomainObject> loadResults = new LoadResults<>(program,
+						program.getName(), destFolder.getPathname());
+					boolean success = false;
+					try {
+						doPostImportProcessing(tool, programManager, fsrl, loadResults, consumer,
+							"", monitor);
+						success = true;
+					}
+					finally {
+						if (!success) {
+							program.release(consumer);
+						}
+					}
 				}
 			}
 			catch (Exception e) {
@@ -367,16 +341,25 @@ public class ImporterUtilities {
 		Program program =
 			pfs.getProgram(gfile, DefaultLanguageService.getLanguageService(), monitor, consumer);
 
-		if (program != null) {
+		if (program == null) {
+			return null;
+		}
+
+		boolean success = false;
+		try {
 			String importFilename = ProjectDataUtils.getUniqueName(destFolder, program.getName());
 			if (importFilename == null) {
-				program.release(consumer);
 				throw new IOException("Unable to find unique name for " + program.getName());
 			}
-
 			destFolder.createFile(importFilename, program, monitor);
+			success = true;
+			return program;
 		}
-		return program;
+		finally {
+			if (!success) {
+				program.release(consumer);
+			}
+		}
 
 	}
 
@@ -401,13 +384,13 @@ public class ImporterUtilities {
 
 			Object consumer = new Object();
 			MessageLog messageLog = new MessageLog();
-			List<DomainObject> importedObjects = loadSpec.getLoader().load(bp, programName,
-				destFolder, loadSpec, options, messageLog, consumer, monitor);
-			if (importedObjects == null) {
-				return;
-			}
+			LoadResults<? extends DomainObject> loadResults = loadSpec.getLoader()
+					.load(bp, programName, tool.getProject(), destFolder.getPathname(), loadSpec,
+						options, messageLog, consumer, monitor);
 
-			doPostImportProcessing(tool, programManager, fsrl, importedObjects, consumer,
+			loadResults.save(tool.getProject(), consumer, messageLog, monitor);
+
+			doPostImportProcessing(tool, programManager, fsrl, loadResults, consumer,
 				messageLog.toString(), monitor);
 		}
 		catch (CancelledException e) {
@@ -420,34 +403,32 @@ public class ImporterUtilities {
 	}
 
 	private static Set<DomainFile> doPostImportProcessing(PluginTool pluginTool,
-			ProgramManager programManager, FSRL fsrl, List<DomainObject> importedObjects,
-			Object consumer, String importMessages, TaskMonitor monitor)
-			throws CancelledException, IOException {
+			ProgramManager programManager, FSRL fsrl,
+			LoadResults<? extends DomainObject> loadResults, Object consumer, String importMessages,
+			TaskMonitor monitor) throws CancelledException {
 
 		boolean firstProgram = true;
 		Set<DomainFile> importedFilesSet = new HashSet<>();
-		for (DomainObject importedObject : importedObjects) {
-			monitor.checkCanceled();
+		for (Loaded<? extends DomainObject> loaded : loadResults) {
+			monitor.checkCancelled();
 
-			if (importedObject instanceof Program) {
-				Program program = (Program) importedObject;
-
-				setProgramProperties(program, fsrl, monitor);
+			if (loaded.getDomainObject() instanceof Program program) {
 				ProgramMappingService.createAssociation(fsrl, program);
 
 				if (programManager != null) {
-					int openState =
-						firstProgram ? ProgramManager.OPEN_CURRENT : ProgramManager.OPEN_VISIBLE;
+					int openState = firstProgram
+							? ProgramManager.OPEN_CURRENT
+							: ProgramManager.OPEN_VISIBLE;
 					programManager.openProgram(program, openState);
 				}
 				importedFilesSet.add(program.getDomainFile());
 			}
 			if (firstProgram) {
 				// currently we only show results for the imported program, not any libraries
-				displayResults(pluginTool, importedObject, importedObject.getDomainFile(),
-					importMessages);
+				displayResults(pluginTool, loaded.getDomainObject(),
+					loaded.getDomainObject().getDomainFile(), importMessages);
 			}
-			importedObject.release(consumer);
+			loaded.release(consumer);
 			firstProgram = false;
 		}
 

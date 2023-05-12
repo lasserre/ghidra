@@ -15,6 +15,10 @@
  */
 package ghidra.program.model.lang;
 
+import static ghidra.program.model.pcode.AttributeId.*;
+import static ghidra.program.model.pcode.ElementId.*;
+
+import java.io.IOException;
 import java.util.*;
 import java.util.Map.Entry;
 
@@ -22,8 +26,7 @@ import ghidra.app.plugin.processors.sleigh.VarnodeData;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressSpace;
 import ghidra.program.model.data.*;
-import ghidra.program.model.pcode.AddressXML;
-import ghidra.program.model.pcode.Varnode;
+import ghidra.program.model.pcode.*;
 import ghidra.util.SystemUtilities;
 import ghidra.util.xml.SpecXmlUtils;
 import ghidra.xml.*;
@@ -39,6 +42,7 @@ public class ParamEntry {
 	//private static final int EXTRACHECK_HIGH = 128;
 	//private static final int EXTRACHECK_LOW = 256;
 	private static final int IS_GROUPED = 512;			// The entry is grouped with other entries
+	private static final int OVERLAPPING = 0x100;		// This overlaps an earlier entry
 
 	public static final int TYPE_UNKNOWN = 8;			// Default type restriction
 	public static final int TYPE_PTR = 2;				// pointer types
@@ -46,8 +50,7 @@ public class ParamEntry {
 
 	private int flags;
 	private int type;				// Restriction on DataType this entry must match
-	private int group;				// Group of (mutually exclusive) entries that this entry belongs to
-	private int groupsize;			// The number of consecutive groups taken by the entry
+	private int[] groupSet;			// Group(s) this entry belongs to
 	private AddressSpace spaceid;	// Space of this range
 	private long addressbase;		// Start of the range
 	private int size;				// size of the range
@@ -57,15 +60,16 @@ public class ParamEntry {
 	private Varnode[] joinrec;
 
 	public ParamEntry(int grp) {	// For use with restoreXml
-		group = grp;
+		groupSet = new int[1];
+		groupSet[0] = grp;
 	}
 
 	public int getGroup() {
-		return group;
+		return groupSet[0];
 	}
 
-	public int getGroupSize() {
-		return groupsize;
+	public int[] getAllGroups() {
+		return groupSet;
 	}
 
 	public int getSize() {
@@ -100,6 +104,10 @@ public class ParamEntry {
 		return ((flags & IS_GROUPED) != 0);
 	}
 
+	public boolean isOverlap() {
+		return ((flags & OVERLAPPING) != 0);
+	}
+
 	public boolean isBigEndian() {
 		return ((flags & IS_BIG_ENDIAN) != 0);
 	}
@@ -112,40 +120,123 @@ public class ParamEntry {
 		return (((flags & IS_BIG_ENDIAN) == 0) || ((flags & FORCE_LEFT_JUSTIFY) != 0));
 	}
 
-	/**
-	 * @return true if at least one piece of a join doesn't overlap with another ParamEntry
-	 */
-	public boolean isNonOverlappingJoin() {
-		if (joinrec == null) {
-			return false;
-		}
-		return (joinrec.length != groupsize);
-	}
-
 	public AddressSpace getSpace() {
 		return spaceid;
 	}
 
-	public Varnode[] getJoinRecord() {
-		return joinrec;
+	/**
+	 * Collect pieces from the join list, in endian order, until the given size is covered.
+	 * The last piece is trimmed to match the size exactly.  If the size is too big to be
+	 * covered by this ParamEntry, null is returned.
+	 * @param sz is the given size
+	 * @return the collected array of Varnodes or null
+	 */
+	public Varnode[] getJoinPieces(int sz) {
+		int num = 0;
+		int first, replace;
+		Varnode vn = null;
+		Varnode[] res;
+		if (isBigEndian()) {
+			first = 0;
+			while (sz > 0) {
+				if (num >= joinrec.length) {
+					return null;
+				}
+				vn = joinrec[num];
+				if (vn.getSize() > sz) {
+					num += 1;
+					break;
+				}
+				sz -= vn.getSize();
+				num += 1;
+			}
+			replace = num - 1;
+		}
+		else {
+			while (sz > 0) {
+				if (num >= joinrec.length) {
+					return null;
+				}
+				vn = joinrec[joinrec.length - 1 - num];
+				if (vn.getSize() > sz) {
+					num += 1;
+					break;
+				}
+				sz -= vn.getSize();
+				num += 1;
+			}
+			first = joinrec.length - num;
+			replace = first;
+		}
+		if (sz == 0 && num == joinrec.length) {
+			return joinrec;
+		}
+		res = new Varnode[num];
+		for (int i = 0; i < num; ++i) {
+			res[i] = joinrec[first + i];
+		}
+		if (sz > 0) {
+			res[replace] = new Varnode(vn.getAddress(), sz);
+		}
+
+		return res;
 	}
 
-	public boolean contains(ParamEntry op2) {
-		if ((type != TYPE_UNKNOWN) && (op2.type != type)) {
+	/**
+	 * Is this ParamEntry, as a memory range, contained by the given memory range.
+	 * @param addr is the starting address of the given memory range
+	 * @param sz is the number of bytes in the given memory range
+	 * @return true if this is contained
+	 */
+	public boolean containedBy(Address addr, int sz) {
+		if (spaceid != addr.getAddressSpace()) {
 			return false;
 		}
-		if (spaceid != op2.spaceid) {
+		if (Long.compareUnsigned(addressbase, addr.getOffset()) < 0) {
 			return false;
 		}
-		if (unsignedCompare(op2.addressbase, addressbase)) {
+		long rangeEnd = addr.getOffset() + sz - 1;
+		long thisEnd = addressbase + size - 1;
+		return (Long.compareUnsigned(thisEnd, rangeEnd) <= 0);
+	}
+
+	/**
+	 * Does this ParamEntry intersect the given range in some way
+	 * @param addr is the starting address of the given range
+	 * @param sz is the number of bytes in the given range
+	 * @return true if there is an intersection
+	 */
+	public boolean intersects(Address addr, int sz) {
+		long rangeend;
+		if (joinrec != null) {
+			rangeend = addr.getOffset() + sz - 1;
+			for (Varnode vn : joinrec) {
+				if (addr.getAddressSpace().getSpaceID() != vn.getSpace()) {
+					continue;
+				}
+				long vnend = vn.getOffset() + vn.getSize() - 1;
+				if (Long.compareUnsigned(addr.getOffset(), vn.getOffset()) < 0 &&
+					Long.compareUnsigned(rangeend, vnend) < 0) {
+					continue;
+				}
+				if (Long.compareUnsigned(addr.getOffset(), vn.getOffset()) > 0 &&
+					Long.compareUnsigned(rangeend, vnend) > 0) {
+					continue;
+				}
+				return true;
+			}
+		}
+		if (spaceid.getSpaceID() != addr.getAddressSpace().getSpaceID()) {
 			return false;
 		}
-		long op2end = op2.addressbase + op2.size - 1;
-		long end = addressbase + size - 1;
-		if (unsignedCompare(end, op2end)) {
+		rangeend = addr.getOffset() + sz - 1;
+		long thisend = addressbase + size - 1;
+		if (Long.compareUnsigned(addr.getOffset(), addressbase) < 0 &&
+			Long.compareUnsigned(rangeend, thisend) < 0) {
 			return false;
 		}
-		if (alignment != op2.alignment) {
+		if (Long.compareUnsigned(addr.getOffset(), addressbase) > 0 &&
+			Long.compareUnsigned(rangeend, thisend) > 0) {
 			return false;
 		}
 		return true;
@@ -177,14 +268,14 @@ public class ParamEntry {
 			return -1;
 		}
 		long startaddr = addr.getOffset();
-		if (unsignedCompare(startaddr, addressbase)) {
+		if (Long.compareUnsigned(startaddr, addressbase) < 0) {
 			return -1;
 		}
 		long endaddr = startaddr + sz - 1;
-		if (unsignedCompare(endaddr, startaddr)) {
+		if (Long.compareUnsigned(endaddr, startaddr) < 0) {
 			return -1;		// Don't allow wrap around
 		}
-		if (unsignedCompare(addressbase + size - 1, endaddr)) {
+		if (Long.compareUnsigned(addressbase + size - 1, endaddr) < 0) {
 			return -1;
 		}
 		startaddr -= addressbase;
@@ -200,6 +291,27 @@ public class ParamEntry {
 	}
 
 	/**
+	 * Does this ParamEntry contain another entry (as a subpiece)
+	 * @param otherEntry is the other entry
+	 * @return true if this contains the other entry
+	 */
+	public boolean contains(ParamEntry otherEntry) {
+		if (otherEntry.joinrec != null) {
+			return false;	// Assume a join entry cannot be contained
+		}
+		if (joinrec == null) {
+			Address addr = spaceid.getAddress(addressbase);
+			return otherEntry.containedBy(addr, size);
+		}
+		for (Varnode vn : joinrec) {
+			if (otherEntry.containedBy(vn.getAddress(), vn.getSize())) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
 	 * Assuming the address is contained in this entry and we -skip- to a certain byte
 	 * return the slot associated with that byte
 	 * @param addr  is the address to check (which MUST be contained)
@@ -207,7 +319,7 @@ public class ParamEntry {
 	 * @return the slot index
 	 */
 	public int getSlot(Address addr, int skip) {
-		int res = group;
+		int res = groupSet[0];
 		if (alignment != 0) {
 			long diff = addr.getOffset() + skip - addressbase;
 			int baseslot = (int) diff / alignment;
@@ -219,7 +331,7 @@ public class ParamEntry {
 			}
 		}
 		else if (skip != 0) {
-			res += (groupsize - 1);
+			res = groupSet[groupSet.length - 1];
 		}
 		return res;
 	}
@@ -299,20 +411,6 @@ public class ParamEntry {
 		return null;
 	}
 
-	public int countJoinOverlap(List<ParamEntry> curList) {
-		if (joinrec == null) {
-			return 0;
-		}
-		int count = 0;
-		for (Varnode vn : joinrec) {
-			ParamEntry match = findEntryByStorage(curList, vn);
-			if (match != null) {
-				count += 1;
-			}
-		}
-		return count;
-	}
-
 	/**
 	 * Adjust the group and groupsize based on the ParamEntrys being overlapped
 	 * @param curList is the current list of ParamEntry
@@ -322,40 +420,78 @@ public class ParamEntry {
 		if (joinrec == null) {
 			return;
 		}
-		int mingrp = 1000;
-		int maxgrp = -1;
+		ArrayList<Integer> newGroupSet = new ArrayList<>();
 		for (Varnode piece : joinrec) {
 			ParamEntry entry = findEntryByStorage(curList, piece);
 			if (entry != null) {
-				if (entry.group < mingrp) {
-					mingrp = entry.group;
-				}
-				int max = entry.group + entry.groupsize;
-				if (max > maxgrp) {
-					maxgrp = max;
+				for (int group : entry.groupSet) {
+					newGroupSet.add(group);
 				}
 			}
 		}
-		if (maxgrp < 0 || mingrp >= 1000) {
+		if (newGroupSet.isEmpty()) {
 			throw new XmlParseException("<pentry> join must overlap at least one previous entry");
 		}
-		group = mingrp;
-		groupsize = (maxgrp - mingrp);
-		if (groupsize > joinrec.length) {
-			throw new XmlParseException("<pentry> join must overlap sequential entries");
+		newGroupSet.sort(null);
+		groupSet = new int[newGroupSet.size()];
+		for (int i = 0; i < groupSet.length; ++i) {
+			groupSet[i] = newGroupSet.get(i);
 		}
+		flags |= OVERLAPPING;
 	}
 
-	public void saveXml(StringBuilder buffer) {
-		buffer.append("<pentry");
-		SpecXmlUtils.encodeSignedIntegerAttribute(buffer, "minsize", minsize);
-		SpecXmlUtils.encodeSignedIntegerAttribute(buffer, "maxsize", size);
+	/**
+	 * Search for overlap with any previous ParamEntry.  Reassign group and groupsize to
+	 * reflect this overlap.
+	 * @param curList is the list of previous ParamEntry
+	 * @throws XmlParseException if overlaps do not take the correct form
+	 */
+	private void resolveOverlap(List<ParamEntry> curList) throws XmlParseException {
+		if (joinrec != null) {
+			return;
+		}
+		ArrayList<Integer> newGroupSet = new ArrayList<>();
+		Address addr = spaceid.getAddress(addressbase);
+		for (ParamEntry entry : curList) {
+			if (entry == this) {
+				continue;
+			}
+			if (!entry.intersects(addr, size)) {
+				continue;
+			}
+			if (contains(entry)) {
+				if (entry.isOverlap()) {
+					continue;		// Don't count resources (already counted overlapped pentry)
+				}
+				for (int group : entry.groupSet) {
+					newGroupSet.add(group);
+				}
+			}
+			else {
+				throw new XmlParseException("Illegal overlap of <pentry> in compiler spec");
+			}
+		}
+		if (newGroupSet.isEmpty()) {
+			return;				// No overlaps
+		}
+		newGroupSet.sort(null);
+		groupSet = new int[newGroupSet.size()];
+		for (int i = 0; i < groupSet.length; ++i) {
+			groupSet[i] = newGroupSet.get(i);
+		}
+		flags |= OVERLAPPING;
+	}
+
+	public void encode(Encoder encoder) throws IOException {
+		encoder.openElement(ELEM_PENTRY);
+		encoder.writeSignedInteger(ATTRIB_MINSIZE, minsize);
+		encoder.writeSignedInteger(ATTRIB_MAXSIZE, size);
 		if (alignment != 0) {
-			SpecXmlUtils.encodeSignedIntegerAttribute(buffer, "align", alignment);
+			encoder.writeSignedInteger(ATTRIB_ALIGN, alignment);
 		}
 		if (type == TYPE_FLOAT || type == TYPE_PTR) {
 			String tok = (type == TYPE_FLOAT) ? "float" : "ptr";
-			SpecXmlUtils.encodeStringAttribute(buffer, "metatype", tok);
+			encoder.writeString(ATTRIB_METATYPE, tok);
 		}
 		String extString = null;
 		if ((flags & SMALLSIZE_SEXT) != 0) {
@@ -371,9 +507,8 @@ public class ParamEntry {
 			extString = "float";
 		}
 		if (extString != null) {
-			SpecXmlUtils.encodeStringAttribute(buffer, "extension", extString);
+			encoder.writeString(ATTRIB_EXTENSION, extString);
 		}
-		buffer.append(">\n");
 		AddressXML addressSize;
 		if (joinrec == null) {
 			// Treat as unsized address with no size
@@ -382,8 +517,8 @@ public class ParamEntry {
 		else {
 			addressSize = new AddressXML(spaceid, addressbase, size, joinrec);
 		}
-		addressSize.saveXml(buffer);
-		buffer.append("</pentry>");
+		addressSize.encode(encoder);
+		encoder.closeElement(ELEM_PENTRY);
 	}
 
 	public void restoreXml(XmlPullParser parser, CompilerSpec cspec, List<ParamEntry> curList,
@@ -393,7 +528,6 @@ public class ParamEntry {
 		size = minsize = -1;		// Must be filled in
 		alignment = 0;				// default
 		numslots = 1;
-		groupsize = 1;				// default
 
 		XmlElement el = parser.start("pentry");
 		Iterator<Entry<String, String>> iter = el.getAttributes().entrySet().iterator();
@@ -491,61 +625,40 @@ public class ParamEntry {
 			flags |= IS_GROUPED;
 		}
 		resolveJoin(curList);
+		resolveOverlap(curList);
 		parser.end(el);
 	}
 
-	@Override
-	public boolean equals(Object obj) {
-		ParamEntry op2 = (ParamEntry) obj;
-		if (!spaceid.equals(op2.spaceid) || addressbase != op2.addressbase) {
+	/**
+	 * Determine if this ParamEntry is equivalent to another instance
+	 * @param obj is the other instance
+	 * @return true if they are equivalent
+	 */
+	public boolean isEquivalent(ParamEntry obj) {
+		if (!spaceid.equals(obj.spaceid) || addressbase != obj.addressbase) {
 			return false;
 		}
-		if (size != op2.size || minsize != op2.minsize || alignment != op2.alignment) {
+		if (size != obj.size || minsize != obj.minsize || alignment != obj.alignment) {
 			return false;
 		}
-		if (type != op2.type || flags != op2.flags) {
+		if (type != obj.type || flags != obj.flags) {
 			return false;
 		}
-		if (numslots != op2.numslots) {
+		if (numslots != obj.numslots) {
 			return false;
 		}
-		if (group != op2.group || groupsize != op2.groupsize) {
+		if (groupSet.length != obj.groupSet.length) {
 			return false;
 		}
-		if (!SystemUtilities.isArrayEqual(joinrec, op2.joinrec)) {
+		for (int i = 0; i < groupSet.length; ++i) {
+			if (groupSet[i] != obj.groupSet[i]) {
+				return false;
+			}
+		}
+		if (!SystemUtilities.isArrayEqual(joinrec, obj.joinrec)) {
 			return false;
 		}
 		return true;
-	}
-
-	@Override
-	public int hashCode() {
-		int hash = spaceid.hashCode();
-		hash = 79 * hash + Long.hashCode(addressbase);
-		hash = 79 * hash + alignment;
-		hash = 79 * hash + flags;
-		hash = 79 * hash + group;
-		hash = 79 * hash + groupsize;
-		hash = 79 * hash + minsize;
-		hash = 79 * hash + numslots;
-		hash = 79 * hash + size;
-		hash = 79 * hash + type;
-		if (joinrec != null) {
-			for (Varnode vn : joinrec) {
-				hash = 79 * hash + vn.hashCode();
-			}
-		}
-		return hash;
-	}
-
-	/**
-	 * Unsigned less-than operation
-	 * @param a is the first operand
-	 * @param b is the second operand
-	 * @return   return true is a is less than b, where a and b are interpreted as unsigned integers
-	 */
-	public static boolean unsignedCompare(long a, long b) {
-		return (a + 0x8000000000000000L < b + 0x8000000000000000L);
 	}
 
 	/**
@@ -568,12 +681,12 @@ public class ParamEntry {
 		if (spc1 != spc2) {
 			return -1;
 		}
-		if (unsignedCompare(offset2, offset1)) {
+		if (Long.compareUnsigned(offset2, offset1) < 0) {
 			return -1;
 		}
 		long off1 = offset1 + (sz1 - 1);
 		long off2 = offset2 + (sz2 - 1);
-		if (unsignedCompare(off1, off2)) {
+		if (Long.compareUnsigned(off1, off2) < 0) {
 			return -1;
 		}
 		if (isBigEndian && (!forceleft)) {

@@ -18,16 +18,19 @@ package ghidra.app.plugin.core.debug.platform.gdb;
 import java.util.*;
 
 import ghidra.app.plugin.core.debug.service.model.launch.*;
-import ghidra.app.services.DebuggerModelService;
 import ghidra.dbg.DebuggerModelFactory;
-import ghidra.dbg.target.TargetLauncher.TargetCmdLineLauncher;
-import ghidra.dbg.target.TargetMethod.ParameterDescription;
 import ghidra.dbg.util.ConfigurableFactory.Property;
 import ghidra.dbg.util.PathUtils;
 import ghidra.framework.plugintool.PluginTool;
 import ghidra.program.model.listing.Program;
 
-public class GdbDebuggerProgramLaunchOpinion implements DebuggerProgramLaunchOpinion {
+public class GdbDebuggerProgramLaunchOpinion extends AbstractDebuggerProgramLaunchOpinion {
+	protected static final List<Class<? extends DebuggerProgramLaunchOffer>> OFFER_CLASSES =
+		List.of(
+			InVmGdbDebuggerProgramLaunchOffer.class,
+			GadpGdbDebuggerProgramLaunchOffer.class,
+			SshGdbDebuggerProgramLaunchOffer.class);
+
 	protected static abstract class AbstractGdbDebuggerProgramLaunchOffer
 			extends AbstractDebuggerProgramLaunchOffer {
 
@@ -41,16 +44,11 @@ public class GdbDebuggerProgramLaunchOpinion implements DebuggerProgramLaunchOpi
 			return PathUtils.parse("Inferiors[1]");
 		}
 
-		@Override
-		protected Map<String, ?> generateDefaultLauncherArgs(
-				Map<String, ParameterDescription<?>> params) {
-			return Map.of(TargetCmdLineLauncher.CMDLINE_ARGS_NAME, program.getExecutablePath());
-		}
 	}
 
-	protected class InVmGdbDebuggerProgramLaunchOffer
+	@FactoryClass("agent.gdb.GdbInJvmDebuggerModelFactory")
+	protected static class InVmGdbDebuggerProgramLaunchOffer
 			extends AbstractGdbDebuggerProgramLaunchOffer {
-		private static final String FACTORY_CLS_NAME = "agent.gdb.GdbInJvmDebuggerModelFactory";
 
 		public InVmGdbDebuggerProgramLaunchOffer(Program program, PluginTool tool,
 				DebuggerModelFactory factory) {
@@ -68,10 +66,9 @@ public class GdbDebuggerProgramLaunchOpinion implements DebuggerProgramLaunchOpi
 		}
 	}
 
-	protected class GadpGdbDebuggerProgramLaunchOffer
+	@FactoryClass("agent.gdb.gadp.GdbGadpDebuggerModelFactory")
+	protected static class GadpGdbDebuggerProgramLaunchOffer
 			extends AbstractGdbDebuggerProgramLaunchOffer {
-		private static final String FACTORY_CLS_NAME =
-			"agent.gdb.gadp.GdbLocalDebuggerModelFactory";
 
 		public GadpGdbDebuggerProgramLaunchOffer(Program program, PluginTool tool,
 				DebuggerModelFactory factory) {
@@ -89,8 +86,9 @@ public class GdbDebuggerProgramLaunchOpinion implements DebuggerProgramLaunchOpi
 		}
 	}
 
-	protected class SshGdbDebuggerProgramLaunchOffer extends AbstractGdbDebuggerProgramLaunchOffer {
-		private static final String FACTORY_CLS_NAME = "agent.gdb.GdbOverSshDebuggerModelFactory";
+	@FactoryClass("agent.gdb.GdbOverSshDebuggerModelFactory")
+	protected static class SshGdbDebuggerProgramLaunchOffer
+			extends AbstractGdbDebuggerProgramLaunchOffer {
 
 		public SshGdbDebuggerProgramLaunchOffer(Program program, PluginTool tool,
 				DebuggerModelFactory factory) {
@@ -117,28 +115,7 @@ public class GdbDebuggerProgramLaunchOpinion implements DebuggerProgramLaunchOpi
 	}
 
 	@Override
-	public Collection<DebuggerProgramLaunchOffer> getOffers(Program program, PluginTool tool,
-			DebuggerModelService service) {
-		String exe = program.getExecutablePath();
-		if (exe == null || "".equals(exe.trim())) {
-			return List.of();
-		}
-		List<DebuggerProgramLaunchOffer> offers = new ArrayList<>();
-		for (DebuggerModelFactory factory : service.getModelFactories()) {
-			if (!factory.isCompatible()) {
-				continue;
-			}
-			String clsName = factory.getClass().getName();
-			if (clsName.equals(InVmGdbDebuggerProgramLaunchOffer.FACTORY_CLS_NAME)) {
-				offers.add(new InVmGdbDebuggerProgramLaunchOffer(program, tool, factory));
-			}
-			else if (clsName.equals(GadpGdbDebuggerProgramLaunchOffer.FACTORY_CLS_NAME)) {
-				offers.add(new GadpGdbDebuggerProgramLaunchOffer(program, tool, factory));
-			}
-			else if (clsName.equals(SshGdbDebuggerProgramLaunchOffer.FACTORY_CLS_NAME)) {
-				offers.add(new SshGdbDebuggerProgramLaunchOffer(program, tool, factory));
-			}
-		}
-		return offers;
+	protected Collection<Class<? extends DebuggerProgramLaunchOffer>> getOfferClasses() {
+		return OFFER_CLASSES;
 	}
 }

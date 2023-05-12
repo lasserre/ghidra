@@ -20,6 +20,7 @@ import java.awt.event.*;
 import java.util.*;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import javax.swing.*;
 import javax.swing.table.TableColumnModel;
@@ -34,6 +35,7 @@ import docking.widgets.filter.FilterListener;
 import docking.widgets.label.GDLabel;
 import docking.widgets.label.GLabel;
 import docking.widgets.table.GTableCellRenderingData;
+import generic.theme.GColor;
 import ghidra.app.context.ListingActionContext;
 /**
  * Dialog for Equate Plugin.
@@ -64,6 +66,13 @@ import ghidra.util.table.*;
 import utility.function.Callback;
 
 public class SetEquateDialog extends DialogComponentProvider {
+
+	private Color FG_EQUATE_SELECED_COLOR =
+		new GColor("color.fg.dialog.equates.equate.selected");
+	private Color FG_BAD_EQUATE_COLOR = new GColor("color.fg.dialog.equates.equate.bad");
+	private Color FG_EQUATE_COLOR = new GColor("color.fg.dialog.equates.equate");
+	private Color FG_SUGGESTION_COLOR = new GColor("color.fg.dialog.equates.suggestion");
+
 	public static final int CANCELED = 0;
 	public static final int OK = 1;
 
@@ -88,6 +97,10 @@ public class SetEquateDialog extends DialogComponentProvider {
 	private Scalar scalar;
 	private EquateFilterListener filterListener = new EquateFilterListener();
 	private EquateEnterListener enterListener = new EquateEnterListener();
+
+	// these will be set in the okCallback()
+	private String equateName;
+	private Enum enumDt;
 
 	/**
 	 * Constructor
@@ -147,17 +160,19 @@ public class SetEquateDialog extends DialogComponentProvider {
 				int refCount = eqRowObject.getRefCount();
 				if (refCount > 0) {
 					if (eqRowObject.getEntryName().contains(EquateManager.ERROR_TAG)) {
-						c.setForeground(isSelected ? Color.WHITE : Color.RED);
+						c.setForeground(
+							isSelected ? FG_EQUATE_SELECED_COLOR : FG_BAD_EQUATE_COLOR);
 					}
 					else {
 						Equate e = eqRowObject.getEquate();
 						if (e != null && !e.isEnumBased()) {
-							c.setForeground(isSelected ? Color.WHITE : Color.BLUE.brighter());
+							c.setForeground(
+								isSelected ? FG_EQUATE_SELECED_COLOR : FG_EQUATE_COLOR);
 						}
 					}
 				}
 				else {
-					c.setForeground(isSelected ? Color.WHITE : Color.GRAY.darker());
+					c.setForeground(isSelected ? FG_EQUATE_SELECED_COLOR : FG_SUGGESTION_COLOR);
 				}
 				return c;
 			}
@@ -210,14 +225,16 @@ public class SetEquateDialog extends DialogComponentProvider {
 			.stream()
 			.filter(dt -> dt instanceof Enum)
 			.map(Enum.class::cast)
-			.filter(enoom -> enoom.getName(scalar.getValue()) != null)
-			.forEach(enoom -> {
-				String name = enoom.getName(scalar.getValue());
-				entries.add(new EquateRowObject(name, enoom));
-			});
+			.flatMap(this::enumToRowObjects)
+			.forEach(entries::add);
 		//@formatter:on
 
 		return entries;
+	}
+
+	private Stream<EquateRowObject> enumToRowObjects(Enum enoom) {
+		String[] names = enoom.getNames(scalar.getValue());
+		return Arrays.stream(names).map(name -> new EquateRowObject(name, enoom));
 	}
 
 	/*
@@ -394,6 +411,10 @@ public class SetEquateDialog extends DialogComponentProvider {
 	 * Get the Equate Name entered or chosen by the user.
 	 */
 	public String getEquateName() {
+		return equateName;
+	}
+
+	private String doGetEquateName() {
 		EquateRowObject equateEntry = getRowObject();
 		if (equateEntry != null) {
 			return equateEntry.getEntryName();
@@ -410,6 +431,10 @@ public class SetEquateDialog extends DialogComponentProvider {
 	 * @return the enum data type for the selected entry, or null if there is no enum.
 	 */
 	public Enum getEnumDataType() {
+		return enumDt;
+	}
+
+	private Enum doGetEnumDataType() {
 		EquateRowObject equateEntry = getRowObject();
 		return (equateEntry != null) ? equateEntry.getEnumDataType() : null;
 	}
@@ -470,7 +495,7 @@ public class SetEquateDialog extends DialogComponentProvider {
 	/**
 	 * Returns true if the user has chosen to overwrite any existing equate rules.
 	 *
-	 * @return true if the user has chosen to overwrite any existing equate rules. 
+	 * @return true if the user has chosen to overwrite any existing equate rules.
 	 */
 	public boolean getOverwriteExisting() {
 		return overwriteExistingEquates.isSelected();
@@ -510,13 +535,13 @@ public class SetEquateDialog extends DialogComponentProvider {
 		this.setStatusText(text);
 	}
 
-	/**
-	 * Called when user selects OK button
-	 */
 	@Override
 	protected void okCallback() {
-		if (isValid(this.getEquateName(), scalar)) {
+		String name = doGetEquateName();
+		if (isValid(name, scalar)) {
 			result = OK;
+			equateName = name;
+			enumDt = doGetEnumDataType();
 			close();
 		}
 		else {
@@ -532,8 +557,7 @@ public class SetEquateDialog extends DialogComponentProvider {
 
 		// look up the new equate string
 		Equate newEquate = equateTable.getEquate(equateStr);
-
-		if (newEquate != null && getEnumDataType() == null) {
+		if (newEquate != null && doGetEnumDataType() == null) {
 			// make sure any existing equate with that name has the same value.
 			if (newEquate.getValue() != testScalar.getValue()) {
 				setStatus("Equate " + equateStr + " exists with value 0x" +
@@ -548,15 +572,14 @@ public class SetEquateDialog extends DialogComponentProvider {
 		return (Enum) dataTypeManager.findDataTypeForID(id);
 	}
 
-	/**
-	 * Called when user selects Cancel Button.
-	 */
 	@Override
 	protected void cancelCallback() {
 		close();
 	}
 
+	@Override
 	public void dispose() {
+		super.dispose();
 		suggestedEquatesTable.dispose();
 		filterPanel.dispose();
 	}
@@ -580,7 +603,7 @@ public class SetEquateDialog extends DialogComponentProvider {
 			}
 
 			this.enoom = enoom;
-			this.entryName = enoom.getName(value);
+			this.entryName = name;
 			this.dataTypeUUID = enoom.getUniversalID();
 			this.path = getFullPath(enoom);
 			String formattedEquateName = EquateManager.formatNameForEquate(dataTypeUUID, value);
@@ -674,6 +697,9 @@ public class SetEquateDialog extends DialogComponentProvider {
 				return false;
 			}
 			if (enoom == null || !enoom.isEquivalent(other.getEnumDataType())) {
+				return false;
+			}
+			if (!Objects.equals(entryName, other.entryName)) {
 				return false;
 			}
 			return true;

@@ -31,7 +31,7 @@ import ghidra.program.model.listing.*;
 import ghidra.test.AbstractGhidraHeadedIntegrationTest;
 import ghidra.test.TestEnv;
 import ghidra.util.Msg;
-import ghidra.util.task.TaskMonitorAdapter;
+import ghidra.util.task.TaskMonitor;
 
 public abstract class AbstractCorrelatorTest extends AbstractGhidraHeadedIntegrationTest {
 
@@ -100,13 +100,14 @@ public abstract class AbstractCorrelatorTest extends AbstractGhidraHeadedIntegra
 				options = factory.createDefaultOptions();
 				correlator = factory.createCorrelator(serviceProvider, sourceProgram,
 					sourceAddressSet, destinationProgram, destinationAddressSet, options);
-				correlator.correlate(session, TaskMonitorAdapter.DUMMY_MONITOR);
+				correlator.correlate(session, TaskMonitor.DUMMY);
 
 				FunctionManager functionManager = sourceProgram.getFunctionManager();
 				FunctionIterator functions =
 					functionManager.getFunctions(sourceSetThatShouldBeFound, true);
 				for (Function function : functions) {
-					if (function.getBody().getNumAddresses() > ExactMatchBytesProgramCorrelatorFactory.FUNCTION_MINIMUM_SIZE_DEFAULT) {
+					if (function.getBody()
+							.getNumAddresses() > ExactMatchBytesProgramCorrelatorFactory.FUNCTION_MINIMUM_SIZE_DEFAULT) {
 						Address sourceEntryPoint = function.getEntryPoint();
 						Collection<VTAssociation> associations =
 							manager.getRelatedAssociationsBySourceAddress(sourceEntryPoint);
@@ -137,7 +138,7 @@ public abstract class AbstractCorrelatorTest extends AbstractGhidraHeadedIntegra
 			}
 		}
 		catch (Exception e) {
-			Msg.error(this, "Unexpected exception", e);
+			errors.add(e.getMessage());
 		}
 		finally {
 			session.release(this);
@@ -166,7 +167,7 @@ public abstract class AbstractCorrelatorTest extends AbstractGhidraHeadedIntegra
 				options = factory.createDefaultOptions();
 				correlator = factory.createCorrelator(serviceProvider, sourceProgram,
 					sourceAddressSet, destinationProgram, destinationAddressSet, options);
-				correlator.correlate(session, TaskMonitorAdapter.DUMMY_MONITOR);
+				correlator.correlate(session, TaskMonitor.DUMMY);
 
 				HashMap<Address, Address> mapCopy = new HashMap<>(map);
 

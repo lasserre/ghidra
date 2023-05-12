@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import javax.swing.ImageIcon;
+import javax.swing.Icon;
 
 import docking.ActionContext;
 import docking.action.DockingAction;
@@ -53,7 +53,10 @@ public abstract class AbstractDebuggerWrappedConsoleConnection<T extends TargetO
 		}
 
 		@Override
-		public void consoleOutput(TargetObject console, Channel channel, byte[] out) {
+		public void consoleOutput(TargetObject object, Channel channel, byte[] out) {
+			if (object != targetConsole) {
+				return;
+			}
 			OutputStream os;
 			switch (channel) {
 				case STDOUT:
@@ -69,14 +72,8 @@ public abstract class AbstractDebuggerWrappedConsoleConnection<T extends TargetO
 			if (os == null) {
 				return;
 			}
-			/**
-			 * NB: yes, the extra space is lame... The InterpreterPanel's repositionScrollPane
-			 * method subtracts 1 from the text length to compute the new position causing it to
-			 * scroll to the last character printed. We want it to scroll to the next line, so...
-			 */
 			try {
 				os.write(out);
-				os.write(' ');
 			}
 			catch (IOException e) {
 				Msg.error(this, "Cannot write to interpreter window: ", e);
@@ -85,6 +82,9 @@ public abstract class AbstractDebuggerWrappedConsoleConnection<T extends TargetO
 
 		@AttributeCallback(TargetObject.DISPLAY_ATTRIBUTE_NAME)
 		public void displayChanged(TargetObject object, String display) {
+			if (object != targetConsole) {
+				return;
+			}
 			// TODO: Add setSubTitle(String) to InterpreterConsole
 			if (guiConsole == null) {
 				/**
@@ -98,7 +98,10 @@ public abstract class AbstractDebuggerWrappedConsoleConnection<T extends TargetO
 		}
 
 		@AttributeCallback(TargetInterpreter.PROMPT_ATTRIBUTE_NAME)
-		public void promptChanged(TargetObject interpreter, String prompt) {
+		public void promptChanged(TargetObject object, String prompt) {
+			if (object != targetConsole) {
+				return;
+			}
 			if (guiConsole == null) {
 				/**
 				 * Can happen during init. setPrompt will get called immediately after guiConsole is
@@ -111,10 +114,11 @@ public abstract class AbstractDebuggerWrappedConsoleConnection<T extends TargetO
 
 		@Override
 		public void invalidated(TargetObject object, TargetObject branch, String reason) {
+			if (object != targetConsole) {
+				return;
+			}
 			Swing.runLater(() -> {
-				if (object == targetConsole) { // Redundant
-					consoleInvalidated();
-				}
+				consoleInvalidated();
 			});
 		}
 	}
@@ -137,7 +141,7 @@ public abstract class AbstractDebuggerWrappedConsoleConnection<T extends TargetO
 			T targetConsole) {
 		this.plugin = plugin;
 		this.targetConsole = targetConsole;
-		targetConsole.addListener(listener);
+		targetConsole.getModel().addModelListener(listener);
 	}
 
 	protected abstract CompletableFuture<Void> sendLine(String line);
@@ -148,7 +152,7 @@ public abstract class AbstractDebuggerWrappedConsoleConnection<T extends TargetO
 	}
 
 	@Override
-	public ImageIcon getIcon() {
+	public Icon getIcon() {
 		return DebuggerResources.ICON_CONSOLE;
 	}
 
@@ -194,7 +198,7 @@ public abstract class AbstractDebuggerWrappedConsoleConnection<T extends TargetO
 				.build();
 		guiConsole.addAction(actionPin);
 
-		DockingAction interruptAction =	InterpreterInterruptAction.builder(plugin)
+		DockingAction interruptAction = InterpreterInterruptAction.builder(plugin)
 				.onAction(this::sendInterrupt)
 				.build();
 		guiConsole.addAction(interruptAction);

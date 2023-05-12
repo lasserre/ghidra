@@ -20,12 +20,14 @@ import ghidra.app.decompiler.ClangToken;
 import ghidra.app.plugin.core.decompile.DecompilerActionContext;
 import ghidra.app.util.HelpTopics;
 import ghidra.program.database.symbol.CodeSymbol;
-import ghidra.program.model.address.Address;
+import ghidra.program.model.data.ProgramBasedDataTypeManager;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.pcode.HighFunction;
+import ghidra.program.model.pcode.PcodeOp;
 import ghidra.program.model.symbol.*;
-import ghidra.util.*;
+import ghidra.util.HelpLocation;
+import ghidra.util.UndefinedFunction;
 
 public class DeletePrototypeOverrideAction extends AbstractDecompilerAction {
 
@@ -39,16 +41,17 @@ public class DeletePrototypeOverrideAction extends AbstractDecompilerAction {
 		if (tokenAtCursor == null) {
 			return null;
 		}
-		Address addr = tokenAtCursor.getMinAddress();
-		if (addr == null) {
-			return null;
-		}
+
 		Namespace overspace = HighFunction.findOverrideSpace(func);
 		if (overspace == null) {
 			return null;
 		}
+		PcodeOp op = OverridePrototypeAction.getCallOp(func.getProgram(), tokenAtCursor);
+		if (op == null) {
+			return null;
+		}
 		SymbolTable symtab = func.getProgram().getSymbolTable();
-		SymbolIterator iter = symtab.getSymbols(overspace);
+		SymbolIterator iter = symtab.getSymbolsAsIterator(op.getSeqnum().getTarget());
 		while (iter.hasNext()) {
 			Symbol sym = iter.next();
 			if (!sym.getName().startsWith("prt")) {
@@ -57,7 +60,7 @@ public class DeletePrototypeOverrideAction extends AbstractDecompilerAction {
 			if (!(sym instanceof CodeSymbol)) {
 				continue;
 			}
-			if (!sym.getAddress().equals(addr)) {
+			if (!sym.getParentNamespace().equals(overspace)) {
 				continue;
 			}
 			return (CodeSymbol) sym;
@@ -83,14 +86,13 @@ public class DeletePrototypeOverrideAction extends AbstractDecompilerAction {
 		CodeSymbol sym = getSymbol(func, context.getTokenAtCursor());
 		Program program = func.getProgram();
 		SymbolTable symtab = program.getSymbolTable();
-		int transaction = program.startTransaction("Remove Override Signature");
-		boolean commit = true;
-		if (!symtab.removeSymbolSpecial(sym)) {
-			commit = false;
-			Msg.showError(getClass(), context.getDecompilerPanel(),
-				"Removing Override Signature Failed", "Error removing override signature");
+		ProgramBasedDataTypeManager dtm = program.getDataTypeManager();
+		int txId = program.startTransaction("Remove Override Signature");
+		try {
+			symtab.removeSymbolSpecial(sym);
 		}
-		program.endTransaction(transaction, commit);
-
+		finally {
+			program.endTransaction(txId, true);
+		}
 	}
 }

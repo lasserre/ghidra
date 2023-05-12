@@ -20,20 +20,21 @@ import java.util.concurrent.CompletableFuture;
 
 import agent.gdb.manager.GdbManager;
 import agent.gdb.model.impl.GdbModelImpl;
-import agent.gdb.pty.linux.LinuxPtyFactory;
+import agent.gdb.pty.PtyFactory;
 import ghidra.dbg.DebuggerModelFactory;
 import ghidra.dbg.DebuggerObjectModel;
 import ghidra.dbg.util.ConfigurableFactory.FactoryDescription;
 import ghidra.dbg.util.ShellUtils;
+import ghidra.program.model.listing.Program;
 
-/**
- * Note this is in the testing source because it's not meant to be shipped in the release.... That
- * may change if it proves stable, though, no?
- */
-@FactoryDescription( //
-	brief = "IN-VM GNU gdb local debugger", //
-	htmlDetails = "Launch a GDB session in this same JVM" //
-)
+@FactoryDescription(
+	brief = "gdb",
+	htmlDetails = """
+			Connect to gdb.
+			This is best for most Linux and Unix userspace targets, and many embedded targets.
+			It may also be used with gdbserver by connecting to gdb, then using <code>target remote
+			...</code>.
+			This will access the native API, which may put Ghidra's JVM at risk.""")
 public class GdbInJvmDebuggerModelFactory implements DebuggerModelFactory {
 
 	private String gdbCmd = GdbManager.DEFAULT_GDB_CMD;
@@ -50,9 +51,8 @@ public class GdbInJvmDebuggerModelFactory implements DebuggerModelFactory {
 
 	@Override
 	public CompletableFuture<? extends DebuggerObjectModel> build() {
-		// TODO: Choose Linux or Windows pty based on host OS
 		List<String> gdbCmdLine = ShellUtils.parseArgs(gdbCmd);
-		GdbModelImpl model = new GdbModelImpl(new LinuxPtyFactory());
+		GdbModelImpl model = new GdbModelImpl(PtyFactory.local());
 		return model
 				.startGDB(existing ? null : gdbCmdLine.get(0),
 					gdbCmdLine.subList(1, gdbCmdLine.size()).toArray(String[]::new))
@@ -60,8 +60,17 @@ public class GdbInJvmDebuggerModelFactory implements DebuggerModelFactory {
 	}
 
 	@Override
-	public boolean isCompatible() {
-		return GdbCompatibility.INSTANCE.isCompatible(gdbCmd);
+	public int getPriority(Program program) {
+		if (!GdbCompatibility.INSTANCE.isCompatible(gdbCmd)) {
+			return -1;
+		}
+		if (program != null) {
+			String exe = program.getExecutablePath();
+			if (exe == null || exe.isBlank()) {
+				return -1;
+			}
+		}
+		return 80;
 	}
 
 	public String getGdbCommand() {

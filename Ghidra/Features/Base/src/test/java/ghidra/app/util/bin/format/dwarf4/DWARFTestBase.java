@@ -16,7 +16,8 @@
 package ghidra.app.util.bin.format.dwarf4;
 
 import static ghidra.app.util.bin.format.dwarf4.encoding.DWARFAttribute.*;
-import static ghidra.app.util.bin.format.dwarf4.encoding.DWARFEncoding.*;
+import static ghidra.app.util.bin.format.dwarf4.encoding.DWARFEncoding.DW_ATE_float;
+import static ghidra.app.util.bin.format.dwarf4.encoding.DWARFEncoding.DW_ATE_signed;
 import static ghidra.app.util.bin.format.dwarf4.encoding.DWARFTag.*;
 import static org.junit.Assert.*;
 
@@ -61,11 +62,9 @@ public class DWARFTestBase extends AbstractGhidraHeadedIntegrationTest {
 	protected MockDWARFCompilationUnit cu;
 	protected MockDWARFCompilationUnit cu2;
 	protected DWARFDataTypeManager dwarfDTM;
-	protected CategoryPath rootCP;
+	protected CategoryPath uncatCP;
+	protected CategoryPath dwarfRootCP;
 
-	/*
-	 * @see TestCase#setUp()
-	 */
 	@Before
 	public void setUp() throws Exception {
 		program = createDefaultProgram(testName.getMethodName(), ProgramBuilder._X64, this);
@@ -85,7 +84,9 @@ public class DWARFTestBase extends AbstractGhidraHeadedIntegrationTest {
 		importOptions = new DWARFImportOptions();
 		dwarfProg =
 			new DWARFProgram(program, importOptions, TaskMonitor.DUMMY, new NullSectionProvider());
-		rootCP = dwarfProg.getUncategorizedRootDNI().asCategoryPath();
+		dwarfDTM = dwarfProg.getDwarfDTM();
+		dwarfRootCP = dwarfProg.getRootDNI().asCategoryPath();
+		uncatCP = dwarfProg.getUncategorizedRootDNI().asCategoryPath();
 
 		cu = new MockDWARFCompilationUnit(dwarfProg, 0x1000, 0x2000, 0,
 			DWARFCompilationUnit.DWARF_32, (short) 4, 0, (byte) 8, 0,
@@ -95,14 +96,8 @@ public class DWARFTestBase extends AbstractGhidraHeadedIntegrationTest {
 			DWARFSourceLanguage.DW_LANG_C);
 
 		setMockCompilationUnits(cu, cu2);
-
-		DWARFImportSummary importSummary = new DWARFImportSummary();
-		dwarfDTM = new DWARFDataTypeManager(dwarfProg, dataMgr, builtInDTM, importSummary);
 	}
 
-	/*
-	 * @see TestCase#tearDown()
-	 */
 	@After
 	public void tearDown() throws Exception {
 		endTransaction();
@@ -138,9 +133,7 @@ public class DWARFTestBase extends AbstractGhidraHeadedIntegrationTest {
 		dwarfProg.checkPreconditions(monitor);
 		dwarfDTM.importAllDataTypes(monitor);
 
-		DWARFImportSummary importSummary = new DWARFImportSummary();
-		DWARFFunctionImporter dfi =
-			new DWARFFunctionImporter(dwarfProg, dwarfDTM, importOptions, importSummary, monitor);
+		DWARFFunctionImporter dfi = new DWARFFunctionImporter(dwarfProg, monitor);
 		dfi.importFunctions();
 	}
 
@@ -345,10 +338,14 @@ public class DWARFTestBase extends AbstractGhidraHeadedIntegrationTest {
 	protected DIECreator newFormalParam(DebugInfoEntry subprogram, String paramName,
 			DebugInfoEntry paramDataType, int... locationExpr) {
 		DIECreator param = new DIECreator(DW_TAG_formal_parameter)
-				.addString(DW_AT_name, paramName)
 				.addRef(DW_AT_type, paramDataType)
-				.addBlock(DW_AT_location, locationExpr)
 				.setParent(subprogram);
+		if (locationExpr.length > 0) {
+			param.addBlock(DW_AT_location, locationExpr);
+		}
+		if (paramName != null) {
+			param.addString(DW_AT_name, paramName);
+		}
 		return param;
 	}
 

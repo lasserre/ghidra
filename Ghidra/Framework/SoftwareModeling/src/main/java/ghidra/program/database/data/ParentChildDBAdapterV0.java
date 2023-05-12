@@ -16,10 +16,17 @@
 package ghidra.program.database.data;
 
 import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
 
 import db.*;
 import ghidra.util.exception.VersionException;
 
+/**
+ * Version 0 implementation for accessing the datatype parent/child database table. 
+ * 
+ * NOTE: Use of tablePrefix introduced with this adapter version.
+ */
 class ParentChildDBAdapterV0 extends ParentChildAdapter {
 
 	private static final int VERSION = 0;
@@ -33,19 +40,28 @@ class ParentChildDBAdapterV0 extends ParentChildAdapter {
 	private Table table;
 	private boolean needsInitializing = false;
 
-	ParentChildDBAdapterV0(DBHandle handle, boolean create) throws VersionException, IOException {
-
+	/**
+	 * Gets a version 1 adapter for the datatype parent/child database table.
+	 * @param handle handle to the database containing the table.
+	 * @param tablePrefix prefix to be used with default table name
+	 * @param create true if this constructor should create the table.
+	 * @throws VersionException if the the table's version does not match the expected version
+	 * for this adapter.
+	 * @throws IOException if an IO error occurs
+	 */
+	ParentChildDBAdapterV0(DBHandle handle, String tablePrefix, boolean create)
+			throws VersionException, IOException {
+		String tableName = tablePrefix + PARENT_CHILD_TABLE_NAME;
 		if (create) {
-			table = handle.createTable(TABLE_NAME, V0_SCHEMA, new int[] { PARENT_COL, CHILD_COL });
+			table = handle.createTable(tableName, V0_SCHEMA, new int[] { PARENT_COL, CHILD_COL });
 		}
 		else {
-			table = handle.getTable(TABLE_NAME);
+			table = handle.getTable(tableName);
 			if (table == null) {
 				throw new VersionException(true);
 			}
-			if (table.getSchema().getVersion() != 0) {
-				throw new VersionException("Expected version 0 for table " + TABLE_NAME +
-					" but got " + table.getSchema().getVersion());
+			if (table.getSchema().getVersion() != VERSION) {
+				throw new VersionException(false);
 			}
 		}
 	}
@@ -73,12 +89,12 @@ class ParentChildDBAdapterV0 extends ParentChildAdapter {
 	}
 
 	@Override
-	long[] getParentIds(long childID) throws IOException {
+	Set<Long> getParentIds(long childID) throws IOException {
 		Field[] ids = table.findRecords(new LongField(childID), CHILD_COL);
-		long[] parentIds = new long[ids.length];
+		Set<Long> parentIds = new HashSet<>(ids.length);
 		for (int i = 0; i < ids.length; i++) {
 			DBRecord rec = table.getRecord(ids[i]);
-			parentIds[i] = rec.getLongValue(PARENT_COL);
+			parentIds.add(rec.getLongValue(PARENT_COL));
 		}
 		return parentIds;
 	}

@@ -108,19 +108,21 @@ public interface DebuggerModelService {
 	 * 
 	 * @param target a target to record
 	 * @param mapper a mapper between target and trace objects
+	 * @param source the source of the request
 	 * @return the destination trace
 	 * @throws IOException if a trace cannot be created
 	 * @see DebuggerMappingOpinion#getOffers(TargetObject)
 	 */
-	TraceRecorder recordTarget(TargetObject target, DebuggerTargetTraceMapper mapper)
-			throws IOException;
+	TraceRecorder recordTarget(TargetObject target, DebuggerTargetTraceMapper mapper,
+			ActionSource source) throws IOException;
 
 	/**
 	 * Query mapping opinions and record the given target using the "best" offer
 	 * 
 	 * <p>
 	 * If exactly one offer is given, this simply uses it. If multiple are given, this automatically
-	 * chooses the "best" one without prompting the user. If none are given, this fails.
+	 * chooses the "best" one without prompting the user. If none are given, this fails. This
+	 * invocation is assumed to come from an {@link ActionSource#AUTOMATIC} source.
 	 * 
 	 * @see DebuggerMappingOpinion#queryOpinions(TargetObject)
 	 * @param target the target to record.
@@ -134,10 +136,8 @@ public interface DebuggerModelService {
 	 * <p>
 	 * Even if exactly one offer is given, the user is prompted to provide information about the new
 	 * recording, and to give the user an opportunity to cancel. If none are given, the prompt says
-	 * as much. If the user cancels, the returned future completes with {@code null}.
-	 * 
-	 * <p>
-	 * TODO: Should the prompt allow the user to force an opinion which gave no offers?
+	 * as much. If the user cancels, the returned future completes with {@code null}. The invocation
+	 * is assumed to come from a {@link ActionSource#MANUAL} source.
 	 * 
 	 * @see DebuggerMappingOpinion#queryOpinions(TargetObject)
 	 * @param target the target to record.
@@ -149,7 +149,8 @@ public interface DebuggerModelService {
 	 * Start and open a new trace on the given target
 	 *
 	 * <p>
-	 * Starts a new trace, and opens it in the tool
+	 * Starts a new trace, and opens it in the tool. The invocation is assumed to come from an
+	 * {@link ActionSource#AUTOMATIC} source.
 	 * 
 	 * @see #recordTarget(TargetObject)
 	 */
@@ -352,14 +353,20 @@ public interface DebuggerModelService {
 	 * 
 	 * @return a future which completes with the new connection, possibly cancelled
 	 */
-	default CompletableFuture<DebuggerObjectModel> showConnectDialog() {
-		return showConnectDialog(null);
-	}
+	CompletableFuture<DebuggerObjectModel> showConnectDialog();
+
+	/**
+	 * Prompt the user to create a new connection, hinting at the program to launch
+	 * 
+	 * @param program the current program used to help select a default
+	 * @return a future which completes with the new connection, possibly cancelled
+	 */
+	CompletableFuture<DebuggerObjectModel> showConnectDialog(Program program);
 
 	/**
 	 * Prompt the user to create a new connection, optionally fixing the factory
 	 * 
-	 * @param factory the required factory, or null for user selection
+	 * @param factory the required factory
 	 * @return a future which completes with the new connection, possible cancelled
 	 */
 	CompletableFuture<DebuggerObjectModel> showConnectDialog(DebuggerModelFactory factory);

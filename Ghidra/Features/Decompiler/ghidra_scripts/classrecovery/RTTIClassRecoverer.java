@@ -43,11 +43,9 @@ public class RTTIClassRecoverer extends RecoveredClassHelper {
 
 	RTTIClassRecoverer(Program program, ProgramLocation location, PluginTool tool,
 			FlatProgramAPI api, boolean createBookmarks, boolean useShortTemplates,
-			boolean nameVfunctions, boolean hasDebugSymbols, boolean replaceClassStructures,
-			TaskMonitor monitor) throws Exception {
+			boolean nameVfunctions, boolean hasDebugSymbols, TaskMonitor monitor) throws Exception {
 
 		super(program, location, tool, api, createBookmarks, useShortTemplates, nameVfunctions,
-			replaceClassStructures,
 			monitor);
 
 		this.program = program;
@@ -148,7 +146,7 @@ public class RTTIClassRecoverer extends RecoveredClassHelper {
 
 		Iterator<RecoveredClass> recoveredClassIterator = recoveredClasses.iterator();
 		while (recoveredClassIterator.hasNext()) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			RecoveredClass recoveredClass = recoveredClassIterator.next();
 
 			// if class is non-virtual have to search for an existing class datatype
@@ -159,7 +157,7 @@ public class RTTIClassRecoverer extends RecoveredClassHelper {
 					continue;
 				}
 				for (int i = 0; i < possibleExistingClassStructures.length; i++) {
-					monitor.checkCanceled();
+					monitor.checkCancelled();
 					if (!(possibleExistingClassStructures[i] instanceof Structure)) {
 						continue;
 					}
@@ -179,7 +177,7 @@ public class RTTIClassRecoverer extends RecoveredClassHelper {
 				recoveredClass.getConstructorOrDestructorFunctions();
 			Iterator<Function> constDestIterator = constructorOrDestructorFunctions.iterator();
 			while (constDestIterator.hasNext()) {
-				monitor.checkCanceled();
+				monitor.checkCancelled();
 				Function constDestFunction = constDestIterator.next();
 				Namespace parentNamespace = constDestFunction.getParentNamespace();
 				if (!parentNamespace.equals(recoveredClass.getClassNamespace())) {
@@ -239,7 +237,7 @@ public class RTTIClassRecoverer extends RecoveredClassHelper {
 
 		Iterator<RecoveredClass> classIterator = recoveredClasses.iterator();
 		while (classIterator.hasNext()) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			RecoveredClass recoveredClass = classIterator.next();
 
 			// we can only figure out structure info for functions with vftable since that is
@@ -258,12 +256,11 @@ public class RTTIClassRecoverer extends RecoveredClassHelper {
 			memberFunctionsToProcess.addAll(recoveredClass.getConstructorList());
 			memberFunctionsToProcess.addAll(recoveredClass.getDestructorList());
 			memberFunctionsToProcess.addAll(recoveredClass.getIndeterminateList());
-
 			memberFunctionsToProcess.addAll(recoveredClass.getInlinedConstructorList());
 
 			Iterator<Function> memberFunctionIterator = memberFunctionsToProcess.iterator();
 			while (memberFunctionIterator.hasNext()) {
-				monitor.checkCanceled();
+				monitor.checkCancelled();
 				Function memberFunction = memberFunctionIterator.next();
 
 				if (getVftableReferences(memberFunction) == null) {

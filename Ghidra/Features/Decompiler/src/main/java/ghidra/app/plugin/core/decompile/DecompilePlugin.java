@@ -20,6 +20,7 @@ import java.util.*;
 import org.jdom.Element;
 
 import ghidra.app.CorePluginPackage;
+import ghidra.app.decompiler.*;
 import ghidra.app.decompiler.component.hover.DecompilerHoverService;
 import ghidra.app.events.*;
 import ghidra.app.plugin.PluginCategoryNames;
@@ -49,12 +50,14 @@ import ghidra.util.task.SwingUpdateManager;
 		GoToService.class, NavigationHistoryService.class, ClipboardService.class,
 		DataTypeManagerService.class /*, ProgramManager.class */
 	},
+	servicesProvided = {
+		DecompilerHighlightService.class, DecompilerMarginService.class
+	},
 	eventsConsumed = {
 		ProgramActivatedPluginEvent.class, ProgramOpenedPluginEvent.class,
 		ProgramLocationPluginEvent.class, ProgramSelectionPluginEvent.class,
 		ProgramClosedPluginEvent.class
-	}
-)
+	})
 //@formatter:on
 public class DecompilePlugin extends Plugin {
 
@@ -66,14 +69,19 @@ public class DecompilePlugin extends Plugin {
 	private ProgramSelection currentSelection;
 
 	/**
-	 * Delay location changes to allow location events to settle down.
-	 * This happens when a readDataState occurs when a tool is restored
-	 * or when switching program tabs.
+	 * Delay location changes to allow location events to settle down. This happens when a
+	 * readDataState occurs when a tool is restored or when switching program tabs.
 	 */
 	SwingUpdateManager delayedLocationUpdateMgr = new SwingUpdateManager(200, 200, () -> {
-		if (currentLocation != null) {
-			connectedProvider.setLocation(currentLocation, null);
+		if (currentLocation == null) {
+			return;
 		}
+
+		Program locationProgram = currentLocation.getProgram();
+		if (locationProgram.isClosed()) {
+			return; // not sure if this can happen
+		}
+		connectedProvider.setLocation(currentLocation, null);
 	});
 
 	public DecompilePlugin(PluginTool tool) {
@@ -81,6 +89,14 @@ public class DecompilePlugin extends Plugin {
 
 		disconnectedProviders = new ArrayList<>();
 		connectedProvider = new PrimaryDecompilerProvider(this);
+
+		registerServices();
+	}
+
+	private void registerServices() {
+		registerServiceProvided(DecompilerHighlightService.class, connectedProvider);
+		// Allow pluggable margin providers for disconnected providers?
+		registerServiceProvided(DecompilerMarginService.class, connectedProvider);
 	}
 
 	@Override
@@ -200,15 +216,18 @@ public class DecompilePlugin extends Plugin {
 		}
 	}
 
+	void handleTokenRenamed(ClangToken tokenAtCursor, String newName) {
+		connectedProvider.handleTokenRenamed(tokenAtCursor, newName);
+		for (DecompilerProvider provider : disconnectedProviders) {
+			provider.handleTokenRenamed(tokenAtCursor, newName);
+		}
+	}
+
 	private void removeProvider(DecompilerProvider provider) {
 		tool.removeComponentProvider(provider);
 		provider.dispose();
 	}
 
-	/**
-	 * Process the plugin event; delegates the processing to the
-	 * byte block.
-	 */
 	@Override
 	public void processEvent(PluginEvent event) {
 		if (event instanceof ProgramClosedPluginEvent) {

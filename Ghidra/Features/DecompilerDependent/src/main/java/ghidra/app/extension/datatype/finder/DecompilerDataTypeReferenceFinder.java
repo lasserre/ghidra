@@ -28,10 +28,10 @@ import ghidra.app.decompiler.parallel.*;
 import ghidra.app.plugin.core.datamgr.util.DataTypeUtils;
 import ghidra.app.plugin.core.navigation.locationreferences.LocationReference;
 import ghidra.app.plugin.core.navigation.locationreferences.ReferenceUtils;
-import ghidra.app.services.DataTypeReference;
-import ghidra.app.services.DataTypeReferenceFinder;
+import ghidra.app.services.*;
 import ghidra.program.model.address.Address;
-import ghidra.program.model.data.*;
+import ghidra.program.model.data.BuiltInDataType;
+import ghidra.program.model.data.DataType;
 import ghidra.program.model.listing.*;
 import ghidra.util.Msg;
 import ghidra.util.StringUtilities;
@@ -40,7 +40,7 @@ import ghidra.util.exception.CancelledException;
 import ghidra.util.task.TaskMonitor;
 
 /**
- * Implementation of {@link DataTypeReferenceFinder} that uses the Decompiler's output 
+ * Implementation of {@link DataTypeReferenceFinder} that uses the Decompiler's output
  * to find data type and composite field usage.
  */
 public class DecompilerDataTypeReferenceFinder implements DataTypeReferenceFinder {
@@ -52,33 +52,33 @@ public class DecompilerDataTypeReferenceFinder implements DataTypeReferenceFinde
 	@Override
 	public void findReferences(Program program, DataType dataType,
 			Consumer<DataTypeReference> callback, TaskMonitor monitor) throws CancelledException {
-
-		DecompilerDataTypeFinderQCallback qCallback =
-			new DecompilerDataTypeFinderQCallback(program, dataType, callback);
-
-		Set<Function> functions = filterFunctions(program, dataType, monitor);
-
-		try {
-			ParallelDecompiler.decompileFunctions(qCallback, functions, monitor);
-		}
-		catch (InterruptedException e) {
-			Thread.currentThread().interrupt(); // reset the flag
-			Msg.trace(this, "Interrupted while decompiling functions");
-		}
-		catch (Exception e) {
-			Msg.error(this, "Encountered an exception decompiling functions", e);
-		}
-		finally {
-			qCallback.dispose();
-		}
+		findReferences(program, dataType, null, callback, monitor);
 	}
 
 	@Override
-	public void findReferences(Program program, Composite dataType, String fieldName,
-			Consumer<DataTypeReference> callback, TaskMonitor monitor) throws CancelledException {
+	public void findReferences(Program program, DataType dataType, String fieldName,
+			Consumer<DataTypeReference> consumer, TaskMonitor monitor) throws CancelledException {
 
+		FieldMatcher fieldMatcher = new FieldMatcher(dataType, fieldName);
 		DecompilerDataTypeFinderQCallback qCallback =
-			new DecompilerDataTypeFinderQCallback(program, dataType, fieldName, callback);
+			new DecompilerDataTypeFinderQCallback(program, dataType, fieldMatcher, consumer);
+		doFindReferences(program, dataType, qCallback, consumer, monitor);
+	}
+
+	@Override
+	public void findReferences(Program program, FieldMatcher fieldMatcher,
+			Consumer<DataTypeReference> consumer, TaskMonitor monitor) throws CancelledException {
+
+		DataType dataType = fieldMatcher.getDataType();
+		DecompilerDataTypeFinderQCallback qCallback =
+			new DecompilerDataTypeFinderQCallback(program, dataType, fieldMatcher, consumer);
+
+		doFindReferences(program, dataType, qCallback, consumer, monitor);
+	}
+
+	private void doFindReferences(Program program, DataType dataType,
+			DecompilerDataTypeFinderQCallback qCallback, Consumer<DataTypeReference> consumer,
+			TaskMonitor monitor) throws CancelledException {
 
 		Set<Function> functions = filterFunctions(program, dataType, monitor);
 
@@ -87,7 +87,9 @@ public class DecompilerDataTypeReferenceFinder implements DataTypeReferenceFinde
 		}
 		catch (InterruptedException e) {
 			Thread.currentThread().interrupt(); // reset the flag
-			Msg.debug(this, "Interrupted while decompiling functions");
+			if (!monitor.isCancelled()) {
+				Msg.debug(this, "Interrupted while decompiling functions");
+			}
 		}
 		catch (Exception e) {
 			Msg.error(this, "Encountered an exception decompiling functions", e);
@@ -104,12 +106,12 @@ public class DecompilerDataTypeReferenceFinder implements DataTypeReferenceFinde
 		buildTypeLineage(dt, types);
 
 		Set<Function> results = new HashSet<>();
-		accumulateFunctionCallsToDefinedData(program, types, results, monitor);
+		accumulateFunctionCallsToDefinedData(program, dt, types, results, monitor);
 
 		Listing listing = program.getListing();
 		FunctionIterator it = listing.getFunctions(true);
 		for (Function f : it) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			if (results.contains(f)) {
 				continue;
 			}
@@ -122,7 +124,7 @@ public class DecompilerDataTypeReferenceFinder implements DataTypeReferenceFinde
 		// note: do this here, so that don't cause the code above to skip processing these functions
 		Set<Function> callers = new HashSet<>();
 		for (Function f : results) {
-			monitor.checkCanceled();
+			monitor.checkCancelled();
 			Set<Function> callingFunctions = f.getCallingFunctions(monitor);
 			callers.addAll(callingFunctions);
 		}
@@ -132,21 +134,23 @@ public class DecompilerDataTypeReferenceFinder implements DataTypeReferenceFinde
 		return results;
 	}
 
-	private void accumulateFunctionCallsToDefinedData(Program program, Set<DataType> potentialTypes,
-			Set<Function> results, TaskMonitor monitor) throws CancelledException {
+	private void accumulateFunctionCallsToDefinedData(Program program, DataType dataType,
+			Set<DataType> potentialTypes, Set<Function> results, TaskMonitor monitor)
+			throws CancelledException {
 
 		Listing listing = program.getListing();
 		AtomicInteger counter = new AtomicInteger();
 		SetAccumulator<LocationReference> accumulator = new SetAccumulator<>();
 		Predicate<Data> dataMatcher = data -> {
 			counter.incrementAndGet();
-			DataType dataType = data.getDataType();
-			boolean matches = potentialTypes.contains(dataType);
+			DataType dt = data.getDataType();
+			boolean matches = potentialTypes.contains(dt);
 			return matches;
 		};
 
-		ReferenceUtils.findDataTypeMatchesInDefinedData(accumulator, program, dataMatcher, null,
-			monitor);
+		FieldMatcher emptyMatcher = new FieldMatcher(dataType);
+		ReferenceUtils.findDataTypeMatchesInDefinedData(accumulator, program, dataMatcher,
+			emptyMatcher, monitor);
 
 		for (LocationReference ref : accumulator) {
 			Address address = ref.getLocationOfUse();
@@ -175,12 +179,10 @@ public class DecompilerDataTypeReferenceFinder implements DataTypeReferenceFinde
 
 		// We have a different type, should we search for it?
 		if (baseType instanceof BuiltInDataType) {
-			// When given a wrapper type (e.g., typedef) , ignore 
-			// built-ins (e.g., int, byte, etc), as 
-			// they will be of little value due to their volume in the program and the
-			// user *probably* did not intend to search for them.  (Below we do not do 
-			// this check, which allows the user to search directly for a 
-			// built-in type, if they wish.)			
+			// When given a wrapper type (e.g., typedef) , ignore built-ins (e.g., int, byte, etc),
+			// as they will be of little value due to their volume in the program and the user
+			// *probably* did not intend to search for them.  (Below we do not do this check, which
+			// allows the user to search directly for a built-in type, if they wish.)
 			return;
 		}
 
@@ -191,8 +193,7 @@ public class DecompilerDataTypeReferenceFinder implements DataTypeReferenceFinde
 
 		types.add(dt);
 
-		DataType[] parents = dt.getParents();
-		for (DataType parent : parents) {
+		for (DataType parent : dt.getParents()) {
 			buildTypeLineage(parent, types);
 		}
 	}
@@ -225,22 +226,16 @@ public class DecompilerDataTypeReferenceFinder implements DataTypeReferenceFinde
 
 		private Consumer<DataTypeReference> callback;
 		private DataType dataType;
-		private String fieldName;
-
-		/* Search for Data Type access only--no field usage */
-		DecompilerDataTypeFinderQCallback(Program program, DataType dataType,
-				Consumer<DataTypeReference> callback) {
-			this(program, dataType, null, callback);
-		}
+		private FieldMatcher fieldMatcher;
 
 		/* Search for composite field access */
-		DecompilerDataTypeFinderQCallback(Program program, DataType dataType, String fieldName,
-				Consumer<DataTypeReference> callback) {
+		DecompilerDataTypeFinderQCallback(Program program, DataType dataType,
+				FieldMatcher fieldMatcher, Consumer<DataTypeReference> callback) {
 
 			super(program, new DecompilerConfigurer());
 
 			this.dataType = dataType;
-			this.fieldName = fieldName;
+			this.fieldMatcher = fieldMatcher;
 			this.callback = callback;
 		}
 
@@ -254,7 +249,7 @@ public class DecompilerDataTypeReferenceFinder implements DataTypeReferenceFinde
 			}
 
 			DecompilerDataTypeFinder finder =
-				new DecompilerDataTypeFinder(results, function, dataType, fieldName);
+				new DecompilerDataTypeFinder(results, function, dataType, fieldMatcher);
 			List<DataTypeReference> refs = finder.findUsage();
 
 			refs.forEach(r -> callback.accept(r));
@@ -279,7 +274,7 @@ public class DecompilerDataTypeReferenceFinder implements DataTypeReferenceFinde
 	}
 
 	/**
-	 * Class to do the work of searching through the Decompiler's results for the desired 
+	 * Class to do the work of searching through the Decompiler's results for the desired
 	 * data type access.
 	 */
 	private static class DecompilerDataTypeFinder {
@@ -287,14 +282,18 @@ public class DecompilerDataTypeReferenceFinder implements DataTypeReferenceFinde
 		private DecompileResults decompilation;
 		private Function function;
 		private DataType dataType;
-		private String fieldName;
+		private FieldMatcher fieldMatcher;
+
+		private String dbgPrefix;
 
 		DecompilerDataTypeFinder(DecompileResults results, Function function, DataType dataType,
-				String fieldName) {
+				FieldMatcher fieldMatcher) {
 			this.decompilation = results;
 			this.function = function;
 			this.dataType = dataType;
-			this.fieldName = fieldName;
+			this.fieldMatcher = fieldMatcher;
+
+			this.dbgPrefix = "f: " + function + "\n\t";
 		}
 
 		List<DataTypeReference> findUsage() {
@@ -308,7 +307,7 @@ public class DecompilerDataTypeReferenceFinder implements DataTypeReferenceFinde
 
 			ClangTokenGroup tokens = decompilation.getCCodeMarkup();
 
-// TODO delete this when the ticket settles down			
+// TODO delete this when the ticket settles down
 //			dumpTokens(tokens, 0);
 //			dumpTokenNames(tokens, 0);
 
@@ -318,13 +317,17 @@ public class DecompilerDataTypeReferenceFinder implements DataTypeReferenceFinde
 				return;
 			}
 
+			DtrfDbg.println(dbgPrefix + "checking vars...");
 			List<DecompilerReference> variables = findVariableReferences(tokens);
+			DtrfDbg.println(dbgPrefix + "DONE searching decompilation\nMatching results");
+
 			variables.forEach(v -> matchUsage(v, results));
 		}
 
 		/** Finds any search input match in the given reference */
 		private void matchUsage(DecompilerReference reference, List<DataTypeReference> results) {
-			reference.accumulateMatches(dataType, fieldName, results);
+			DtrfDbg.println("Checking " + reference);
+			reference.accumulateMatches(dataType, fieldMatcher, results);
 		}
 
 		private List<DecompilerReference> findVariableReferences(ClangTokenGroup tokens) {
@@ -339,25 +342,25 @@ public class DecompilerDataTypeReferenceFinder implements DataTypeReferenceFinde
 		}
 
 		/**
-		 * Uses the given line to find variables (also parameters and return types) and any 
-		 * accesses to them in that line.   A given variable may be used directly or, as in 
+		 * Uses the given line to find variables (also parameters and return types) and any
+		 * accesses to them in that line.   A given variable may be used directly or, as in
 		 * the case with Composite types, may have one of its fields accessed.  Each result
 		 * found by this method will be at least a variable access and may also itself have
 		 * field accesses.
-		 * 
+		 *
 		 * <p>Sometimes a line is structured such that there are anonymous variable accesses.  This
 		 * is the case where a Composite is being accessed, but the Composite itself is
-		 * not a variable in the current function.  See {@link AnonymousVariableAccessDR} for 
+		 * not a variable in the current function.  See {@link AnonymousVariableAccessDR} for
 		 * more details.
-		 * 
+		 *
 		 * @param line the current line being processed from the Decompiler
 		 * @param results the accumulator into which matches will be placed
 		 */
 		private void findVariablesInLine(ClangLine line, List<DecompilerReference> results) {
 
 			List<ClangToken> allTokens = line.getAllTokens();
-			Iterable<ClangToken> filteredTokens = IterableUtils.filteredIterable(allTokens,
-				token -> {
+			Iterable<ClangToken> filteredTokens =
+				IterableUtils.filteredIterable(allTokens, token -> {
 					// Only include desirable tokens (this is really just for easier debugging).
 					// Update this filter if the loop below ever needs other types of tokens.
 					return (token instanceof ClangTypeToken) ||
@@ -371,23 +374,36 @@ public class DecompilerDataTypeReferenceFinder implements DataTypeReferenceFinde
 			VariableAccessDR access = null;
 			for (ClangToken token : filteredTokens) {
 
+				DtrfDbg.println(dbgPrefix + "checking token: " + token);
+
 				if (token instanceof ClangTypeToken) {
 
 					if (token.Parent() instanceof ClangReturnType) {
+						DtrfDbg.println(dbgPrefix + "\treturn type: " + line);
+
 						results.add(new ReturnTypeDR(line, (ClangTypeToken) token));
 					}
 					else if (token.isVariableRef()) {
 						// Note: variable refs will get their variable in an upcoming token
 						if (isFunctionPrototype(token.Parent())) {
+
+							DtrfDbg.println(dbgPrefix + "\tparameter: " + line);
+
 							declaration = new ParameterDR(line, (ClangTypeToken) token);
 						}
 						else {
+
+							DtrfDbg.println(dbgPrefix + "\tlocal var: " + line);
+
 							declaration = new LocalVariableDR(line, (ClangTypeToken) token);
 						}
 
 						results.add(declaration);
 					}
 					else {
+
+						DtrfDbg.println(dbgPrefix + "\tadding a cast");
+
 						// Assumption: this is a cast inside of a ClangStatement
 						// Assumption: there can be multiple casts concatenated
 						castsSoFar.add(new DecompilerVariableType(token));
@@ -396,22 +412,28 @@ public class DecompilerDataTypeReferenceFinder implements DataTypeReferenceFinde
 				else if (token instanceof ClangVariableToken) {
 
 					//
-					// Observations: 
-					// 1) 'access' will be null if we are on a C statement that 
-					//    is a declaration (parameter or variable).  In this case, 
+					// Observations:
+					// 1) 'access' will be null if we are on a C statement that
+					//    is a declaration (parameter or variable).  In this case,
 					//    'declaration' will be an instance of VariableDR.
 					// 2) 'access' will be null the first time a variable is used in
 					//    a statement.
-					// 3) if 'access' is non-null, but already has a variable assigned, 
-					//    then this means the current ClangVariableToken represents a new 
+					// 3) if 'access' is non-null, but already has a variable assigned,
+					//    then this means the current ClangVariableToken represents a new
 					//    variable access/usage.
 					//
 					if (declaration != null) {
+
+						DtrfDbg.println(dbgPrefix + "\thave declaration - " + declaration);
+
 						declaration.setVariable((ClangVariableToken) token);
 						declaration = null;
 					}
 					else {
 						if (access == null || access.getVariable() != null) {
+
+							DtrfDbg.println(dbgPrefix + "\tcreating variable access: " + line);
+
 							access = new VariableAccessDR(line);
 							results.add(access);
 						}
@@ -427,7 +449,7 @@ public class DecompilerDataTypeReferenceFinder implements DataTypeReferenceFinde
 
 					if (access == null) {
 						// Uh-oh.  I've only seen this when line-wrapping is happening.  In that
-						// case, try to get the last variable that we've seen and assume that 
+						// case, try to get the last variable that we've seen and assume that
 						// is the variable to which this field belongs.
 						access = getLastAccess(results);
 						if (access == null) {
@@ -442,7 +464,11 @@ public class DecompilerDataTypeReferenceFinder implements DataTypeReferenceFinde
 
 					ClangFieldToken field = (ClangFieldToken) token;
 					if (typesDoNotMatch(access, field)) {
-						// this can happen when a field is used anonymously, such as directly 
+
+						DtrfDbg.println(
+							dbgPrefix + "\tcreating an anonymous variable access: " + line);
+
+						// this can happen when a field is used anonymously, such as directly
 						// after a nested array index operation
 						results.add(new AnonymousVariableAccessDR(line, field));
 						continue;

@@ -19,6 +19,7 @@ import java.util.Set;
 
 import org.junit.*;
 
+import db.Transaction;
 import ghidra.app.plugin.core.debug.service.tracemgr.DebuggerTraceManagerServicePlugin;
 import ghidra.app.plugin.core.progmgr.ProgramManagerPlugin;
 import ghidra.app.services.DebuggerTraceManagerService;
@@ -30,7 +31,6 @@ import ghidra.program.model.listing.Program;
 import ghidra.test.ToyProgramBuilder;
 import ghidra.trace.database.ToyDBTraceBuilder;
 import ghidra.trace.model.modules.TraceModule;
-import ghidra.util.database.UndoableTransaction;
 import ghidra.util.task.TaskMonitor;
 import help.screenshot.GhidraScreenShotGenerator;
 
@@ -41,7 +41,7 @@ public class DebuggerModulesPluginScreenShots extends GhidraScreenShotGenerator 
 	DebuggerModulesPlugin modulesPlugin;
 	DebuggerModulesProvider modulesProvider;
 	ToyDBTraceBuilder tb;
-	Program progEcho;
+	Program progBash;
 	Program progLibC;
 
 	@Before
@@ -59,8 +59,8 @@ public class DebuggerModulesPluginScreenShots extends GhidraScreenShotGenerator 
 	public void tearDownMine() {
 		tb.close();
 
-		if (progEcho != null) {
-			progEcho.release(this);
+		if (progBash != null) {
+			progBash.release(this);
 		}
 		if (progLibC != null) {
 			progLibC.release(this);
@@ -69,7 +69,7 @@ public class DebuggerModulesPluginScreenShots extends GhidraScreenShotGenerator 
 
 	@Test
 	public void testCaptureDebuggerModulesPlugin() throws Throwable {
-		try (UndoableTransaction tid = tb.startTransaction()) {
+		try (Transaction tx = tb.startTransaction()) {
 			long snap = tb.trace.getTimeManager().createSnapshot("First").getKey();
 
 			TraceModule bin = tb.trace.getModuleManager()
@@ -96,7 +96,7 @@ public class DebuggerModulesPluginScreenShots extends GhidraScreenShotGenerator 
 
 	private void populateTraceAndPrograms() throws Exception {
 		DomainFolder root = tool.getProject().getProjectData().getRootFolder();
-		try (UndoableTransaction tid = tb.startTransaction()) {
+		try (Transaction tx = tb.startTransaction()) {
 			long snap = tb.trace.getTimeManager().createSnapshot("First").getKey();
 
 			TraceModule bin = tb.trace.getModuleManager()
@@ -111,20 +111,20 @@ public class DebuggerModulesPluginScreenShots extends GhidraScreenShotGenerator 
 			lib.addSection("libc[.data]", ".data", tb.range(0x7fae0000, 0x7faeffff));
 		}
 
-		progEcho = createDefaultProgram("bash", ProgramBuilder._X64, this);
+		progBash = createDefaultProgram("bash", ProgramBuilder._X64, this);
 		progLibC = createDefaultProgram("libc.so.6", ProgramBuilder._X64, this);
 
-		try (UndoableTransaction tid = UndoableTransaction.start(progEcho, "Add memory", true)) {
-			progEcho.setImageBase(addr(progEcho, 0x00400000), true);
-			progEcho.getMemory()
-					.createInitializedBlock(".text", addr(progEcho, 0x00400000), 0x10000, (byte) 0,
+		try (Transaction tx = progBash.openTransaction("Add memory")) {
+			progBash.setImageBase(addr(progBash, 0x00400000), true);
+			progBash.getMemory()
+					.createInitializedBlock(".text", addr(progBash, 0x00400000), 0x10000, (byte) 0,
 						TaskMonitor.DUMMY, false);
-			progEcho.getMemory()
-					.createInitializedBlock(".data", addr(progEcho, 0x00600000), 0x10000, (byte) 0,
+			progBash.getMemory()
+					.createInitializedBlock(".data", addr(progBash, 0x00600000), 0x10000, (byte) 0,
 						TaskMonitor.DUMMY, false);
 		}
 
-		try (UndoableTransaction tid = UndoableTransaction.start(progLibC, "Add memory", true)) {
+		try (Transaction tx = progLibC.openTransaction("Add memory")) {
 			progLibC.setImageBase(addr(progLibC, 0x00400000), true);
 			progLibC.getMemory()
 					.createInitializedBlock(".text", addr(progLibC, 0x00400000), 0x10000, (byte) 0,
@@ -135,13 +135,13 @@ public class DebuggerModulesPluginScreenShots extends GhidraScreenShotGenerator 
 		}
 
 		root.createFile("trace", tb.trace, TaskMonitor.DUMMY);
-		root.createFile("echo", progEcho, TaskMonitor.DUMMY);
+		root.createFile("bash", progBash, TaskMonitor.DUMMY);
 		root.createFile("libc.so.6", progLibC, TaskMonitor.DUMMY);
 
 		traceManager.openTrace(tb.trace);
 		traceManager.activateTrace(tb.trace);
 
-		programManager.openProgram(progEcho);
+		programManager.openProgram(progBash);
 		programManager.openProgram(progLibC);
 	}
 

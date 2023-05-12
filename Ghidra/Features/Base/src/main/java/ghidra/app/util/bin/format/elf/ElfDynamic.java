@@ -17,9 +17,8 @@ package ghidra.app.util.bin.format.elf;
 
 import java.io.IOException;
 
-import ghidra.app.util.bin.ByteArrayConverter;
-import ghidra.app.util.bin.format.FactoryBundledWithBinaryReader;
-import ghidra.util.*;
+import ghidra.app.util.bin.BinaryReader;
+import ghidra.util.StringUtilities;
 
 /**
  * A class to represent the Elf<code>32</code>_Dyn data structure.
@@ -51,33 +50,19 @@ import ghidra.util.*;
  * 
  * </code></pre>
  */
-public class ElfDynamic implements ByteArrayConverter {
+public class ElfDynamic {
 
 	private ElfHeader elf;
 
 	private int d_tag;
-//	private ElfDynamicType d_tag_type;
     private long d_val;
 
-    public static ElfDynamic createElfDynamic(
-FactoryBundledWithBinaryReader reader, ElfHeader elf)
-            throws IOException {
-        ElfDynamic elfDynamic = (ElfDynamic) reader.getFactory().create(ElfDynamic.class);
-		elfDynamic.initElfDynamic(reader, elf);
-        return elfDynamic;
-    }
-
-    /**
-     * DO NOT USE THIS CONSTRUCTOR, USE create*(GenericFactory ...) FACTORY METHODS INSTEAD.
-     */
-    public ElfDynamic() {}
-
-	private void initElfDynamic(FactoryBundledWithBinaryReader reader, ElfHeader elf)
+	public ElfDynamic(BinaryReader reader, ElfHeader elf)
 			throws IOException {
 		this.elf = elf;
 		if (elf.is32Bit()) {
 			d_tag = reader.readNextInt();
-            d_val = reader.readNextInt() & Conv.INT_MASK;
+			d_val = Integer.toUnsignedLong(reader.readNextInt());
         }
         else {
 			d_tag = (int) reader.readNextLong();
@@ -136,22 +121,6 @@ FactoryBundledWithBinaryReader reader, ElfHeader elf)
     }
 
     /**
-     * Sets the value of this dynamic. The value could be an address or a number.
-     * @param value the new value dynamic
-     */
-    public void setValue(long value) {
-        this.d_val = value;
-    }
-
-    /**
-     * Sets the value of this dynamic. The value could be an address or a number.
-     * @param value the new value dynamic
-     */
-    public void setValue(int value) {
-        this.d_val = value & Conv.INT_MASK;
-    }
-
-    /**
      * A convenience method for getting a string representing the d_tag value.
      * For example, if d_tag == DT_SYMTAB, then this method returns "DT_SYMTAB".
      * @return a string representing the d_tag value
@@ -170,29 +139,8 @@ FactoryBundledWithBinaryReader reader, ElfHeader elf)
 	}
 
     /**
-     * @see ghidra.app.util.bin.ByteArrayConverter#toBytes(ghidra.util.DataConverter)
-     */
-    public byte [] toBytes(DataConverter dc) {
-        byte [] bytes = new byte[sizeof()];
-		write(bytes, 0, dc);
-        return bytes;
-    }
-
-	public void write(byte[] data, int offset, DataConverter dc)
-			throws ArrayIndexOutOfBoundsException {
-		if (elf.is32Bit()) {
-			dc.putInt(data, offset, d_tag);
-			dc.putInt(data, offset + 4, (int) d_val);
-		}
-		else {
-			dc.putLong(data, offset, d_tag);
-			dc.putLong(data, offset + 8, d_val);
-		}
-	}
-
-    /**
-     * Returns the size in bytes of this object.
-     */
+	 * @return the size in bytes of this object.
+	 */
 	public int sizeof() {
 		return elf.is32Bit() ? 8 : 16;
     }

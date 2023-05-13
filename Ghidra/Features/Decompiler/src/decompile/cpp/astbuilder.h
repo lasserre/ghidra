@@ -4,12 +4,16 @@
 #include <fstream>
 #include <vector>
 
+// #include "funcdata.hh"
 #include "printc.hh"
 #include "ast.h"
 
-class Funcdata;
+
+class ghidra::Funcdata;
 struct PendingExpr;
 struct PendingNode;
+
+using namespace ghidra;
 
 /** helper functions I haven't moved elsewhere  yet */
 template<typename T> string to_hex(T data);
@@ -224,7 +228,7 @@ protected:
     void unimplementedCode(std::string description);
     void unimplementedOp(std::string opname);
 
-    deque<PendingExpr*> _pending_expressions;
+    std::deque<PendingExpr*> _pending_expressions;
 
     /**
      * The AST node stack provides our current context within the AST as we

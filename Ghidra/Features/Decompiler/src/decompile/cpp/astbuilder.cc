@@ -7,6 +7,8 @@
 #include "funcdata.hh"
 #include "varnode.hh"
 
+using namespace std;
+
 static int _count_unimpl_stuff = 0;
 void ASTBuilder::unimplementedCode(std::string description)
 {
@@ -247,7 +249,7 @@ FunctionDecl* ASTBuilder::buildFunctionDecl(Funcdata* fd, bool fwd_decl)
     fdecl->addChild(fbody);
 
     // locals (main scope)
-    ScopeLocal& const scope = *fd->getScopeLocal();
+    ScopeLocal& scope = *fd->getScopeLocal();
     buildLocalDeclsFromScope(scope, fbody);
     // locals from nested scopes
     ScopeMap::const_iterator iter = fd->getScopeLocal()->childrenBegin();

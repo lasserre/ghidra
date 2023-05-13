@@ -1,8 +1,10 @@
 #pragma once
 
+
 #include <vector>
 #include <string>
 
+#include "types.h"
 #include "funcdata.hh"
 
 class ASTVisitor;
@@ -10,6 +12,10 @@ class ValueDecl;
 
 class BuiltinType;
 class Type;
+
+// using namespace std;
+using std::string;
+using namespace ghidra;
 
 /**
  * @brief Represents a single node in the AST

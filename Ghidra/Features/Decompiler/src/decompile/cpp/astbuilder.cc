@@ -465,6 +465,7 @@ void ASTBuilder::processPendingConstant(PendingNode* node)
     auto value = node->vnode->getOffset();
     HighVariable* high = node->vnode->getHigh();
     Datatype* dt = high->getType();
+    Datatype* subtype = nullptr;
 
     /**
      * AHA:
@@ -486,28 +487,46 @@ void ASTBuilder::processPendingConstant(PendingNode* node)
             else {
                 createIntLiteral(this, dt, value);  // int/uint
             }
-            break;
+            return;
         case TYPE_UNKNOWN:
             createIntLiteral(this, dt, value);
-            break;
+            return;
         case TYPE_BOOL:
             unimplementedCode("bool constant");
-            break;
+            return;
         case TYPE_VOID:
             // this is wrong...log or ignore (Ghidra throws here so just ignore)
-            break;
+            return;
         case TYPE_PTR:
         case TYPE_PTRREL:
-            unimplementedCode("pointer constant");
+            if (option_NULL && (value == 0)) {
+                // 'NULL' token for null pointers
+                unimplementedCode("NULL pointer");
+                return;
+            }
+            subtype = ((TypePointer*)dt)->getPtrTo();
+            if (subtype->isCharPrint()) {
+                // TODO: pick up here...
+                // -----------------------
+                // TODO: pushPtrCharConstant()
+                // if pushPtrCharConstant()
+                    // return
+            } else if (subtype->getMetatype() == TYPE_CODE) {
+                unimplementedCode("pushPtrCodeConstant() from processPendingConstant");
+                return;
+            }
             break;
         case TYPE_FLOAT:
             unimplementedCode("float constant");
-            break;
+            return;
         default:
-            unimplementedCode("default 'printing' for constant");
+            unimplementedCode("default 'printing' for constant with metatype" + (int)dt->getMetatype());
             // typecast, integer
             break;
     }
+
+    // TODO: implement casting block down here...
+    // (this is where my (char*) is being generated...in FUN_0014fced)
 }
 
 void ASTBuilder::processPendingTerminal(PendingNode* node)

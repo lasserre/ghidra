@@ -8,7 +8,8 @@
             "name": "(Windows) Attach",
             "type": "cppvsdbg",
             "request": "attach",
+            // "preLaunchTask": "buildNatives",  // don't do this because we attach to running instance
+            "processId": "${command:pickProcess}"
         }
-
     ]
 }

@@ -133,6 +133,12 @@ ASTBuilder::ASTBuilder(Architecture* ghidra, string logfolder)
     : PrintC(ghidra), _logfolder(logfolder),
     _head_translation_unit(nullptr), _next_vdecl_id(0)
 {
+    // TODO: initialize AST callbacks...
+    _ast_callbacks.toAstTypeCallback = [this](const Datatype* dt) {
+        return this->toAstType(dt);
+        // return ((ASTBuilder*)context)->toAstType(dt);
+    };
+    initASTCallbacks(&_ast_callbacks);
 }
 
 /**
@@ -440,10 +446,10 @@ void ASTBuilder::processPendingTemporary(PendingNode* node)
     }
 }
 
-void createIntLiteral(ASTBuilder* builder, Datatype* dt, uintb value)
+void ASTBuilder::createIntLiteral(Datatype* dt, uintb value)
 {
     IntegerLiteral* lit = new IntegerLiteral(toAstType(dt), value);
-    builder->currentASTNode()->addChild(lit);
+    currentASTNode()->addChild(lit);
 }
 
 void ASTBuilder::createCharConstant(Datatype* dt, uintb value, const Varnode* vn)
@@ -458,6 +464,56 @@ void ASTBuilder::createCharConstant(Datatype* dt, uintb value, const Varnode* vn
     //    come back and add some logic back in if it e.g. changes data types
     //    to int in some cases (also the EquateSymbol case)
     //    If so, just reuse their functions and convert the stringstream
+}
+
+bool ASTBuilder::createPtrCharConstant(TypePointer* pt, uintb value, const Varnode* vn, const PcodeOp* op)
+{
+    if (value == 0) {
+        return false;
+    }
+
+    // below mostly copied from pushPtrCharConstant()
+    AddrSpace* spc = glb->getDefaultDataSpace();
+    uintb fullEncoding;
+    Address point;
+    if (op != (const PcodeOp*)0) {
+        point = op->getAddr();
+    }
+    Address stringaddr = glb->resolveConstant(spc, value, pt->getSize(), point, fullEncoding);
+    if (stringaddr.isInvalid()) {
+        return false;
+    }
+    if (!glb->symboltab->getGlobalScope()->isReadOnly(stringaddr,1,Address())) {
+        return false;   // string location is not readonly
+    }
+
+    ostringstream str;
+    Datatype* pointedto_dt = pt->getPtrTo();
+    if (!printCharacterConstant(str, stringaddr, pointedto_dt)) {
+        return false;   // unable to get a nice ASCII string
+    }
+
+    // TODO: use string literal
+    unimplementedCode("string literal");
+    return false;
+}
+
+bool ASTBuilder::createPtrCodeConstant(TypePointer* pt, uintb value, const Varnode* vn, const PcodeOp* op)
+{
+    AddrSpace* spc = glb->getDefaultCodeSpace();
+    Funcdata* fd = (Funcdata*)nullptr;
+    uintb byte_offset = AddrSpace::addressToByte(value, spc->getWordSize());
+    fd = glb->symboltab->getGlobalScope()->queryFunction(Address(spc, byte_offset));
+    if (fd) {
+        unimplementedCode("reference to function pointer");
+        return false;
+        // this is probably going to be a DeclRef?
+        // ALSO: make sure we properly handle any needed fwd-decls in case this adds a new
+        // reference to a function (I think we postprocess those and get this automatically)
+        // fd->getName()
+        // return true;
+    }
+    return false;
 }
 
 void ASTBuilder::processPendingConstant(PendingNode* node)
@@ -485,11 +541,11 @@ void ASTBuilder::processPendingConstant(PendingNode* node)
                 unimplementedCode("enum constant");
             }
             else {
-                createIntLiteral(this, dt, value);  // int/uint
+                createIntLiteral(dt, value);  // int/uint
             }
             return;
         case TYPE_UNKNOWN:
-            createIntLiteral(this, dt, value);
+            createIntLiteral(dt, value);
             return;
         case TYPE_BOOL:
             unimplementedCode("bool constant");
@@ -501,32 +557,35 @@ void ASTBuilder::processPendingConstant(PendingNode* node)
         case TYPE_PTRREL:
             if (option_NULL && (value == 0)) {
                 // 'NULL' token for null pointers
+                // we will never hit this unless we enable this option (in the GUI)
                 unimplementedCode("NULL pointer");
                 return;
             }
             subtype = ((TypePointer*)dt)->getPtrTo();
             if (subtype->isCharPrint()) {
-                // TODO: pick up here...
-                // -----------------------
-                // TODO: pushPtrCharConstant()
-                // if pushPtrCharConstant()
-                    // return
+                if (createPtrCharConstant((TypePointer*)dt, value, node->vnode, node->op)) {
+                    return;
+                }
             } else if (subtype->getMetatype() == TYPE_CODE) {
-                unimplementedCode("pushPtrCodeConstant() from processPendingConstant");
-                return;
+                if (createPtrCodeConstant((TypePointer*)dt, value, node->vnode, node->op)) {
+                    return;
+                }
             }
-            break;
+            break;  // break out to default print below
         case TYPE_FLOAT:
             unimplementedCode("float constant");
             return;
         default:
             unimplementedCode("default 'printing' for constant with metatype" + (int)dt->getMetatype());
             // typecast, integer
-            break;
+            break;  // break out to default print below
     }
 
-    // TODO: implement casting block down here...
-    // (this is where my (char*) is being generated...in FUN_0014fced)
+    // insert type cast and the literal integer value for the constant
+    CStyleCastExpr* cast = createTypeCast(dt);
+    pushASTNode(cast);
+    createIntLiteral(dt, value);
+    popASTNode();
 }
 
 void ASTBuilder::processPendingTerminal(PendingNode* node)
@@ -1347,17 +1406,52 @@ std::string ASTBuilder::getTypeStringEnd(const Datatype* dt)
     return type_str;
 }
 
-void ASTBuilder::createTypeCast(const PcodeOp* op)
+CStyleCastExpr* ASTBuilder::createTypeCast(Datatype* dt)
 {
-    Datatype* dt = op->getOut()->getHigh()->getType();
     CStyleCastExpr* cast = new CStyleCastExpr(toAstType(dt));
     currentASTNode()->addChild(cast);
+    return cast;
+}
+
+void ASTBuilder::processTypeCastExpression(const PcodeOp* op)
+{
+    Datatype* dt = op->getOut()->getHigh()->getType();
+    auto cast = createTypeCast(dt);
 
     PendingExpr* expr = new PendingExpr();
     expr->ast_op = cast;
     PendingNode* node = buildNodeImplied(op->getIn(0), op, mods);
     expr->parts.push_back(node);
     _pending_expressions.push_back(expr);
+}
+
+Type* ASTBuilder::toAstType(const Datatype* dt)
+{
+    switch (dt->getMetatype()) {
+        case TYPE_UINT:     // fall-through
+        case TYPE_INT:
+        case TYPE_FLOAT:
+        case TYPE_BOOL:
+            return new BuiltinType(dt);
+        case TYPE_ARRAY:
+            return new ConstantArrayType((TypeArray*)dt);
+        case TYPE_UNKNOWN:      // fall-through
+        case TYPE_SPACEBASE:
+        default:
+            // _messages.push_back("UNHANDLED metatype " + string(dt->getMetatype())
+                // + " for " + dt->getName());
+            unimplementedCode("UNHANDLED metatype " + std::to_string((int)dt->getMetatype()) +
+                              " for " + dt->getName());
+            return new Type(dt);
+    }
+
+    // TYPE_VOID = 12,		///< Standard "void" type, absence of type
+    // TYPE_CODE = 6,		///< Data is actual executable code
+
+    // TYPE_PTR = 4,			///< Pointer data-type
+    // TYPE_PTRREL = 3,		///< Pointer relative to another data-type (specialization of TYPE_PTR)
+    // TYPE_PARTIALSTRUCT = 1,	///< Part of a structure, stored separately from the whole
+    // TYPE_STRUCT = 0		///< Structure data-type, made up of component datatypes
 }
 
 void ASTBuilder::opIntSext(const PcodeOp *op,const PcodeOp *readOp)
@@ -1371,7 +1465,7 @@ void ASTBuilder::opIntSext(const PcodeOp *op,const PcodeOp *readOp)
             unimplementedCode("opHiddenFunc case in opIntSext");
         }
         else {
-            createTypeCast(op);
+            processTypeCastExpression(op);
         }
     }
     else {
@@ -1628,7 +1722,7 @@ void ASTBuilder::opSubpiece(const PcodeOp *op)
 
 void ASTBuilder::opCast(const PcodeOp *op)
 {
-    createTypeCast(op);
+    processTypeCastExpression(op);
 }
 
 void ASTBuilder::opPtradd(const PcodeOp *op)

@@ -221,8 +221,14 @@ protected:
      */
     void processExpressionStack();
 
+    void createIntLiteral(Datatype* dt, uintb value);
     void createCharConstant(Datatype* dt, uintb value, const Varnode* vn);
-    void createTypeCast(const PcodeOp* op);
+    bool createPtrCharConstant(TypePointer* pt, uintb value, const Varnode* vn, const PcodeOp* op);
+    bool createPtrCodeConstant(TypePointer* pt, uintb value, const Varnode* vn, const PcodeOp* op);
+    void processTypeCastExpression(const PcodeOp *op);
+    CStyleCastExpr* createTypeCast(Datatype* dt);
+
+    Type* toAstType(const Datatype* dt);
 
     /** temp functions for logging spots I need to implement */
     void unimplementedCode(std::string description);
@@ -267,4 +273,5 @@ protected:
 
     string _logfolder;
     ofstream _logfile;  // log unimplemented code for review
+    ASTCallbacks _ast_callbacks;
 };

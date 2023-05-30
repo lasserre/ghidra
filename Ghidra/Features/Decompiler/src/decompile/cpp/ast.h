@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <string>
+#include <functional>
 
 #include "types.h"
 #include "funcdata.hh"
@@ -16,6 +17,30 @@ class Type;
 // using namespace std;
 using std::string;
 using namespace ghidra;
+
+/**
+ * @brief Yes, this is bad design but I need to leave the unimplementedCode
+ * logging function associated with ASTBuilder state and have the toAstType()
+ * function be able to call this...but also have these classes be able to call
+ * toAstType(). This is my hacky workaround that I'm doing to simply get the job
+ * done...I know it's not pretty lol. Once everything works, we can remove this
+ * as I don't expect to use the unimplementedCode callback at all
+ */
+struct ASTCallbacks
+{
+    std::function<Type*(const Datatype* dt)> toAstTypeCallback;
+    // Type* (*toAstTypeCallback)(const Datatype* dt, void* context);
+    // void* context;
+
+    // this one is actually called by AST classes
+    Type* toAstType(const Datatype* dt)
+    {
+        return toAstTypeCallback(dt);
+        // return toAstTypeCallback(dt, context);
+    }
+};
+
+void initASTCallbacks(ASTCallbacks* cb);
 
 /**
  * @brief Represents a single node in the AST
@@ -691,4 +716,3 @@ protected:
     ProtoParameter* _param;
 };
 
-Type* toAstType(const Datatype* dt);

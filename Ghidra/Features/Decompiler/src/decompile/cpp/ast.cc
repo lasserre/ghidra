@@ -1,6 +1,12 @@
 #include "ast.h"
 #include "astvisitor.h"
 
+static ASTCallbacks* callbacks;
+void initASTCallbacks(ASTCallbacks* cb)
+{
+    callbacks = cb;
+}
+
 ASTNode::ASTNode()
     : _parent(nullptr), _children(), _messages()
 {
@@ -277,7 +283,7 @@ void* DeclStmt::doAccept(ASTVisitor* v, void* context)
 FunctionDecl::FunctionDecl(int id, Funcdata* fd)
     : ValueDecl(id), _fd(fd)
 {
-    _return_type = toAstType(fd->getFuncProto().getOutputType());
+    _return_type = callbacks->toAstType(fd->getFuncProto().getOutputType());
 }
 
 void* FunctionDecl::doAccept(ASTVisitor* v, void* context)
@@ -402,7 +408,7 @@ void* BuiltinType::doAccept(ASTVisitor* v, void* context)
 ConstantArrayType::ConstantArrayType(const Datatype* elementType, int numElements)
     : Type(""), _num_elements(numElements)
 {
-    addChild(toAstType(elementType));
+    addChild(callbacks->toAstType(elementType));
 }
 
 ConstantArrayType::ConstantArrayType(const TypeArray* arrType)
@@ -466,7 +472,7 @@ ParmVarDecl::ParmVarDecl(int id, ProtoParameter* param)
     : VarDecl(id, param->getSymbol()), _param(param)
 {
     if (!_type) {
-        _type = toAstType(param->getType());
+        _type = callbacks->toAstType(param->getType());
     }
 }
 
@@ -490,7 +496,7 @@ VarDecl::VarDecl(int id, Symbol* sym)
 {
     if (sym) {
         _name = sym->getName();
-        _type = toAstType(sym->getType());
+        _type = callbacks->toAstType(sym->getType());
     }
 }
 
@@ -502,37 +508,10 @@ VarDecl::VarDecl(int id, string name, Type* type)
 VarDecl::VarDecl(int id, string name, const Datatype* dt)
     : ValueDecl(id), _sym(nullptr), _name(name), _type(nullptr)
 {
-    _type = toAstType(dt);
+    _type = callbacks->toAstType(dt);
 }
 
 void* VarDecl::doAccept(ASTVisitor* v, void* context)
 {
     return v->visitVarDecl(this, context);
-}
-
-Type* toAstType(const Datatype* dt)
-{
-    switch (dt->getMetatype()) {
-        case TYPE_UINT:     // fall-through
-        case TYPE_INT:
-        case TYPE_FLOAT:
-        case TYPE_BOOL:
-            return new BuiltinType(dt);
-        case TYPE_ARRAY:
-            return new ConstantArrayType((TypeArray*)dt);
-        case TYPE_UNKNOWN:      // fall-through
-        case TYPE_SPACEBASE:
-        default:
-            // _messages.push_back("UNHANDLED metatype " + string(dt->getMetatype())
-                // + " for " + dt->getName());
-            return new Type(dt);
-    }
-
-    // TYPE_VOID = 12,		///< Standard "void" type, absence of type
-    // TYPE_CODE = 6,		///< Data is actual executable code
-
-    // TYPE_PTR = 4,			///< Pointer data-type
-    // TYPE_PTRREL = 3,		///< Pointer relative to another data-type (specialization of TYPE_PTR)
-    // TYPE_PARTIALSTRUCT = 1,	///< Part of a structure, stored separately from the whole
-    // TYPE_STRUCT = 0		///< Structure data-type, made up of component datatypes
 }

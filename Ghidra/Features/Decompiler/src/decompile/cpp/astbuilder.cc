@@ -1437,8 +1437,12 @@ Type* ASTBuilder::toAstType(const Datatype* dt)
             return new PointerType(((TypePointer*)dt)->getPtrTo());
         case TYPE_ARRAY:
             return new ConstantArrayType((TypeArray*)dt);
-        case TYPE_UNKNOWN:      // fall-through
-        case TYPE_SPACEBASE:
+        case TYPE_UNKNOWN:
+            // convert undefinedX types to Type() and TypedefDeclVisitor will generate
+            // the proper typedefs for them
+            // -> (we can also change this to generate BuiltinType directly if desired)
+            return new Type(dt);
+        case TYPE_SPACEBASE:    // fall-through
         default:
             // _messages.push_back("UNHANDLED metatype " + string(dt->getMetatype())
                 // + " for " + dt->getName());
@@ -1447,13 +1451,15 @@ Type* ASTBuilder::toAstType(const Datatype* dt)
             return new Type(dt);
     }
 
-    // TYPE_VOID = 12,		///< Standard "void" type, absence of type
-    // TYPE_CODE = 6,		///< Data is actual executable code
+    // TYPE_VOID = 14,		///< Standard "void" type, absence of type
+    // TYPE_SPACEBASE = 13,		///< Placeholder for symbol/type look-up calculations
+    // TYPE_CODE = 8,		///< Data is actual executable code
 
-    // TYPE_PTR = 4,			///< Pointer data-type
-    // TYPE_PTRREL = 3,		///< Pointer relative to another data-type (specialization of TYPE_PTR)
+    // TYPE_PTRREL = 5,		///< Pointer relative to another data-type (specialization of TYPE_PTR)
+    // TYPE_STRUCT = 3,		///< Structure data-type, made up of component datatypes
+    // TYPE_UNION = 2,		///< An overlapping union of multiple datatypes
     // TYPE_PARTIALSTRUCT = 1,	///< Part of a structure, stored separately from the whole
-    // TYPE_STRUCT = 0		///< Structure data-type, made up of component datatypes
+    // TYPE_PARTIALUNION = 0		///< Part of a union
 }
 
 void ASTBuilder::opIntSext(const PcodeOp *op,const PcodeOp *readOp)

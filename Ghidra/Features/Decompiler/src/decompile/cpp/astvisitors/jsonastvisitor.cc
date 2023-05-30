@@ -163,7 +163,7 @@ void* JsonASTVisitor::visitCharacterLiteral(CharacterLiteral* cl, void* context)
     json cl_json;
     cl_json["kind"] = "CharacterLiteral";
     cl_json["dtype"] = typeToJson(cl->type());
-    cl_json["dtype_name"] = datatypeToJson(cl->type()->ghidra_dtype());
+    // cl_json["dtype_name"] = datatypeToJson(cl->type()->ghidra_dtype());
     cl_json["value"] = cl->value();
     addMessages(cl, cl_json);
     return copy_to_parent(cl_json, context);
@@ -202,7 +202,7 @@ void* JsonASTVisitor::visitCStyleCastExpr(CStyleCastExpr* cast_expr, void* conte
     json cast;
     cast["kind"] = "CStyleCastExpr";
     cast["dtype"] = typeToJson(cast_expr->type());
-    cast["dtype_name"] = datatypeToJson(cast_expr->type()->ghidra_dtype());
+    // cast["dtype_name"] = datatypeToJson(cast_expr->type()->ghidra_dtype());
     addMessages(cast_expr, cast);
     return copy_to_parent(cast, context);
 }
@@ -235,7 +235,7 @@ void* JsonASTVisitor::visitFunctionDecl(FunctionDecl* fd, void* context)
     fdecl["name"] = fd->name();
     fdecl["address"] = to_hex(fd->address());
     fdecl["return_dtype"] = typeToJson(fd->return_type());
-    fdecl["return_dtype_name"] = datatypeToJson(fd->return_type()->ghidra_dtype());
+    // fdecl["return_dtype_name"] = datatypeToJson(fd->return_type()->ghidra_dtype());
     addMessages(fd, fdecl);
     return copy_to_parent(fdecl, context);
 }
@@ -246,7 +246,7 @@ void* JsonASTVisitor::visitIntegerLiteral(IntegerLiteral* lit, void* context)
     int_lit["kind"] = "IntegerLiteral";
     int_lit["value"] = lit->value();
     int_lit["dtype"] = typeToJson(lit->type());
-    int_lit["dtype_name"] = datatypeToJson(lit->type()->ghidra_dtype());
+    // int_lit["dtype_name"] = datatypeToJson(lit->type()->ghidra_dtype());
     addMessages(lit, int_lit);
     return copy_to_parent(int_lit, context);
 }
@@ -286,7 +286,7 @@ void* JsonASTVisitor::visitParmVarDecl(ParmVarDecl* pv, void* context)
         pvdecl["name"] = pv->name();
     }
     pvdecl["dtype"] = typeToJson(pv->type());
-    pvdecl["dtype_name"] = datatypeToJson(pv->type()->ghidra_dtype());
+    // pvdecl["dtype_name"] = datatypeToJson(pv->type()->ghidra_dtype());
     addMessages(pv, pvdecl);
     return copy_to_parent(pvdecl, context);
 }
@@ -363,7 +363,7 @@ void* JsonASTVisitor::visitUnaryOperator(UnaryOperator* uo, void* context)
     uo_json["inner"] = json::array();
     uo_json["opcode"] = uo->opcode();
     uo_json["dtype"] = typeToJson(uo->type());
-    uo_json["dtype_name"] = datatypeToJson(uo->type()->ghidra_dtype());
+    // uo_json["dtype_name"] = datatypeToJson(uo->type()->ghidra_dtype());
     addMessages(uo, uo_json);
     return copy_to_parent(uo_json, context);
 }
@@ -382,7 +382,7 @@ void* JsonASTVisitor::visitVarDecl(VarDecl* vd, void* context)
     var_decl["kind"] = "VarDecl";
     var_decl["id"] = vd->id();
     var_decl["dtype"] = typeToJson(vd->type());
-    var_decl["dtype_name"] = datatypeToJson(vd->type()->ghidra_dtype());
+    // var_decl["dtype_name"] = datatypeToJson(vd->type()->ghidra_dtype());
     var_decl["name"] = vd->name();
     addMessages(vd, var_decl);
     return copy_to_parent(var_decl, context);

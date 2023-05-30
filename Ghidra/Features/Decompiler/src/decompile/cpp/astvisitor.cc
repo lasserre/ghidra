@@ -92,6 +92,11 @@ void* ASTVisitor::visitParmVarDecl(ParmVarDecl*, void*)
     return nullptr;
 }
 
+void* ASTVisitor::visitPointerType(PointerType*, void*)
+{
+    return nullptr;
+}
+
 void* ASTVisitor::visitReturnStmt(ReturnStmt*, void*)
 {
     return nullptr;

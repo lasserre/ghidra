@@ -421,6 +421,17 @@ void* ConstantArrayType::doAccept(ASTVisitor* v, void* context)
     return v->visitConstantArrayType(this, context);
 }
 
+PointerType::PointerType(const Datatype* pointedToType)
+    : Type("")
+{
+    addChild(callbacks->toAstType(pointedToType));
+}
+
+void* PointerType::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitPointerType(this, context);
+}
+
 TypedefDecl::TypedefDecl(string name)
     : _name(name)
 {

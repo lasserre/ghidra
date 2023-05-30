@@ -1433,6 +1433,8 @@ Type* ASTBuilder::toAstType(const Datatype* dt)
         case TYPE_FLOAT:
         case TYPE_BOOL:
             return new BuiltinType(dt);
+        case TYPE_PTR:
+            return new PointerType(((TypePointer*)dt)->getPtrTo());
         case TYPE_ARRAY:
             return new ConstantArrayType((TypeArray*)dt);
         case TYPE_UNKNOWN:      // fall-through

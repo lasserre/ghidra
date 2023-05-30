@@ -291,6 +291,15 @@ void* JsonASTVisitor::visitParmVarDecl(ParmVarDecl* pv, void* context)
     return copy_to_parent(pvdecl, context);
 }
 
+void* JsonASTVisitor::visitPointerType(PointerType* pt, void* context)
+{
+    json pt_j;
+    pt_j["kind"] = "PointerType";
+    pt_j["inner"] = json::array();
+    addMessages(pt, pt_j);
+    return copy_to_parent(pt_j, context);
+}
+
 void* JsonASTVisitor::visitReturnStmt(ReturnStmt* rs, void* context)
 {
     json rs_j;

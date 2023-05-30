@@ -548,6 +548,18 @@ protected:
 };
 
 /**
+ * @brief Pointer type, child node is the pointed-to type
+ */
+class PointerType : public Type
+{
+public:
+    PointerType(const Datatype* pointedToType);
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+};
+
+/**
  * @brief This declares the typedef
  * (e.g. typedef int foo; )
  */

@@ -300,6 +300,14 @@ void* JsonASTVisitor::visitPointerType(PointerType* pt, void* context)
     return copy_to_parent(pt_j, context);
 }
 
+void* JsonASTVisitor::visitVoidType(VoidType* vt, void* context)
+{
+    json vt_j;
+    vt_j["kind"] = "VoidType";
+    addMessages(vt, vt_j);
+    return copy_to_parent(vt_j, context);
+}
+
 void* JsonASTVisitor::visitReturnStmt(ReturnStmt* rs, void* context)
 {
     json rs_j;

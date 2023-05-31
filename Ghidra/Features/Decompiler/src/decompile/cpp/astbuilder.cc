@@ -1428,6 +1428,8 @@ void ASTBuilder::processTypeCastExpression(const PcodeOp* op)
 Type* ASTBuilder::toAstType(const Datatype* dt)
 {
     switch (dt->getMetatype()) {
+        case TYPE_VOID:
+            return new VoidType();
         case TYPE_UINT:     // fall-through
         case TYPE_INT:
         case TYPE_FLOAT:
@@ -1451,7 +1453,6 @@ Type* ASTBuilder::toAstType(const Datatype* dt)
             return new Type(dt);
     }
 
-    // TYPE_VOID = 14,		///< Standard "void" type, absence of type
     // TYPE_SPACEBASE = 13,		///< Placeholder for symbol/type look-up calculations
     // TYPE_CODE = 8,		///< Data is actual executable code
 

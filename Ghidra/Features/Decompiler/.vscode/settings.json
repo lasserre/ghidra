@@ -94,6 +94,11 @@
         "xtr1common": "cpp",
         "xtree": "cpp",
         "xutility": "cpp",
-        "deque": "cpp"
+        "deque": "cpp",
+        "cstdarg": "cpp",
+        "mutex": "cpp",
+        "random": "cpp",
+        "unordered_set": "cpp",
+        "variant": "cpp"
     }
 }

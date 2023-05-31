@@ -560,6 +560,34 @@ protected:
 };
 
 /**
+ * @brief Represents the void keyword when it is treated as a data type
+ * (void return value, void*, etc.)
+ *
+ * I was going back and forth on how to represent void (clang AST just has a
+ * string "void" inside qualType as far as I can tell right now), but choosing
+ * to use a dedicated ASTNode type for now since it can simplify handling it
+ * from the perspective of traversing the AST.
+ *
+ * The other option is to make void a special case of BuiltinType, where it
+ * is the only valid BuiltinType to have a size of 0. Something like:
+ * { size: 0, sign: ?, isFloating: ? }
+ *
+ * ...the only downside there is that you then have to make sure your code that
+ * processes BuiltinTypes can handle sizes of zero, which might be weird. So
+ * I'm representing VoidType as its own node type for now - if we choose to
+ * combine it with BuiltinType for our model input data that is fine (and we can
+ * always change this later).
+ */
+class VoidType : public Type
+{
+public:
+    VoidType() : Type("void") {}
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+};
+
+/**
  * @brief This declares the typedef
  * (e.g. typedef int foo; )
  */

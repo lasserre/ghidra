@@ -432,6 +432,11 @@ void* PointerType::doAccept(ASTVisitor* v, void* context)
     return v->visitPointerType(this, context);
 }
 
+void* VoidType::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitVoidType(this, context);
+}
+
 TypedefDecl::TypedefDecl(string name)
     : _name(name)
 {

@@ -53,6 +53,7 @@ public:
     virtual void* visitParenExpr(ParenExpr*, void*);
     virtual void* visitParmVarDecl(ParmVarDecl*, void*);
     virtual void* visitPointerType(PointerType*, void*);
+    virtual void* visitVoidType(VoidType*, void*);
     virtual void* visitReturnStmt(ReturnStmt*, void*);
     virtual void* visitSwitchStmt(SwitchStmt*, void*);
     virtual void* visitTranslationUnitDecl(TranslationUnitDecl*, void*);

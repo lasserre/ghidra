@@ -493,9 +493,10 @@ bool ASTBuilder::createPtrCharConstant(TypePointer* pt, uintb value, const Varno
         return false;   // unable to get a nice ASCII string
     }
 
-    // TODO: use string literal
-    unimplementedCode("string literal");
-    return false;
+    // add string literal to AST
+    StringLiteral* strlit = new StringLiteral(str.str());
+    currentASTNode()->addChild(strlit);
+    return true;
 }
 
 bool ASTBuilder::createPtrCodeConstant(TypePointer* pt, uintb value, const Varnode* vn, const PcodeOp* op)

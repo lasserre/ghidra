@@ -317,6 +317,15 @@ void* JsonASTVisitor::visitReturnStmt(ReturnStmt* rs, void* context)
     return copy_to_parent(rs_j, context);
 }
 
+void* JsonASTVisitor::visitStringLiteral(StringLiteral* lit, void* context)
+{
+    json lit_j;
+    lit_j["kind"] = "StringLiteral";
+    lit_j["value"] = lit->value();
+    addMessages(lit, lit_j);
+    return copy_to_parent(lit_j, context);
+}
+
 void* JsonASTVisitor::visitSwitchStmt(SwitchStmt* ss, void* context)
 {
     json ss_j;

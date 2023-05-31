@@ -107,6 +107,11 @@ void* ASTVisitor::visitReturnStmt(ReturnStmt*, void*)
     return nullptr;
 }
 
+void* ASTVisitor::visitStringLiteral(StringLiteral*, void*)
+{
+    return nullptr;
+}
+
 void* ASTVisitor::visitSwitchStmt(SwitchStmt*, void*)
 {
     return nullptr;

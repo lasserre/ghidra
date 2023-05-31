@@ -338,6 +338,16 @@ void* ReturnStmt::doAccept(ASTVisitor* v, void* context)
     return v->visitReturnStmt(this, context);
 }
 
+StringLiteral::StringLiteral(string value)
+    : _value(value)
+{
+}
+
+void* StringLiteral::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitStringLiteral(this, context);
+}
+
 SwitchStmt::SwitchStmt()
 {
 }

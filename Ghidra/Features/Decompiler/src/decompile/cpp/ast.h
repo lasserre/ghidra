@@ -400,6 +400,30 @@ protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
 };
 
+class StringLiteral : public ASTNode
+{
+public:
+    StringLiteral(string value);
+
+    inline string value() { return _value; }
+
+    // CLS: not sure if we need to have a type for this or not?
+    // the other literals do, but all I'm seeing so far in clang AST
+    // output is char[10], char[4], char[32], etc. based on the
+    // size of the value. If we need it, add it...but not sure yet
+    // inline Type* type() { return _type; }
+
+    int precedence() { return -1; }
+    bool isLRAssociative() { return false; }
+    bool wouldNextChildBeLeftOfOp() { return false; }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+
+    string _value;
+    // Type* _type;
+};
+
 class SwitchStmt : public ASTNode
 {
 public:

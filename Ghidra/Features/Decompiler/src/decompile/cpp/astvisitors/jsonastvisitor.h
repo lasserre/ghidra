@@ -55,6 +55,7 @@ public:
     virtual void* visitPointerType(PointerType*, void*);
     virtual void* visitVoidType(VoidType*, void*);
     virtual void* visitReturnStmt(ReturnStmt*, void*);
+    virtual void* visitStringLiteral(StringLiteral*, void*);
     virtual void* visitSwitchStmt(SwitchStmt*, void*);
     virtual void* visitTranslationUnitDecl(TranslationUnitDecl*, void*);
     virtual void* visitType(Type*, void*);

@@ -373,21 +373,27 @@ void* JsonASTVisitor::visitTranslationUnitDecl(TranslationUnitDecl* td, void* co
 
     auto structs_by_id = json::object();
 
-    for (const auto& struct_pair : *td->type_library()->structures_by_id()) {
+    for (const auto& struct_pair : td->type_library()->structures_by_id()) {
         auto stype_j = json::object();
         auto sid = struct_pair.first;
         auto stype = struct_pair.second;
         stype_j["name"] = stype->name();
         auto fields_j = json::object();
 
-        for (const auto& field_pair : *stype->fields()) {
-            auto offset = field_pair.first;
-            StructField field = field_pair.second;
-            fields_j[offset] = {
-                {"name", field.name()},
-                {"offset", field.offset()},
-                {"dtype", typeToJson(field.dtype())}
-            };
+        for (const auto& pair : stype->fields()) {
+            auto offset = pair.first;
+            // const StructField& field = field_pair.second;
+            auto field = json::object();
+            field["name"] = pair.second.name();
+            field["offset"] = pair.second.offset();
+            field["dtype"] = typeToJson(pair.second.dtype());
+            fields_j[std::to_string(offset)] = field;
+
+            // fields_j[std::to_string(offset)] = {
+            //     {"name", pair.second.name()},
+            //     {"offset", pair.second.offset()},
+            //     {"dtype", typeToJson(pair.second.dtype())}
+            // };
         }
 
         stype_j["fields"] = fields_j;

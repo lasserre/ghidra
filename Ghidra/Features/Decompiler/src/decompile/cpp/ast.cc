@@ -229,7 +229,7 @@ CharacterLiteral::CharacterLiteral(BuiltinType* type, uintb value)
 {
 }
 
-CharacterLiteral* CharacterLiteral::clone() const
+CharacterLiteral* CharacterLiteral::clone()
 {
     auto lit = new CharacterLiteral(*this);
     lit->_type = _type->clone();
@@ -265,6 +265,14 @@ CStyleCastExpr::CStyleCastExpr(Type* type)
 {
 }
 
+CStyleCastExpr* CStyleCastExpr::clone()
+{
+    auto castexpr = new CStyleCastExpr(*this);
+    castexpr->_type = _type->clone();
+    clone_children(castexpr);
+    return castexpr;
+}
+
 void* CStyleCastExpr::doAccept(ASTVisitor* v, void* context)
 {
     return v->visitCStyleCastExpr(this, context);
@@ -273,6 +281,14 @@ void* CStyleCastExpr::doAccept(ASTVisitor* v, void* context)
 DeclRefExpr::DeclRefExpr(ValueDecl* referencedDecl)
     : _ref(referencedDecl)
 {
+}
+
+DeclRefExpr* DeclRefExpr::clone()
+{
+    auto ref = new DeclRefExpr(*this);
+    ref->_ref = _ref->clone();
+    clone_children(ref);
+    return ref;
 }
 
 void* DeclRefExpr::doAccept(ASTVisitor* v, void* context)
@@ -314,6 +330,14 @@ IntegerLiteral::IntegerLiteral(Type* type, uintb value)
 {
 }
 
+IntegerLiteral* IntegerLiteral::clone()
+{
+    auto lit = new IntegerLiteral(*this);
+    lit->_type = _type->clone();
+    clone_children(lit);
+    return lit;
+}
+
 void* IntegerLiteral::doAccept(ASTVisitor* v, void* context)
 {
     return v->visitIntegerLiteral(this, context);
@@ -338,6 +362,14 @@ void* ParenExpr::doAccept(ASTVisitor* v, void* context)
     return v->visitParenExpr(this, context);
 }
 
+FieldDecl* FieldDecl::clone()
+{
+    auto field = new FieldDecl(*this);
+    field->_type = _type->clone();
+    clone_children(field);
+    return field;
+}
+
 void* FieldDecl::doAccept(ASTVisitor* v, void* context)
 {
     return v->visitFieldDecl(this, context);
@@ -346,9 +378,8 @@ void* FieldDecl::doAccept(ASTVisitor* v, void* context)
 RecordDecl::RecordDecl(StructType* stype)
     : _sid(stype->sid())
 {
-    for (const auto& field : *stype->fields()) {
-        StructField sf = field.second;
-        addChild(new FieldDecl(sf.name(), sf.dtype()));
+    for (auto& f : stype->fields()) {
+        addChild(new FieldDecl(f.second.name(), f.second.dtype()));
     }
 }
 
@@ -418,7 +449,6 @@ StructType* StructTypeLibrary::mapNewStructure(TypeStruct* ts)
         // within the StructType constructor
         Type* type = callbacks->toAstType(tf.type);
         stype->_fields[tf.offset] = StructField(tf.name, type, tf.offset);
-        delete type;
     }
 
     return stype;
@@ -534,12 +564,12 @@ int StructType::size()
     return _size;
 }
 
-map<int, StructField>* StructType::fields()
+map<int, StructField>& StructType::fields()
 {
     if (_type_lib) {
         return _type_lib->getStructureType(_sid)->fields();
     }
-    return &_fields;
+    return _fields;
 }
 
 void* StructType::doAccept(ASTVisitor* v, void* context)

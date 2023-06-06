@@ -56,7 +56,7 @@ public:
      * @brief Virtual function to just clone this type of node
      * (children will be handled generically by clone())
      */
-    virtual ASTNode* clone() const = 0;
+    virtual ASTNode* clone() = 0;
 
     inline ASTNode* parent() { return _parent; }
     inline std::vector<ASTNode*>* children() { return &_children; }
@@ -129,7 +129,7 @@ protected:
     {
         cloned_node->children()->clear();
 
-        for (auto child : _children) {
+        for (auto const& child : _children) {
             cloned_node->children()->push_back(child->clone());
         }
     }
@@ -139,7 +139,7 @@ protected:
      * on a particular kind of ASTNode. The general accept() handles calling
      * both this function as well as recursing through any child nodes
      */
-    virtual void* doAccept(ASTVisitor*, void*) = 0;
+    virtual void* doAccept(ASTVisitor*, void*) { return nullptr; }
 
     ASTNode* _parent;       // pointer to existing parent, not our memory
     // dynamically-allocated child pointers we must free when destructed
@@ -152,7 +152,7 @@ class BinaryOperator : public ASTNode
 public:
     BinaryOperator(std::string opcode);
 
-    virtual BinaryOperator* clone() const
+    virtual BinaryOperator* clone() override
     {
         auto binop = new BinaryOperator(*this);
         clone_children(binop);
@@ -180,7 +180,7 @@ class BreakStmt : public ASTNode
 {
 public:
     BreakStmt();
-    virtual BreakStmt* clone() const
+    virtual BreakStmt* clone() override
     {
         auto bs = new BreakStmt(*this);
         clone_children(bs);
@@ -205,7 +205,7 @@ class CallExpr : public ASTNode
 {
 public:
     CallExpr();
-    virtual CallExpr* clone() const
+    virtual CallExpr* clone() override
     {
         auto expr = new CallExpr(*this);
         clone_children(expr);
@@ -228,7 +228,7 @@ class CaseStmt : public ASTNode
 {
 public:
     CaseStmt();
-    virtual CaseStmt* clone() const
+    virtual CaseStmt* clone() override
     {
         auto stmt = new CaseStmt(*this);
         clone_children(stmt);
@@ -249,7 +249,7 @@ public:
     CharacterLiteral(BuiltinType* type, uintb value);
     virtual ~CharacterLiteral() { delete _type; }
 
-    virtual CharacterLiteral* clone() const;
+    virtual CharacterLiteral* clone() override;
 
     inline uintb value() { return _value; }
     inline BuiltinType* type() { return _type; }
@@ -271,7 +271,7 @@ class CompoundStmt : public ASTNode
 {
 public:
     CompoundStmt();
-    virtual ASTNode* clone() const
+    virtual CompoundStmt* clone() override
     {
         auto cs = new CompoundStmt(*this);
         clone_children(cs);
@@ -290,7 +290,7 @@ class ConstantExpr : public ASTNode
 {
 public:
     ConstantExpr();
-    virtual ConstantExpr* clone() const
+    virtual ConstantExpr* clone() override
     {
         auto expr = new ConstantExpr(*this);
         clone_children(expr);
@@ -310,13 +310,7 @@ class CStyleCastExpr : public ASTNode
 public:
     CStyleCastExpr(Type* type);
 
-    virtual CStyleCastExpr* clone() const
-    {
-        auto castexpr = new CStyleCastExpr(*this);
-        castexpr->_type = _type->clone();
-        clone_children(castexpr);
-        return castexpr;
-    }
+    virtual CStyleCastExpr* clone() override;
 
     inline Type* type() { return _type; }
 
@@ -353,13 +347,7 @@ public:
      */
     DeclRefExpr(ValueDecl* referencedDecl);
 
-    virtual DeclRefExpr* clone() const
-    {
-        auto ref = new DeclRefExpr(*this);
-        ref->_ref = _ref->clone();
-        clone_children(ref);
-        return ref;
-    }
+    virtual DeclRefExpr* clone() override;
 
     inline ValueDecl* ref() { return _ref; }
     int precedence() { return -1; }
@@ -379,7 +367,7 @@ class DeclStmt : public ASTNode
 public:
     DeclStmt();
 
-    virtual DeclStmt* clone() const
+    virtual DeclStmt* clone() override
     {
         auto ds = new DeclStmt(*this);
         clone_children(ds);
@@ -405,7 +393,7 @@ class IfStmt : public ASTNode
 public:
     IfStmt();
 
-    virtual IfStmt* clone() const
+    virtual IfStmt* clone() override
     {
         auto stmt = new IfStmt(*this);
         clone_children(stmt);
@@ -425,13 +413,7 @@ class IntegerLiteral : public ASTNode
 public:
     IntegerLiteral(Type* type, uintb value);
 
-    virtual IntegerLiteral* clone() const
-    {
-        auto lit = new IntegerLiteral(*this);
-        lit->_type = _type->clone();
-        clone_children(lit);
-        return lit;
-    }
+    virtual IntegerLiteral* clone() override;
 
     inline uintb value() { return _value; }
     inline Type* type() { return _type; }
@@ -458,7 +440,7 @@ class LogMsg : public ASTNode
 public:
     LogMsg(std::string msg);
 
-    virtual LogMsg* clone() const
+    virtual LogMsg* clone() override
     {
         auto msg = new LogMsg(*this);
         clone_children(msg);
@@ -481,7 +463,7 @@ class ParenExpr : public ASTNode
 public:
     ParenExpr();
 
-    virtual ParenExpr* clone() const
+    virtual ParenExpr* clone() override
     {
         auto expr = new ParenExpr(*this);
         clone_children(expr);
@@ -509,13 +491,7 @@ public:
         : _name(name), _type(type)
     { }
 
-    virtual FieldDecl* clone() const
-    {
-        auto field = new FieldDecl(*this);
-        field->_type = _type->clone();
-        clone_children(field);
-        return field;
-    }
+    virtual FieldDecl* clone() override;
 
     int precedence() { return -1; }
     bool isLRAssociative() { return false; }
@@ -538,7 +514,7 @@ class RecordDecl : public ASTNode
 public:
     RecordDecl(StructType* stype);
 
-    virtual RecordDecl* clone() const
+    virtual RecordDecl* clone() override
     {
         auto rd = new RecordDecl(*this);
         clone_children(rd);
@@ -561,7 +537,7 @@ class ReturnStmt : public ASTNode
 public:
     ReturnStmt();
 
-    virtual ReturnStmt* clone() const
+    virtual ReturnStmt* clone() override
     {
         auto rs = new ReturnStmt(*this);
         clone_children(rs);
@@ -581,7 +557,7 @@ class StringLiteral : public ASTNode
 public:
     StringLiteral(string value);
 
-    virtual StringLiteral* clone() const
+    virtual StringLiteral* clone() override
     {
         auto lit = new StringLiteral(*this);
         clone_children(lit);
@@ -612,7 +588,7 @@ class SwitchStmt : public ASTNode
 public:
     SwitchStmt();
 
-    virtual SwitchStmt* clone() const
+    virtual SwitchStmt* clone() override
     {
         auto ss = new SwitchStmt(*this);
         clone_children(ss);
@@ -641,8 +617,8 @@ class StructTypeLibrary
 public:
     StructTypeLibrary(int base_id = 0);
 
-    map<int, StructType*>* structures_by_id() { return &_structures_by_id; }
-    map<string, StructType*>* structures_by_name() { return &_structures_by_name; }
+    map<int, StructType*>& structures_by_id() { return _structures_by_id; }
+    map<string, StructType*>& structures_by_name() { return _structures_by_name; }
 
     // STRUCT ID OPTIONS
     // 1. Use the Ghidra ID (this won't work if this type is not defined in ghidra already)
@@ -719,7 +695,7 @@ class TranslationUnitDecl : public ASTNode
 public:
     TranslationUnitDecl();
 
-    virtual TranslationUnitDecl* clone() const
+    virtual TranslationUnitDecl* clone() override
     {
         auto tu = new TranslationUnitDecl(*this);
         clone_children(tu);
@@ -790,7 +766,7 @@ public:
     Type(string name);
     virtual ~Type() {}
 
-    virtual Type* clone() const
+    virtual Type* clone() override
     {
         auto t = new Type(*this);
         clone_children(t);
@@ -824,7 +800,7 @@ public:
     BuiltinType(const Datatype* dt);
     BuiltinType(string name, int size, bool isFloatingPoint, bool sign);
 
-    virtual BuiltinType* clone() const
+    virtual BuiltinType* clone() override
     {
         auto t = new BuiltinType(*this);
         clone_children(t);
@@ -864,7 +840,7 @@ public:
     ConstantArrayType(const Datatype* elementType, int numElements);
     ConstantArrayType(const TypeArray* arrType);
 
-    virtual ConstantArrayType* clone() const
+    virtual ConstantArrayType* clone() override
     {
         auto t = new ConstantArrayType(*this);
         clone_children(t);
@@ -886,7 +862,7 @@ class PointerType : public Type
 public:
     PointerType(const Datatype* pointedToType);
 
-    virtual PointerType* clone() const
+    virtual PointerType* clone() override
     {
         auto pt = new PointerType(*this);
         clone_children(pt);
@@ -916,17 +892,43 @@ public:
      * @param offset
      */
     StructField(string name, Type* dtype, int offset)
-        : _name(name), _dtype(dtype->clone()), _offset(offset)
+        : _name(name), _dtype(dtype), _offset(offset)
     { }
+
+    // StructField(const StructField& other)
+    // {
+    //     _name = other._name;
+    //     if (other._dtype) {
+    //         _dtype = other._dtype->clone();
+    //     } else {
+    //         _dtype = nullptr;
+    //     }
+    //     _offset = other._offset;
+    // }
+
+    // StructField(StructField&& other)
+    // {
+    //     if (_dtype) {
+    //         delete _dtype;
+    //     }
+    //     _dtype = other._dtype;
+    //     _name = other._name;
+    //     _offset = other._offset;
+
+    //     other._dtype = nullptr;
+    // }
 
     ~StructField()
     {
-        delete _dtype;
+        if (_dtype) {
+            delete _dtype;
+            _dtype = nullptr;
+        }
     }
 
-    string name() { return _name; }
-    Type* dtype() { return _dtype; }
-    int offset() { return _offset; }
+    string name() const { return _name; }
+    Type* dtype() const { return _dtype; }
+    int offset() const { return _offset; }
 
 protected:
     string _name;
@@ -967,7 +969,7 @@ public:
     virtual ~StructType()
     {}
 
-    virtual StructType* clone() const
+    virtual StructType* clone() override
     {
         auto st = new StructType(*this);
         clone_children(st);
@@ -980,7 +982,7 @@ public:
     /** @brief Size of the structure in bytes */
     int size();
 
-    map<int, StructField>* fields();
+    map<int, StructField>& fields();
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -1014,7 +1016,7 @@ class VoidType : public Type
 public:
     VoidType() : Type("void") {}
 
-    virtual VoidType* clone() const
+    virtual VoidType* clone() override
     {
         auto vt = new VoidType(*this);
         clone_children(vt);
@@ -1034,7 +1036,7 @@ class TypedefDecl : public ASTNode
 public:
     TypedefDecl(string name);
 
-    virtual TypedefDecl* clone() const
+    virtual TypedefDecl* clone() override
     {
         auto td = new TypedefDecl(*this);
         clone_children(td);
@@ -1061,7 +1063,7 @@ class TypedefType: public Type
 public:
     TypedefType(TypedefDecl* decl);
 
-    virtual TypedefType* clone() const
+    virtual TypedefType* clone() override
     {
         auto t = new TypedefType(*this);
         clone_children(t);
@@ -1081,7 +1083,7 @@ class UnaryOperator : public ASTNode
 public:
     UnaryOperator(std::string opcode, Type* type);
 
-    virtual UnaryOperator* clone() const
+    virtual UnaryOperator* clone() override
     {
         auto op = new UnaryOperator(*this);
         op->_type = _type->clone();
@@ -1116,7 +1118,7 @@ public:
     ValueDecl(int id);
     virtual ~ValueDecl() {}
 
-    virtual ValueDecl* clone() const
+    virtual ValueDecl* clone() override
     {
         auto vd = new ValueDecl(*this);
         clone_children(vd);
@@ -1142,7 +1144,7 @@ class FunctionDecl : public ValueDecl
 public:
     FunctionDecl(int id, Funcdata* fd);
 
-    virtual FunctionDecl* clone() const
+    virtual FunctionDecl* clone() override
     {
         auto fdecl = new FunctionDecl(*this);
         fdecl->_return_type = _return_type->clone();
@@ -1190,7 +1192,7 @@ public:
         delete _type;
     }
 
-    virtual VarDecl* clone() const
+    virtual VarDecl* clone() override
     {
         auto vdecl = new VarDecl(*this);
         vdecl->_type = _type->clone();
@@ -1227,7 +1229,7 @@ class ParmVarDecl : public VarDecl
 public:
     ParmVarDecl(int id, ProtoParameter* param);
 
-    virtual ParmVarDecl* clone() const
+    virtual ParmVarDecl* clone() override
     {
         auto pv = new ParmVarDecl(*this);
         clone_children(pv);

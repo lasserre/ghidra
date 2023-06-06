@@ -229,6 +229,14 @@ CharacterLiteral::CharacterLiteral(BuiltinType* type, uintb value)
 {
 }
 
+CharacterLiteral* CharacterLiteral::clone() const
+{
+    auto lit = new CharacterLiteral(*this);
+    lit->_type = _type->clone();
+    clone_children(lit);
+    return lit;
+}
+
 void* CharacterLiteral::doAccept(ASTVisitor* v, void* context)
 {
     return v->visitCharacterLiteral(this, context);
@@ -330,6 +338,25 @@ void* ParenExpr::doAccept(ASTVisitor* v, void* context)
     return v->visitParenExpr(this, context);
 }
 
+void* FieldDecl::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitFieldDecl(this, context);
+}
+
+RecordDecl::RecordDecl(StructType* stype)
+    : _sid(stype->sid())
+{
+    for (const auto& field : *stype->fields()) {
+        StructField sf = field.second;
+        addChild(new FieldDecl(sf.name(), sf.dtype()));
+    }
+}
+
+void* RecordDecl::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitRecordDecl(this, context);
+}
+
 ReturnStmt::ReturnStmt()
 {
 }
@@ -386,13 +413,12 @@ StructType* StructTypeLibrary::mapNewStructure(TypeStruct* ts)
     // -> this prevents problems with the recursion since we could have struct
     //    types that contain pointers to themselves
 
-    for (TypeField ghidra_field : getStructFields(ts)) {
-        stype->_fields[ghidra_field.offset] = StructField(
-            ghidra_field.name,
-            // this toAstType() would cause recursion issues if called
-            // within the StructType constructor
-            callbacks->toAstType(ghidra_field.type),
-            ghidra_field.offset);
+    for (TypeField tf : getStructFields(ts)) {
+        // this toAstType() would cause recursion issues if called
+        // within the StructType constructor
+        Type* type = callbacks->toAstType(tf.type);
+        stype->_fields[tf.offset] = StructField(tf.name, type, tf.offset);
+        delete type;
     }
 
     return stype;

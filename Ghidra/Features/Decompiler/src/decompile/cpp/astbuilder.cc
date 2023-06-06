@@ -333,22 +333,17 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
     // glb->getDefaultCodeSpace()->getAddrSize()
 
     // ---------------------------------
-    // TODO: FIRST, generate RecordDecl's for structures underneath TranslationUnitDecl
+    // FIRST, generate RecordDecl's for structures underneath TranslationUnitDecl
     // putting these here allows TypeDef visitor to be able to generate any further-needed typedefs
     // if that's even possible...
     // (we should already have built up the structure map via builder->_head_translation_unit.structures)
     // ---------------------------------
-    // RecordDecl - fwd declaration or definition of a struct
-        // sid
-        // inner
-            // FieldDecl
-            // FieldDecl
-            // ...
-            // [these are present for definition, absent for fwd decl]
     // --> only reason to include FieldDecl here (instead of dynamic lookup
     // in TU._structs) is for validation with clang AST
-
-    unimplementedCode("generate RecordDecl structure definitions");
+    auto sid_map = _head_translation_unit->type_library()->structures_by_id();
+    for (auto const& entry : *sid_map) {
+        _head_translation_unit->addChild(new RecordDecl(entry.second));
+    }
 
     // add global decls to the AST under top-level translation unit
     for (auto const& entry : _globals) {

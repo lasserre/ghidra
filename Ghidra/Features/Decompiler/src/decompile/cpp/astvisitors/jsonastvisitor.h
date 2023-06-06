@@ -51,6 +51,8 @@ public:
     virtual void* visitIntegerLiteral(IntegerLiteral*, void*);
     virtual void* visitLogMsg(LogMsg*, void*);
     virtual void* visitParenExpr(ParenExpr*, void*);
+    virtual void* visitFieldDecl(FieldDecl*, void*);
+    virtual void* visitRecordDecl(RecordDecl*, void*);
     virtual void* visitParmVarDecl(ParmVarDecl*, void*);
     virtual void* visitPointerType(PointerType*, void*);
     virtual void* visitStructType(StructType*, void*);

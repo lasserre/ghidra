@@ -277,6 +277,26 @@ void* JsonASTVisitor::visitParenExpr(ParenExpr* pe, void* context)
     return copy_to_parent(paren, context);
 }
 
+void* JsonASTVisitor::visitFieldDecl(FieldDecl* fd, void* context)
+{
+    json fd_j;
+    fd_j["kind"] = "FieldDecl";
+    fd_j["name"] = fd->name();
+    fd_j["dtype"] = typeToJson(fd->type());
+    addMessages(fd, fd_j);
+    return copy_to_parent(fd_j, context);
+}
+
+void* JsonASTVisitor::visitRecordDecl(RecordDecl* rd, void* context)
+{
+    json rd_j;
+    rd_j["kind"] = "RecordDecl";
+    rd_j["sid"] = rd->sid();
+    rd_j["inner"] = json::array();
+    addMessages(rd, rd_j);
+    return copy_to_parent(rd_j, context);
+}
+
 void* JsonASTVisitor::visitParmVarDecl(ParmVarDecl* pv, void* context)
 {
     json pvdecl;

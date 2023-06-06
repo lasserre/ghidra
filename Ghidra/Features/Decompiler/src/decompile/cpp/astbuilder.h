@@ -275,3 +275,37 @@ protected:
     ofstream _logfile;  // log unimplemented code for review
     ASTCallbacks _ast_callbacks;
 };
+
+/**
+ * BlockBasic was so close...but named their iterators beginOp/endOp.
+ * So this simply wraps BlockBasic to enable range-based for loops :)
+ */
+class getPcodeOps
+{
+public:
+    getPcodeOps(const BlockBasic* bb)
+        : _bb(bb)
+    { }
+
+    list<PcodeOp*>::const_iterator begin() const { return _bb->beginOp(); }
+    list<PcodeOp*>::const_iterator end() const { return _bb->endOp(); }
+
+    const BlockBasic* _bb;
+};
+
+/**
+ * @brief Same idea as getPcodeOps above, but here we wrap TypeStruct
+ * beginField/endField iterators
+ */
+class getStructFields
+{
+public:
+    getStructFields(const TypeStruct* ts)
+        : _ts(ts)
+    { }
+
+    vector<TypeField>::const_iterator begin() const { return _ts->beginField(); }
+    vector<TypeField>::const_iterator end() const { return _ts->endField(); }
+
+    const TypeStruct* _ts;
+};

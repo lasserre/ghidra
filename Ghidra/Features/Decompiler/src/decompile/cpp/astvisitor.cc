@@ -97,6 +97,11 @@ void* ASTVisitor::visitPointerType(PointerType*, void*)
     return nullptr;
 }
 
+void* ASTVisitor::visitStructType(StructType*, void*)
+{
+    return nullptr;
+}
+
 void* ASTVisitor::visitVoidType(VoidType*, void*)
 {
     return nullptr;

@@ -48,23 +48,6 @@ string ensureValidFilename(string filename)
     return filename;
 }
 
-/**
- * BlockBasic was so close...but named their iterators beginOp/endOp.
- * So this simply wraps BlockBasic to enable range-based for loops :)
- */
-class getPcodeOps
-{
-public:
-    getPcodeOps(const BlockBasic* bb)
-        : _bb(bb)
-    { }
-
-    list<PcodeOp*>::const_iterator begin() const { return _bb->beginOp(); }
-    list<PcodeOp*>::const_iterator end() const { return _bb->endOp(); }
-
-    const BlockBasic* _bb;
-};
-
 template<typename T> string to_hex(T data)
 {
     stringstream ss;
@@ -348,6 +331,24 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
     /** CLS: I'm thinking this is the best way to get word size? could be wrong */
     int4 arch_wordsize = glb->getDefaultSize();
     // glb->getDefaultCodeSpace()->getAddrSize()
+
+    // ---------------------------------
+    // TODO: FIRST, generate RecordDecl's for structures underneath TranslationUnitDecl
+    // putting these here allows TypeDef visitor to be able to generate any further-needed typedefs
+    // if that's even possible...
+    // (we should already have built up the structure map via builder->_head_translation_unit.structures)
+    // ---------------------------------
+    // RecordDecl - fwd declaration or definition of a struct
+        // sid
+        // inner
+            // FieldDecl
+            // FieldDecl
+            // ...
+            // [these are present for definition, absent for fwd decl]
+    // --> only reason to include FieldDecl here (instead of dynamic lookup
+    // in TU._structs) is for validation with clang AST
+
+    unimplementedCode("generate RecordDecl structure definitions");
 
     // add global decls to the AST under top-level translation unit
     for (auto const& entry : _globals) {
@@ -1428,6 +1429,9 @@ void ASTBuilder::processTypeCastExpression(const PcodeOp* op)
 
 Type* ASTBuilder::toAstType(const Datatype* dt)
 {
+    StructTypeLibrary* type_lib = _head_translation_unit->type_library();
+    StructType* stype = nullptr;
+
     switch (dt->getMetatype()) {
         case TYPE_VOID:
             return new VoidType();
@@ -1438,6 +1442,9 @@ Type* ASTBuilder::toAstType(const Datatype* dt)
             return new BuiltinType(dt);
         case TYPE_PTR:
             return new PointerType(((TypePointer*)dt)->getPtrTo());
+        case TYPE_STRUCT:
+            stype = type_lib->getStructTypeForGhidraStruct((TypeStruct*)dt);
+            return new StructType(stype->sid(), type_lib);  // these can get deleted, so need to return a new'd copy
         case TYPE_ARRAY:
             return new ConstantArrayType((TypeArray*)dt);
         case TYPE_UNKNOWN:
@@ -1458,7 +1465,6 @@ Type* ASTBuilder::toAstType(const Datatype* dt)
     // TYPE_CODE = 8,		///< Data is actual executable code
 
     // TYPE_PTRREL = 5,		///< Pointer relative to another data-type (specialization of TYPE_PTR)
-    // TYPE_STRUCT = 3,		///< Structure data-type, made up of component datatypes
     // TYPE_UNION = 2,		///< An overlapping union of multiple datatypes
     // TYPE_PARTIALSTRUCT = 1,	///< Part of a structure, stored separately from the whole
     // TYPE_PARTIALUNION = 0		///< Part of a union

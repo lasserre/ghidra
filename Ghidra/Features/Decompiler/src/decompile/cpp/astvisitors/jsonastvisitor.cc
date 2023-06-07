@@ -277,6 +277,25 @@ void* JsonASTVisitor::visitParenExpr(ParenExpr* pe, void* context)
     return copy_to_parent(paren, context);
 }
 
+void* JsonASTVisitor::visitFieldDecl(FieldDecl* fd, void* context)
+{
+    json fd_j;
+    fd_j["kind"] = "FieldDecl";
+    fd_j["name"] = fd->name();
+    fd_j["dtype"] = typeToJson(fd->type());
+    addMessages(fd, fd_j);
+    return copy_to_parent(fd_j, context);
+}
+
+void* JsonASTVisitor::visitRecordDecl(RecordDecl* rd, void* context)
+{
+    json rd_j;
+    rd_j["kind"] = "RecordDecl";
+    rd_j["sid"] = rd->sid();
+    addMessages(rd, rd_j);
+    return copy_to_parent(rd_j, context);
+}
+
 void* JsonASTVisitor::visitParmVarDecl(ParmVarDecl* pv, void* context)
 {
     json pvdecl;
@@ -305,7 +324,6 @@ void* JsonASTVisitor::visitStructType(StructType* st, void* context)
     json st_j;
     st_j["kind"] = "StructType";
     st_j["sid"] = st->sid();
-    st_j["size"] = st->size();
     addMessages(st, st_j);
     return copy_to_parent(st_j, context);
 }
@@ -345,37 +363,56 @@ void* JsonASTVisitor::visitSwitchStmt(SwitchStmt* ss, void* context)
     return copy_to_parent(ss_j, context);
 }
 
+json JsonASTVisitor::structureFieldToJson(TypeField ghidra_field)
+{
+    Type* dtype = _builder->toAstType(ghidra_field.type);
+
+    json field_j;
+    field_j["name"] = ghidra_field.name;
+    field_j["offset"] = ghidra_field.offset;
+    field_j["dtype"] = typeToJson(dtype);
+
+    delete dtype;
+
+    return field_j;
+}
+
+json JsonASTVisitor::buildStructFields(TypeStruct* ghidra_struct)
+{
+    json fields;
+
+    for (TypeField ghidra_field : getStructFields(ghidra_struct)) {
+        string offset_str = std::to_string(ghidra_field.offset);
+        fields[offset_str] = structureFieldToJson(ghidra_field);
+    }
+
+    return fields;
+}
+
+json JsonASTVisitor::buildStructuresById(StructTypeLibrary* type_lib)
+{
+    json structs_by_id;
+
+    for (auto stype : type_lib->getMappedStructs()) {
+        string sid_str = std::to_string(stype.sid());
+        TypeStruct* ghidra_struct = stype.ghidra_struct();
+
+        json stype_j;
+        stype_j["name"] = ghidra_struct->getName();
+        stype_j["size"] = ghidra_struct->getSize();
+        stype_j["fields"] = buildStructFields(ghidra_struct);
+        structs_by_id[sid_str] = stype_j;
+    }
+
+    return structs_by_id;
+}
+
 void* JsonASTVisitor::visitTranslationUnitDecl(TranslationUnitDecl* td, void* context)
 {
     json tudecl;
     tudecl["kind"] = "TranslationUnitDecl";
     tudecl["inner"] = json::array();
-
-    auto structs_by_id = json::object();
-
-    for (const auto& struct_pair : *td->type_library()->structures_by_id()) {
-        auto stype_j = json::object();
-        auto sid = struct_pair.first;
-        auto stype = struct_pair.second;
-        stype_j["name"] = stype->name();
-        auto fields_j = json::object();
-
-        for (const auto& field_pair : *stype->fields()) {
-            auto offset = field_pair.first;
-            StructField field = field_pair.second;
-            fields_j[offset] = {
-                {"name", field.name()},
-                {"offset", field.offset()},
-                {"dtype", typeToJson(field.dtype())}
-            };
-        }
-
-        stype_j["fields"] = fields_j;
-        structs_by_id[sid] = stype_j;
-    }
-
-    tudecl["structures_by_id"] = structs_by_id;
-
+    tudecl["structures_by_id"] = buildStructuresById(_builder->type_library());
     addMessages(td, tudecl);
     return copy_to_parent(tudecl, context);
 }

@@ -87,6 +87,16 @@ void* ASTVisitor::visitParenExpr(ParenExpr*, void*)
     return nullptr;
 }
 
+void* ASTVisitor::visitFieldDecl(FieldDecl*, void*)
+{
+    return nullptr;
+}
+
+void* ASTVisitor::visitRecordDecl(RecordDecl*, void*)
+{
+    return nullptr;
+}
+
 void* ASTVisitor::visitParmVarDecl(ParmVarDecl*, void*)
 {
     return nullptr;

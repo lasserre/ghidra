@@ -51,6 +51,8 @@ public:
     virtual void* visitIntegerLiteral(IntegerLiteral*, void*);
     virtual void* visitLogMsg(LogMsg*, void*);
     virtual void* visitParenExpr(ParenExpr*, void*);
+    virtual void* visitFieldDecl(FieldDecl*, void*);
+    virtual void* visitRecordDecl(RecordDecl*, void*);
     virtual void* visitParmVarDecl(ParmVarDecl*, void*);
     virtual void* visitPointerType(PointerType*, void*);
     virtual void* visitStructType(StructType*, void*);
@@ -81,6 +83,10 @@ protected:
      * is returned directly
      */
     json* copy_to_parent(json& data, void* parent_context);
+
+    json structureFieldToJson(TypeField ghidra_field);
+    json buildStructFields(TypeStruct* ghidra_struct);
+    json buildStructuresById(StructTypeLibrary* type_lib);
 
     json _ast_json;
     ASTBuilder* _builder;

@@ -330,6 +330,25 @@ void* ParenExpr::doAccept(ASTVisitor* v, void* context)
     return v->visitParenExpr(this, context);
 }
 
+void* FieldDecl::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitFieldDecl(this, context);
+}
+
+RecordDecl::RecordDecl(StructType stype)
+    : _sid(stype.sid())
+{
+    for (TypeField ghidra_field : getStructFields(stype.ghidra_struct())) {
+        auto ast_type = callbacks->toAstType(ghidra_field.type);
+        addChild(new FieldDecl(ghidra_field.name, ast_type));
+    }
+}
+
+void* RecordDecl::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitRecordDecl(this, context);
+}
+
 ReturnStmt::ReturnStmt()
 {
 }
@@ -359,47 +378,11 @@ void* SwitchStmt::doAccept(ASTVisitor* v, void* context)
 }
 
 StructTypeLibrary::StructTypeLibrary(int base_id /* = 0 */)
-    : _structures_by_id({}), _structures_by_name({}), _next_id(base_id)
+    : _next_id(base_id), _mapped_structures({})
 {
-}
-
-StructType* StructTypeLibrary::getStructTypeForGhidraStruct(TypeStruct* ts)
-{
-    StructType* stype = getStructureType(ts->getName());
-
-    if (!stype) {
-        stype = mapNewStructure(ts);
-    }
-
-    return stype;
-}
-
-StructType* StructTypeLibrary::mapNewStructure(TypeStruct* ts)
-{
-    auto stype = new StructType(ts, _next_id++);
-    _structures_by_id[stype->sid()] = stype;
-    _structures_by_name[stype->name()] = stype;
-
-    // set fields HERE so that 1) the StructType is mapped and 2) the
-    // pointer value to the StructType remains the same even after we finish
-    // defining the fields
-    // -> this prevents problems with the recursion since we could have struct
-    //    types that contain pointers to themselves
-
-    for (TypeField ghidra_field : getStructFields(ts)) {
-        stype->_fields[ghidra_field.offset] = StructField(
-            ghidra_field.name,
-            // this toAstType() would cause recursion issues if called
-            // within the StructType constructor
-            callbacks->toAstType(ghidra_field.type),
-            ghidra_field.offset);
-    }
-
-    return stype;
 }
 
 TranslationUnitDecl::TranslationUnitDecl()
-    : _type_library()
 {
 }
 
@@ -482,38 +465,6 @@ PointerType::PointerType(const Datatype* pointedToType)
 void* PointerType::doAccept(ASTVisitor* v, void* context)
 {
     return v->visitPointerType(this, context);
-}
-
-StructType::StructType(const TypeStruct* ts, int sid)
-    : Type(ts), _sid(sid), _size(ts->getSize()), _type_lib(nullptr)
-{
-    // should we handle this: ts->hasStripped() ? ts->getStripped()
-
-    // NOTE: fields must be initialized OUTSIDE this constructor (in
-    // StructTypeLibrary::mapNewStructure) to avoid problems with
-    // recursion if we have struct types which contain pointers to themselves
-    // (e.g. linked lists)
-}
-
-StructType::StructType(int sid, StructTypeLibrary* type_lib)
-    : Type(""), _sid(sid), _size(0), _type_lib(type_lib)
-{
-}
-
-int StructType::size()
-{
-    if (_type_lib) {
-        return _type_lib->getStructureType(_sid)->size();
-    }
-    return _size;
-}
-
-map<int, StructField>* StructType::fields()
-{
-    if (_type_lib) {
-        return _type_lib->getStructureType(_sid)->fields();
-    }
-    return &_fields;
 }
 
 void* StructType::doAccept(ASTVisitor* v, void* context)

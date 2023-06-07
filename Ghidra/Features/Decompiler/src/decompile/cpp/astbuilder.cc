@@ -348,7 +348,9 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
     // --> only reason to include FieldDecl here (instead of dynamic lookup
     // in TU._structs) is for validation with clang AST
 
-    unimplementedCode("generate RecordDecl structure definitions");
+    for (auto stype : _type_lib.getMappedStructs()) {
+        _head_translation_unit->addChild(new RecordDecl(stype));
+    }
 
     // add global decls to the AST under top-level translation unit
     for (auto const& entry : _globals) {
@@ -1429,8 +1431,8 @@ void ASTBuilder::processTypeCastExpression(const PcodeOp* op)
 
 Type* ASTBuilder::toAstType(const Datatype* dt)
 {
-    StructTypeLibrary* type_lib = _head_translation_unit->type_library();
-    StructType* stype = nullptr;
+    TypeStruct* ghidra_struct = nullptr;
+    int sid = -1;
 
     switch (dt->getMetatype()) {
         case TYPE_VOID:
@@ -1443,8 +1445,9 @@ Type* ASTBuilder::toAstType(const Datatype* dt)
         case TYPE_PTR:
             return new PointerType(((TypePointer*)dt)->getPtrTo());
         case TYPE_STRUCT:
-            stype = type_lib->getStructTypeForGhidraStruct((TypeStruct*)dt);
-            return new StructType(stype->sid(), type_lib);  // these can get deleted, so need to return a new'd copy
+            ghidra_struct = (TypeStruct*)dt;
+            sid = _type_lib.mapStruct(ghidra_struct);
+            return new StructType(sid, ghidra_struct);
         case TYPE_ARRAY:
             return new ConstantArrayType((TypeArray*)dt);
         case TYPE_UNKNOWN:

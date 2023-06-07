@@ -170,6 +170,10 @@ public:
     std::string getTypeStringEnd(const Datatype* dt);
     std::string getProtoInputString(const FuncProto* proto);
 
+    StructTypeLibrary* type_library() { return &_type_lib; }
+
+    Type* toAstType(const Datatype* dt);
+
 protected:
 
     /**
@@ -228,8 +232,6 @@ protected:
     void processTypeCastExpression(const PcodeOp *op);
     CStyleCastExpr* createTypeCast(Datatype* dt);
 
-    Type* toAstType(const Datatype* dt);
-
     /** temp functions for logging spots I need to implement */
     void unimplementedCode(std::string description);
     void unimplementedOp(std::string opname);
@@ -264,6 +266,12 @@ protected:
     // entries being added only if they introduce a reference with
     // a size not already present in the list of VarDecls
     std::map<Symbol*, vector<VarDecl*>> _mismatch_globals;
+
+    /**
+     * The structure type library which contains the mapping of structure names
+     * (which must be unique in this context) to structure ids
+     */
+    StructTypeLibrary _type_lib;
 
     // counter to generate unique ValueDecl ids within a given context
     // ** This includes globals, locals, and function decls **

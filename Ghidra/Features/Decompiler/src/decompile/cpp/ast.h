@@ -85,13 +85,13 @@ public:
      * here:
      * https://www.learncpp.com/cpp-tutorial/operator-precedence-and-associativity/
      */
-    virtual int precedence() = 0;
+    virtual int precedence() { return -1; }
 
     /**
      * @brief Return true if LR associative, false otherwise. If there is no
      * associativity for this node, returns false.
      */
-    virtual bool isLRAssociative() = 0;
+    virtual bool isLRAssociative() { return false; }
 
     /**
      * @brief True if the next child would be on the left side of this
@@ -108,7 +108,7 @@ public:
      * Example 2: for *(char*)xyz, the subexpr (char*)xyz would NOT be left
      * of the * operator if added
      */
-    virtual bool wouldNextChildBeLeftOfOp() = 0;
+    virtual bool wouldNextChildBeLeftOfOp() { return false; }
 
     /**
      * @brief True if this node has a precedence level
@@ -155,10 +155,6 @@ class BreakStmt : public ASTNode
 public:
     BreakStmt();
 
-    int precedence() { return -1; }
-    bool isLRAssociative() { return false; }
-    bool wouldNextChildBeLeftOfOp() { return false; }
-
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
 };
@@ -191,10 +187,6 @@ class CaseStmt : public ASTNode
 public:
     CaseStmt();
 
-    int precedence() { return -1; }
-    bool isLRAssociative() { return false; }
-    bool wouldNextChildBeLeftOfOp() { return false; }
-
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
 };
@@ -207,10 +199,6 @@ public:
 
     inline uintb value() { return _value; }
     inline BuiltinType* type() { return _type; }
-
-    int precedence() { return -1; }
-    bool isLRAssociative() { return false; }
-    bool wouldNextChildBeLeftOfOp() { return false; }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -226,10 +214,6 @@ class CompoundStmt : public ASTNode
 public:
     CompoundStmt();
 
-    int precedence() { return -1; }
-    bool isLRAssociative() { return false; }
-    bool wouldNextChildBeLeftOfOp() { return false; }
-
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
 };
@@ -238,10 +222,6 @@ class ConstantExpr : public ASTNode
 {
 public:
     ConstantExpr();
-
-    int precedence() { return -1; }
-    bool isLRAssociative() { return false; }
-    bool wouldNextChildBeLeftOfOp() { return false; }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -288,9 +268,6 @@ public:
     DeclRefExpr(ValueDecl* referencedDecl);
 
     inline ValueDecl* ref() { return _ref; }
-    int precedence() { return -1; }
-    bool isLRAssociative() { return false; }
-    bool wouldNextChildBeLeftOfOp() { return false; }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -304,10 +281,6 @@ class DeclStmt : public ASTNode
 {
 public:
     DeclStmt();
-
-    int precedence() { return -1; }
-    bool isLRAssociative() { return false; }
-    bool wouldNextChildBeLeftOfOp() { return false; }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -324,10 +297,6 @@ class IfStmt : public ASTNode
 public:
     IfStmt();
 
-    int precedence() { return -1; }
-    bool isLRAssociative() { return false; }
-    bool wouldNextChildBeLeftOfOp() { return false; }
-
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
 };
@@ -339,10 +308,6 @@ public:
 
     inline uintb value() { return _value; }
     inline Type* type() { return _type; }
-
-    int precedence() { return -1; }
-    bool isLRAssociative() { return false; }
-    bool wouldNextChildBeLeftOfOp() { return false; }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -363,10 +328,6 @@ public:
     LogMsg(std::string msg);
 
     inline std::string message() { return _msg; }
-
-    int precedence() { return -1; }
-    bool isLRAssociative() { return false; }
-    bool wouldNextChildBeLeftOfOp() { return false; }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -399,14 +360,18 @@ public:
         : _name(name), _dtype(dtype)
     { }
 
-    int precedence() { return -1; }
-    bool isLRAssociative() { return false; }
-    bool wouldNextChildBeLeftOfOp() { return false; }
+    ~FieldDecl()
+    {
+        delete _dtype;
+    }
+
+    string name() { return _name; }
+    Type* type() { return _dtype; }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
     string _name;
-    Type* _dtype;   // we don't own the dtype here - StructField does
+    Type* _dtype;
 };
 
 /**
@@ -415,24 +380,19 @@ protected:
 class RecordDecl : public ASTNode
 {
 public:
-    RecordDecl(StructType* stype);
+    RecordDecl(StructType stype);
 
-    int precedence() { return -1; }
-    bool isLRAssociative() { return false; }
-    bool wouldNextChildBeLeftOfOp() { return false; }
+    int sid() { return _sid; }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
+    int _sid;
 };
 
 class ReturnStmt : public ASTNode
 {
 public:
     ReturnStmt();
-
-    int precedence() { return -1; }
-    bool isLRAssociative() { return false; }
-    bool wouldNextChildBeLeftOfOp() { return false; }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -451,10 +411,6 @@ public:
     // size of the value. If we need it, add it...but not sure yet
     // inline Type* type() { return _type; }
 
-    int precedence() { return -1; }
-    bool isLRAssociative() { return false; }
-    bool wouldNextChildBeLeftOfOp() { return false; }
-
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
 
@@ -467,96 +423,8 @@ class SwitchStmt : public ASTNode
 public:
     SwitchStmt();
 
-    int precedence() { return -1; }
-    bool isLRAssociative() { return false; }
-    bool wouldNextChildBeLeftOfOp() { return false; }
-
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
-};
-
-/**
- * @brief Holds all of the structure definitions for some AST code context.
- *
- * Right now this is associated with a TranslationUnit, but I'm adding this
- * layer of abstraction so that if we want to have a single struct type library
- * for an entire program later on (including all its functions and globals) then
- * we have the flexibility to do that - all the code will be written to a
- * StructTypeLibrary instance which we can just move as desired.
- */
-class StructTypeLibrary
-{
-public:
-    StructTypeLibrary(int base_id = 0);
-
-    map<int, StructType*>* structures_by_id() { return &_structures_by_id; }
-    map<string, StructType*>* structures_by_name() { return &_structures_by_name; }
-
-    // STRUCT ID OPTIONS
-    // 1. Use the Ghidra ID (this won't work if this type is not defined in ghidra already)
-    // 2. Autogen a new ID on the fly arbitrarily - increment a counter
-    // 3. Compute a deterministic ID - hash the content or something
-        // - this is slower
-        // - but we can get it from the contents...
-        // - we need to take care that we include or exclude the struct name in the
-        //   hash if we want to prevent 2 separate structures WITH IDENTICAL CONTENT
-        //   to hash to the same id or not
-
-    /**
-     * For this use case, we are always coming FROM Ghidra -> TO JSON
-     * - if we are adding a new structure definition to Ghidra, our approach
-     *   WILL DEFINE IT IN GHIDRA FIRST, then re-decompile, then extract new AST
-     *   (not try and define the struct directly in the AST...because then we
-     *   don't benefit from the normal data-flow analyses, etc.)
-     *
-     * If we ever have a use case where we want to add new types directly to
-     * the AST then we will just have to add new ids with care
-     * - find the existing max id and just keep incrementing
-     * - start at a much higher base id (900,000+) if there is risk of Ghidra
-     *   subsequently adding a structure or two and now colliding with the
-     *   ones we had just added (@ MAX+1)
-     */
-
-    /**
-     * @brief Looks up the matching StructType for the given Ghidra structure
-     * type. If none has been mapped yet, a new StructType is created and added
-     * to the library.
-     *
-     * Since this function performs a new mapping if necessary, a valid StructType
-     * pointer will always be returned.
-     */
-    StructType* getStructTypeForGhidraStruct(TypeStruct* ts);
-
-    /**
-     * @brief Returns the StructType* for the given struct id if it exists,
-     * otherwise returns nullptr
-     */
-    StructType* getStructureType(int sid)
-    {
-        if (_structures_by_id.count(sid)) {
-            return _structures_by_id[sid];
-        }
-        return nullptr;
-    }
-
-    /**
-     * @brief Returns the StructType* for the given struct name if it exists,
-     * otherwise returns nullptr
-     */
-    StructType* getStructureType(string name)
-    {
-        if (_structures_by_name.count(name)) {
-            return _structures_by_name[name];
-        }
-        return nullptr;
-    }
-
-protected:
-    StructType* mapNewStructure(TypeStruct* ts);
-
-    std::map<int, StructType*> _structures_by_id;
-    std::map<string, StructType*> _structures_by_name;
-    int _next_id;
 };
 
 /**
@@ -567,17 +435,8 @@ class TranslationUnitDecl : public ASTNode
 public:
     TranslationUnitDecl();
 
-    int precedence() { return -1; }
-    bool isLRAssociative() { return false; }
-    bool wouldNextChildBeLeftOfOp() { return false; }
-
-    /** @brief The structure type library, where all the structure type
-     * definitions are stored for this translation unit */
-    StructTypeLibrary* type_library() { return &_type_library; }
-
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
-    StructTypeLibrary _type_library;
 };
 
 /**
@@ -629,17 +488,12 @@ class Type : public ASTNode
 public:
     Type(const Datatype* dt);
     Type(string name);
-    virtual ~Type() {}
 
     /**
      * @brief The Ghidra Datatype associated with this Type if one exists,
      * otherwise nullptr.
      */
     inline const Datatype* ghidra_dtype() { return _ghidra_dt; }
-
-    int precedence() { return -1; }
-    bool isLRAssociative() { return false; }
-    bool wouldNextChildBeLeftOfOp() { return false; }
 
     inline string name() { return _name; }
 
@@ -713,32 +567,32 @@ protected:
 /**
  * @brief Describes a single field within a structure
  */
-class StructField
-{
-public:
-    StructField()
-        : _name(""), _dtype(nullptr), _offset(0)
-    { }
+// class StructField
+// {
+// public:
+//     StructField()
+//         : _name(""), _dtype(nullptr), _offset(0)
+//     { }
 
-    StructField(string name, Type* dtype, int offset)
-        : _name(name), _dtype(dtype), _offset(offset)
-    { }
+//     StructField(string name, Type* dtype, int offset)
+//         : _name(name), _dtype(dtype), _offset(offset)
+//     { }
 
-    ~StructField()
-    {
-        delete _dtype;
-    }
+//     ~StructField()
+//     {
+//         delete _dtype;
+//     }
 
-    string name() { return _name; }
-    Type* dtype() { return _dtype; }
-    int offset() { return _offset; }
+//     string name() { return _name; }
+//     Type* dtype() { return _dtype; }
+//     int offset() { return _offset; }
 
-protected:
-    string _name;
-    Type* _dtype;   // we own this and need to clean it up
-    int _offset;
-    // StructType* _parent;
-};
+// protected:
+//     string _name;
+//     Type* _dtype;   // we own this and need to clean it up
+//     int _offset;
+//     // StructType* _parent;
+// };
 
 /**
  * @brief Structure type
@@ -748,44 +602,25 @@ protected:
  */
 class StructType : public Type
 {
-    friend class StructTypeLibrary;
-
-protected:
-    StructType(const TypeStruct* ts, int sid);
-
 public:
-    /**
-     * @brief Essentially creates a "lazily loaded" copy of the struct type using
-     * only the sid. When the members are invoked, the needed information wil
-     * be looked up dynamically from the type_lib.
-     *
-     * This allows us to create shallow copies of new structures which is useful
-     * for recursive structure types (containing pointers referring to themselves).
-     * We need to both 1) return a pointer that can be deleted and 2) return a
-     * pointer for a struct type that isn't fully initialized yet (in this recursive
-     * case). Returning a shallow copy like this allows the pointer to be accessed
-     * and deleted as normal by the client, but still satisfy our intialization
-     * constrains under the hood.
-     */
-    StructType(int sid, StructTypeLibrary* type_lib);
+    StructType(int sid, TypeStruct* ghidra_struct)
+        : Type(ghidra_struct), _sid(sid)
+    { }
 
-    virtual ~StructType()
+    StructType()
+        : Type(""), _sid(-1)
     {}
 
     /** @brief Structure ID */
-    int sid() { return _sid; }
+    int sid() const { return _sid; }
 
-    /** @brief Size of the structure in bytes */
-    int size();
+    string name() const { return ghidra_struct()->getName(); }
 
-    map<int, StructField>* fields();
+    TypeStruct* ghidra_struct() const { return (TypeStruct*)_ghidra_dt; }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
     int _sid;
-    int _size;
-    map<int, StructField> _fields;  // maps offset -> StructField
-    StructTypeLibrary* _type_lib;   // may be nullptr if this is the "real" copy
 };
 
 /**
@@ -826,10 +661,6 @@ public:
     TypedefDecl(string name);
 
     inline string name() { return _name; }
-
-    int precedence() { return -1; }
-    bool isLRAssociative() { return false; }
-    bool wouldNextChildBeLeftOfOp() { return false; }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -887,10 +718,6 @@ public:
 
     inline int id() { return _id; }
 
-    int precedence() { return -1; }
-    bool isLRAssociative() { return false; }
-    bool wouldNextChildBeLeftOfOp() { return false; }
-
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
     int _id;
@@ -916,10 +743,6 @@ public:
 
     /** @brief The backing Funcdata for this FunctionDecl */
     inline Funcdata* funcdata() { return _fd; }
-
-    int precedence() { return -1; }
-    bool isLRAssociative() { return false; }
-    bool wouldNextChildBeLeftOfOp() { return false; }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -954,10 +777,6 @@ public:
         _type = newtype;
     }
 
-    int precedence() { return -1; }
-    bool isLRAssociative() { return false; }
-    bool wouldNextChildBeLeftOfOp() { return false; }
-
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
     Symbol* _sym;
@@ -976,12 +795,75 @@ public:
     /** @brief The backing ProtoParameter for this ParmVarDecl */
     inline ProtoParameter* param() { return _param; }
 
-    int precedence() { return -1; }
-    bool isLRAssociative() { return false; }
-    bool wouldNextChildBeLeftOfOp() { return false; }
-
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
     ProtoParameter* _param;
 };
 
+/**
+ * @brief Holds all of the structure definitions for some AST code context.
+ *
+ * Right now this is associated with a TranslationUnit, but I'm adding this
+ * layer of abstraction so that if we want to have a single struct type library
+ * for an entire program later on (including all its functions and globals) then
+ * we have the flexibility to do that - all the code will be written to a
+ * StructTypeLibrary instance which we can just move as desired.
+ */
+class StructTypeLibrary
+{
+public:
+    StructTypeLibrary(int base_id = 0);
+
+    bool isStructMapped(string name)
+    {
+        return _mapped_structures.count(name);
+    }
+
+    /**
+     * @brief Maps the given Ghidra structure if not already mapped and returns
+     * its structure id (sid)
+     *
+     * @param ghidra_struct
+     * @return int
+     */
+    int mapStruct(TypeStruct* ghidra_struct)
+    {
+        auto name = ghidra_struct->getName();
+
+        if (isStructMapped(name)) {
+            return _mapped_structures[name].sid();
+        }
+
+        // not mapped - map it now
+        _mapped_structures[name] = StructType(_next_id, ghidra_struct);
+        return _next_id++;
+    }
+
+    vector<StructType> getMappedStructs()
+    {
+        // lots of copying, but if it's memory safe and just works I WILL TAKE IT :D
+        vector<StructType> structs;
+        for (auto const& pair : _mapped_structures) {
+            structs.push_back(pair.second);
+        }
+        return structs;
+    }
+
+    // STRUCT ID OPTIONS
+    // 1. Use the Ghidra ID (this won't work if this type is not defined in ghidra already)
+    // 2. Autogen a new ID on the fly arbitrarily - increment a counter
+    // 3. Compute a deterministic ID - hash the content or something
+        // - this is slower
+        // - but we can get it from the contents...
+        // - we need to take care that we include or exclude the struct name in the
+        //   hash if we want to prevent 2 separate structures WITH IDENTICAL CONTENT
+        //   to hash to the same id or not
+
+protected:
+    /**
+     * @brief Maps structure name -> structure id (sid) for this export context
+     * (right now a translation decl, but could be global to a binary)
+     */
+    std::map<string, StructType> _mapped_structures;
+    int _next_id;
+};

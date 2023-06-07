@@ -340,8 +340,7 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
     // ---------------------------------
     // --> only reason to include FieldDecl here (instead of dynamic lookup
     // in TU._structs) is for validation with clang AST
-    auto sid_map = _head_translation_unit->type_library()->structures_by_id();
-    for (auto const& entry : sid_map) {
+    for (auto const& entry : _head_translation_unit->type_library()->_structures_by_id) {
         _head_translation_unit->addChild(new RecordDecl(entry.second));
     }
 

@@ -151,6 +151,7 @@ class BinaryOperator : public ASTNode
 {
 public:
     BinaryOperator(std::string opcode);
+    virtual ~BinaryOperator() {}
 
     virtual BinaryOperator* clone() override
     {
@@ -180,6 +181,7 @@ class BreakStmt : public ASTNode
 {
 public:
     BreakStmt();
+    virtual ~BreakStmt() {}
     virtual BreakStmt* clone() override
     {
         auto bs = new BreakStmt(*this);
@@ -205,6 +207,7 @@ class CallExpr : public ASTNode
 {
 public:
     CallExpr();
+    virtual ~CallExpr() {}
     virtual CallExpr* clone() override
     {
         auto expr = new CallExpr(*this);
@@ -228,6 +231,7 @@ class CaseStmt : public ASTNode
 {
 public:
     CaseStmt();
+    virtual ~CaseStmt() {}
     virtual CaseStmt* clone() override
     {
         auto stmt = new CaseStmt(*this);
@@ -271,6 +275,7 @@ class CompoundStmt : public ASTNode
 {
 public:
     CompoundStmt();
+    virtual ~CompoundStmt() {}
     virtual CompoundStmt* clone() override
     {
         auto cs = new CompoundStmt(*this);
@@ -290,6 +295,7 @@ class ConstantExpr : public ASTNode
 {
 public:
     ConstantExpr();
+    virtual ~ConstantExpr() {}
     virtual ConstantExpr* clone() override
     {
         auto expr = new ConstantExpr(*this);
@@ -309,6 +315,7 @@ class CStyleCastExpr : public ASTNode
 {
 public:
     CStyleCastExpr(Type* type);
+    virtual ~CStyleCastExpr() {}
 
     virtual CStyleCastExpr* clone() override;
 
@@ -347,6 +354,8 @@ public:
      */
     DeclRefExpr(ValueDecl* referencedDecl);
 
+    virtual ~DeclRefExpr() {}
+
     virtual DeclRefExpr* clone() override;
 
     inline ValueDecl* ref() { return _ref; }
@@ -366,6 +375,7 @@ class DeclStmt : public ASTNode
 {
 public:
     DeclStmt();
+    virtual ~DeclStmt() {}
 
     virtual DeclStmt* clone() override
     {
@@ -392,6 +402,7 @@ class IfStmt : public ASTNode
 {
 public:
     IfStmt();
+    virtual ~IfStmt() {}
 
     virtual IfStmt* clone() override
     {
@@ -412,6 +423,10 @@ class IntegerLiteral : public ASTNode
 {
 public:
     IntegerLiteral(Type* type, uintb value);
+    virtual ~IntegerLiteral()
+    {
+        delete _type;
+    }
 
     virtual IntegerLiteral* clone() override;
 
@@ -439,6 +454,7 @@ class LogMsg : public ASTNode
 {
 public:
     LogMsg(std::string msg);
+    virtual ~LogMsg() {}
 
     virtual LogMsg* clone() override
     {
@@ -462,6 +478,7 @@ class ParenExpr : public ASTNode
 {
 public:
     ParenExpr();
+    virtual ~ParenExpr() {}
 
     virtual ParenExpr* clone() override
     {
@@ -491,6 +508,8 @@ public:
         : _name(name), _type(type)
     { }
 
+    virtual ~FieldDecl() {}
+
     virtual FieldDecl* clone() override;
 
     int precedence() { return -1; }
@@ -513,6 +532,7 @@ class RecordDecl : public ASTNode
 {
 public:
     RecordDecl(StructType* stype);
+    virtual ~RecordDecl() {}
 
     virtual RecordDecl* clone() override
     {
@@ -536,6 +556,7 @@ class ReturnStmt : public ASTNode
 {
 public:
     ReturnStmt();
+    virtual ~ReturnStmt() {}
 
     virtual ReturnStmt* clone() override
     {
@@ -556,6 +577,7 @@ class StringLiteral : public ASTNode
 {
 public:
     StringLiteral(string value);
+    virtual ~StringLiteral() {}
 
     virtual StringLiteral* clone() override
     {
@@ -587,6 +609,7 @@ class SwitchStmt : public ASTNode
 {
 public:
     SwitchStmt();
+    virtual ~SwitchStmt() {}
 
     virtual SwitchStmt* clone() override
     {
@@ -616,9 +639,10 @@ class StructTypeLibrary
 {
 public:
     StructTypeLibrary(int base_id = 0);
+    ~StructTypeLibrary();
 
-    map<int, StructType*>& structures_by_id() { return _structures_by_id; }
-    map<string, StructType*>& structures_by_name() { return _structures_by_name; }
+    // map<int, StructType*>& structures_by_id() { return _structures_by_id; }
+    // map<string, StructType*>& structures_by_name() { return _structures_by_name; }
 
     // STRUCT ID OPTIONS
     // 1. Use the Ghidra ID (this won't work if this type is not defined in ghidra already)
@@ -679,11 +703,11 @@ public:
         return nullptr;
     }
 
-protected:
-    StructType* mapNewStructure(TypeStruct* ts);
-
     std::map<int, StructType*> _structures_by_id;
     std::map<string, StructType*> _structures_by_name;
+
+protected:
+    StructType* mapNewStructure(TypeStruct* ts);
     int _next_id;
 };
 
@@ -694,6 +718,7 @@ class TranslationUnitDecl : public ASTNode
 {
 public:
     TranslationUnitDecl();
+    virtual ~TranslationUnitDecl() {}
 
     virtual TranslationUnitDecl* clone() override
     {
@@ -799,6 +824,7 @@ class BuiltinType : public Type
 public:
     BuiltinType(const Datatype* dt);
     BuiltinType(string name, int size, bool isFloatingPoint, bool sign);
+    virtual ~BuiltinType() {}
 
     virtual BuiltinType* clone() override
     {
@@ -839,6 +865,7 @@ public:
      */
     ConstantArrayType(const Datatype* elementType, int numElements);
     ConstantArrayType(const TypeArray* arrType);
+    virtual ~ConstantArrayType() {}
 
     virtual ConstantArrayType* clone() override
     {
@@ -861,6 +888,7 @@ class PointerType : public Type
 {
 public:
     PointerType(const Datatype* pointedToType);
+    virtual ~PointerType() {}
 
     virtual PointerType* clone() override
     {
@@ -880,7 +908,7 @@ class StructField
 {
 public:
     StructField()
-        : _name(""), _dtype(nullptr), _offset(0)
+        : _name(""), _dtype(nullptr), _offset(0), _DEBUG_dtype_typename("")
     { }
 
     /**
@@ -892,19 +920,34 @@ public:
      * @param offset
      */
     StructField(string name, Type* dtype, int offset)
-        : _name(name), _dtype(dtype), _offset(offset)
-    { }
+    {
+        _name = name;
+        _dtype = dtype;
+        _DEBUG_dtype_typename = string(typeid(*_dtype).name());
+        _offset = offset;
+    }
 
-    // StructField(const StructField& other)
-    // {
-    //     _name = other._name;
-    //     if (other._dtype) {
-    //         _dtype = other._dtype->clone();
-    //     } else {
-    //         _dtype = nullptr;
-    //     }
-    //     _offset = other._offset;
-    // }
+    ~StructField()
+    {
+        if (_dtype) {
+            delete _dtype;
+            _dtype = nullptr;
+            _DEBUG_dtype_typename = "";
+        }
+    }
+
+    StructField(const StructField& other)
+    {
+        _name = other._name;
+        if (other._dtype) {
+            _dtype = other._dtype->clone();
+            _DEBUG_dtype_typename = string(typeid(*_dtype).name());
+        } else {
+            _dtype = nullptr;
+            _DEBUG_dtype_typename = "";
+        }
+        _offset = other._offset;
+    }
 
     // StructField(StructField&& other)
     // {
@@ -918,14 +961,6 @@ public:
     //     other._dtype = nullptr;
     // }
 
-    ~StructField()
-    {
-        if (_dtype) {
-            delete _dtype;
-            _dtype = nullptr;
-        }
-    }
-
     string name() const { return _name; }
     Type* dtype() const { return _dtype; }
     int offset() const { return _offset; }
@@ -934,6 +969,7 @@ protected:
     string _name;
     Type* _dtype;   // we own this and need to clean it up
     int _offset;
+    string _DEBUG_dtype_typename;
     // StructType* _parent;
 };
 
@@ -982,7 +1018,7 @@ public:
     /** @brief Size of the structure in bytes */
     int size();
 
-    map<int, StructField>& fields();
+    map<int, StructField>* fields();
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -1015,6 +1051,7 @@ class VoidType : public Type
 {
 public:
     VoidType() : Type("void") {}
+    virtual ~VoidType() {}
 
     virtual VoidType* clone() override
     {
@@ -1035,6 +1072,7 @@ class TypedefDecl : public ASTNode
 {
 public:
     TypedefDecl(string name);
+    virtual ~TypedefDecl() {}
 
     virtual TypedefDecl* clone() override
     {
@@ -1062,6 +1100,7 @@ class TypedefType: public Type
 {
 public:
     TypedefType(TypedefDecl* decl);
+    virtual ~TypedefType() {}
 
     virtual TypedefType* clone() override
     {
@@ -1082,6 +1121,10 @@ class UnaryOperator : public ASTNode
 {
 public:
     UnaryOperator(std::string opcode, Type* type);
+    virtual ~UnaryOperator()
+    {
+        delete _type;
+    }
 
     virtual UnaryOperator* clone() override
     {
@@ -1143,6 +1186,10 @@ class FunctionDecl : public ValueDecl
 {
 public:
     FunctionDecl(int id, Funcdata* fd);
+    virtual ~FunctionDecl()
+    {
+        delete _return_type;
+    }
 
     virtual FunctionDecl* clone() override
     {
@@ -1228,6 +1275,7 @@ class ParmVarDecl : public VarDecl
 {
 public:
     ParmVarDecl(int id, ProtoParameter* param);
+    virtual ~ParmVarDecl() {}
 
     virtual ParmVarDecl* clone() override
     {

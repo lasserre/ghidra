@@ -378,7 +378,7 @@ void* FieldDecl::doAccept(ASTVisitor* v, void* context)
 RecordDecl::RecordDecl(StructType* stype)
     : _sid(stype->sid())
 {
-    for (auto& f : stype->fields()) {
+    for (auto& f : *stype->fields()) {
         addChild(new FieldDecl(f.second.name(), f.second.dtype()));
     }
 }
@@ -419,6 +419,14 @@ void* SwitchStmt::doAccept(ASTVisitor* v, void* context)
 StructTypeLibrary::StructTypeLibrary(int base_id /* = 0 */)
     : _structures_by_id({}), _structures_by_name({}), _next_id(base_id)
 {
+}
+
+StructTypeLibrary::~StructTypeLibrary()
+{
+    // only delete from one map since we are dual-mapping each StructType*
+    for (auto& pair : _structures_by_id) {
+        delete pair.second;
+    }
 }
 
 StructType* StructTypeLibrary::getStructTypeForGhidraStruct(TypeStruct* ts)
@@ -564,12 +572,12 @@ int StructType::size()
     return _size;
 }
 
-map<int, StructField>& StructType::fields()
+map<int, StructField>* StructType::fields()
 {
     if (_type_lib) {
         return _type_lib->getStructureType(_sid)->fields();
     }
-    return _fields;
+    return &_fields;
 }
 
 void* StructType::doAccept(ASTVisitor* v, void* context)

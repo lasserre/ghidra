@@ -373,14 +373,14 @@ void* JsonASTVisitor::visitTranslationUnitDecl(TranslationUnitDecl* td, void* co
 
     auto structs_by_id = json::object();
 
-    for (const auto& struct_pair : td->type_library()->structures_by_id()) {
+    for (const auto& struct_pair : td->type_library()->_structures_by_id) {
         auto stype_j = json::object();
         auto sid = struct_pair.first;
-        auto stype = struct_pair.second;
+        StructType* stype = struct_pair.second;
         stype_j["name"] = stype->name();
         auto fields_j = json::object();
 
-        for (const auto& pair : stype->fields()) {
+        for (const auto& pair : *stype->fields()) {
             auto offset = pair.first;
             // const StructField& field = field_pair.second;
             auto field = json::object();
@@ -397,7 +397,7 @@ void* JsonASTVisitor::visitTranslationUnitDecl(TranslationUnitDecl* td, void* co
         }
 
         stype_j["fields"] = fields_j;
-        structs_by_id[sid] = stype_j;
+        structs_by_id[std::to_string(sid)] = stype_j;
     }
 
     tudecl["structures_by_id"] = structs_by_id;

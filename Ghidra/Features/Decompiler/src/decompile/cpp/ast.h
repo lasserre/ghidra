@@ -368,6 +368,12 @@ public:
     string name() { return _name; }
     Type* type() { return _dtype; }
 
+    inline void replace_type(Type* newtype)
+    {
+        delete _dtype;
+        _dtype = newtype;
+    }
+
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
     string _name;

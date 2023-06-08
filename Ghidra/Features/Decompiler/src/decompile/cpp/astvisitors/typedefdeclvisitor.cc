@@ -51,7 +51,7 @@ void TypedefDeclVisitor::insertTypedefs(ASTNode* parent)
 
     for (const auto& entry : _typedefs_to_add) {
         // add typedef declarations for each at the top
-        parent->addChild(entry.second.decl, /* append =*/ false);
+        parent->addChild(entry.second.decl, /* append =*/ false, /*check_parens = */ false);
 
         // replace each use of this typedef
         for (Type* typedef_use : entry.second.tree_node_uses) {
@@ -62,8 +62,8 @@ void TypedefDeclVisitor::insertTypedefs(ASTNode* parent)
         for (AttachedTypeUpdate* attached_update : entry.second.attached_uses) {
             attached_update->updateType(
                 attached_update->node,
-                new TypedefType(entry.second.decl
-            ));
+                new TypedefType(entry.second.decl)
+            );
 
             delete attached_update;     // done with this now
         }
@@ -157,6 +157,23 @@ void* TypedefDeclVisitor::visitType(Type* type, void* atu)
     // to the existing type the typedef is based on
     Type* real_type = nullptr;
 
+    /**
+     * TODO: either catch it here or VISIT BuiltinType()...(I think I can catch it here)
+     *
+     * if (bit->ghidra_dt()->getTypedef()) {
+     *
+     * ...should also be (for this function)
+     *
+     * if (dt->getTypedef()) {
+     *
+     *      // this is a builtin-type under the hood (via typedef), but actually
+     *      // IS a use of a typedef
+     *      // e.g. __off_t would come here, but getTypedef() will return a Datatype*
+     *      // for "long"
+     *      // TODO: in these cases we need to
+     * }
+     */
+
     switch (meta) {
         case TYPE_UNKNOWN:
             switch (type->ghidra_dtype()->getSize()) {
@@ -221,6 +238,22 @@ void* TypedefDeclVisitor::visitCStyleCastExpr(CStyleCastExpr* castexpr, void* co
 void* TypedefDeclVisitor::visitDeclRefExpr(DeclRefExpr* declref, void* context)
 {
     declref->ref()->accept(this);
+    return nullptr;
+}
+
+void* TypedefDeclVisitor::visitFieldDecl(FieldDecl* fdecl, void* context)
+{
+    auto type_update = new AttachedTypeUpdate(
+        [](ASTNode* fdecl, Type* newtype) {
+            ((FieldDecl*)fdecl)->replace_type(newtype);
+            return fdecl;
+        },
+        fdecl
+    );
+
+    fdecl->type()->accept(this, type_update);
+
+    delete type_update;
     return nullptr;
 }
 

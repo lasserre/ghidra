@@ -56,6 +56,7 @@ public:
     // -------------- CHECK NON-NODE DATA TYPES
     virtual void* visitCStyleCastExpr(CStyleCastExpr*, void*);
     virtual void* visitDeclRefExpr(DeclRefExpr*, void*);
+    virtual void* visitFieldDecl(FieldDecl*, void*);
     virtual void* visitFunctionDecl(FunctionDecl*, void*);
     virtual void* visitParmVarDecl(ParmVarDecl*, void*);
     virtual void* visitVarDecl(VarDecl*, void*);

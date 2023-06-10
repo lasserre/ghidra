@@ -1,4 +1,5 @@
 #include "typedefdeclvisitor.h"
+#include "astbuilder.h"
 
 /**
  * Probably a better way to do this...but I just need a flexible way
@@ -40,8 +41,8 @@ void NewTypedef::addUse(AttachedTypeUpdate* atu, Type* type)
     }
 }
 
-TypedefDeclVisitor::TypedefDeclVisitor()
-    : _typedefs_to_add()
+TypedefDeclVisitor::TypedefDeclVisitor(ASTBuilder* builder)
+    : _typedefs_to_add(), _builder(builder)
 {
 }
 
@@ -141,6 +142,28 @@ void* TypedefDeclVisitor::visitConstantArrayType(ConstantArrayType* cat, void* a
     return type_update;
 }
 
+void TypedefDeclVisitor::insertNewTypedef(Type* alias_type, Type* real_type, AttachedTypeUpdate* atu /*= nullptr*/)
+{
+    NewTypedef td;
+    td.decl = new TypedefDecl(alias_type->name());
+    td.decl->addChild(real_type);
+    td.addUse(atu, alias_type);
+    _typedefs_to_add.insert({alias_type->name(), td});
+}
+
+void* TypedefDeclVisitor::visitBuiltinType(BuiltinType* bit, void* atu)
+{
+    const Datatype* dt = bit->ghidra_dtype();
+
+    if (dt->getTypedef()) {
+        // this is a typedef...need to capture it
+        auto real_type = _builder->toAstType(dt->getTypedef());
+        insertNewTypedef(bit, real_type, (AttachedTypeUpdate*)atu);
+    }
+
+    return nullptr;
+}
+
 void* TypedefDeclVisitor::visitType(Type* type, void* atu)
 {
     if (_typedefs_to_add.count(type->name())) {
@@ -157,54 +180,29 @@ void* TypedefDeclVisitor::visitType(Type* type, void* atu)
     // to the existing type the typedef is based on
     Type* real_type = nullptr;
 
-    /**
-     * TODO: either catch it here or VISIT BuiltinType()...(I think I can catch it here)
-     *
-     * if (bit->ghidra_dt()->getTypedef()) {
-     *
-     * ...should also be (for this function)
-     *
-     * if (dt->getTypedef()) {
-     *
-     *      // this is a builtin-type under the hood (via typedef), but actually
-     *      // IS a use of a typedef
-     *      // e.g. __off_t would come here, but getTypedef() will return a Datatype*
-     *      // for "long"
-     *      // TODO: in these cases we need to
-     * }
-     */
-
-    switch (meta) {
-        case TYPE_UNKNOWN:
-            switch (type->ghidra_dtype()->getSize()) {
-                case 1:
-                    name = "unsigned char";
-                    break;
-                case 2:
-                    name = "unsigned short";
-                    break;
-                case 4:
-                    name = "unsigned int";
-                    break;
-                case 8:
-                    name = "unsigned long";
-                    break;
-                default:
-                    break;
-            }
-            real_type = new BuiltinType(name, dt->getSize(), false, false);
-            break;
-        default:
-            break;
+    if (meta == TYPE_UNKNOWN) {
+        switch (type->ghidra_dtype()->getSize()) {
+            case 1:
+                name = "unsigned char";
+                break;
+            case 2:
+                name = "unsigned short";
+                break;
+            case 4:
+                name = "unsigned int";
+                break;
+            case 8:
+                name = "unsigned long";
+                break;
+            default:
+                break;
+        }
+        real_type = new BuiltinType(name, dt->getSize(), false, false);
     }
 
     if (real_type) {
         // we found a type that needs a typedef
-        NewTypedef td;
-        td.decl = new TypedefDecl(type->name());
-        td.decl->addChild(real_type);
-        td.addUse((AttachedTypeUpdate*)atu, type);
-        _typedefs_to_add.insert({type->name(), td});
+        insertNewTypedef(type, real_type, (AttachedTypeUpdate*)atu);
     }
 
     return nullptr;

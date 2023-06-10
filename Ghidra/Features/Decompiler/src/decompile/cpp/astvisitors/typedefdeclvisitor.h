@@ -3,6 +3,7 @@
 #include "astvisitor.h"
 
 class AttachedTypeUpdate;
+class ASTBuilder;
 
 struct NewTypedef
 {
@@ -34,7 +35,7 @@ public:
      * @param builder is needed for reuse of some PrintC member
      * functions, otherwise I don't need it
      */
-    TypedefDeclVisitor();
+    TypedefDeclVisitor(ASTBuilder* builder);
 
     /**
      * @brief Inserts TypedefDecls as children of the given parent node that
@@ -47,7 +48,7 @@ public:
     void insertTypedefs(ASTNode* parent);
 
     // -------------- PROCESS NODE TYPES
-    // virtual void* visitBuiltinType(BuiltinType*, void*);
+    virtual void* visitBuiltinType(BuiltinType*, void*);
     virtual void* visitConstantArrayType(ConstantArrayType*, void*);
     virtual void* visitType(Type*, void*);
     // CLS: don't think we need this? if there is a TypedefType
@@ -62,16 +63,13 @@ public:
     virtual void* visitVarDecl(VarDecl*, void*);
 
 protected:
-    /**
-     * @brief Checks the given data type to see if it should
-     * be forward-declared. If so, inserts it as a child of the
-     * parent node supplied at insertForwardDecls()
-     *
-     * @param dt
-     */
-    void checkDataType(Datatype* dt);
+
+    void insertNewTypedef(Type* alias_type, Type* real_type, AttachedTypeUpdate* atu = nullptr);
 
     // forward-decl nodes to add when finished traversing
     // the AST (so we don't modify _parent's children while traversing)
     map<string, NewTypedef> _typedefs_to_add;
+    // HACK: this is for access to builder.toAstType() because I'm rushing...
+    // if someone has time to rearchitect this could have a cleaner solution :)
+    ASTBuilder* _builder;
 };

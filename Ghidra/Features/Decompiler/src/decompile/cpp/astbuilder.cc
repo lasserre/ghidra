@@ -374,7 +374,7 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
     // forward declare types/typedefs
     // (these will be prepended @ top, but have to compute last so we process
     // the globals/fwd decls/function code)
-    TypedefDeclVisitor typedef_visitor;
+    TypedefDeclVisitor typedef_visitor(this);
     typedef_visitor.insertTypedefs(_head_translation_unit);
 
     _logfile.flush();

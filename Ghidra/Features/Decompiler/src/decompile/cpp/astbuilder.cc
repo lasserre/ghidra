@@ -648,7 +648,7 @@ void ASTBuilder::processPendingSymbol(PendingNode* node)
         if (_mismatch_globals.count(node->sym)) {
             // check size
             for (VarDecl* vd : _mismatch_globals[node->sym]) {
-                auto existing_size = vd->ghidra_sym()->getType()->getSize();
+                auto existing_size = vd->ghidra_dtype()->getSize();
                 if (node->vnode->getSize() == existing_size) {
                     // use this one
                     sym_decl = vd;
@@ -1749,9 +1749,131 @@ void ASTBuilder::opPtradd(const PcodeOp *op)
     unimplementedOp("opPtradd");
 }
 
+/** CLS: copied from printc.cc (it was local to that file) */
+static bool isValueFlexible(const Varnode *vn)
+{
+  if ((vn->isImplied())&&(vn->isWritten())) {
+    const PcodeOp *def = vn->getDef();
+    if (def->code() == CPUI_PTRSUB) return true;
+    if (def->code() == CPUI_PTRADD) return true;
+  }
+  return false;
+}
+
+// PTRSUB . or -> - Dereference a subfield from a pointer
 void ASTBuilder::opPtrsub(const PcodeOp *op)
 {
-    unimplementedOp("opPtrsub");
+    /**
+     * CLS: trying to get this DONE - structure simply mirrored from
+     * PrintC::opPtrsub()
+    */
+    const Varnode* in0;
+    uintb in1const;
+    TypePointer* ptype;
+    TypePointerRel* ptrel;
+    Datatype* ct;
+    bool valueon,flex,arrayvalue;
+    uint4 m;
+
+    in0 = op->getIn(0);
+    in1const = op->getIn(1)->getOffset();
+    ptype = (TypePointer*)in0->getHighTypeReadFacing(op);
+    if (ptype->getMetatype() != TYPE_PTR) {
+        // we won't get here - main decompiler fails in this case
+        throw LowlevelError("PTRSUB off of non-pointer type");
+    }
+
+    if (ptype->isFormalPointerRel() && ((TypePointerRel*)ptype)->evaluateThruParent(in1const)) {
+        ptrel = (TypePointerRel*) ptype;
+        ct = ptrel->getParent();
+    } else {
+        ptrel = nullptr;
+        ct = ptype->getPtrTo();
+    }
+
+    m = mods & ~(print_load_value|print_store_value); // Current state of mods
+    valueon = (mods & (print_load_value|print_store_value)) != 0;
+    flex = isValueFlexible(in0);
+
+    if (ct->getMetatype() == TYPE_STRUCT || ct->getMetatype() == TYPE_UNION) {
+
+        // ------------ TYPE_STRUCT | TYPE_UNION ------------
+        unimplementedCode("PTRSUB ct STRUCT or UNION case");
+        return;
+    } else if (ct->getMetatype() == TYPE_SPACEBASE) {
+
+        // ------------ TYPE_SPACEBASE ------------
+        HighVariable* high = op->getIn(1)->getHigh();
+        Symbol* symbol = high->getSymbol();
+        arrayvalue = false;
+
+        if (symbol) {
+            ct = symbol->getType();     // ct is now type of getIn(1)
+
+            if (ct->getMetatype() == TYPE_ARRAY) {
+                // & is dropped if the output type is an array
+                arrayvalue = valueon;   // If printing value, use [0]
+                valueon = true;         // If printing ptr, don't use &
+            } else if (ct->getMetatype() == TYPE_CODE) {
+                valueon = true;     // If printing ptr, don't use &
+                // CLS: does valueon mean "print the variable, not the address of variable?"
+                // CLS: does arrayvalue mean "print as an array value [i]"
+            }
+        }
+
+        bool need_to_pop_astnode = false;
+
+        if (!valueon) {
+            // EMIT &name
+            Type* declreftype = nullptr;
+            if (symbol) {
+                declreftype = toAstType(symbol->getType());
+            }
+            UnaryOperator* unary = new UnaryOperator("&", declreftype);
+            currentASTNode()->addChild(unary);
+            pushASTNode(unary);
+            need_to_pop_astnode = true;
+        } else {
+            // EMIT name
+            unimplementedCode("PTRSUB valeuon case");
+        }
+
+        if (!symbol) {
+            unimplementedCode("PTRSUB null symbol case");
+        } else {
+            int4 off = high->getSymbolOffset();
+            if (off == 0) {
+                PendingNode node;
+                node.high = high;
+                node.mods = mods;
+                node.node_type = ePendingNodeType::node_symbol;
+                node.op = op;
+                node.sym = symbol;
+                node.vnode = op->getIn(1);
+                // CLS: didn't originally envision this, but need to call this manually
+                // to handle mapping the variable decls
+                processPendingSymbol(&node);
+            } else {
+                unimplementedCode("PTRSUB push partial symbol");
+            }
+        }
+
+        if (arrayvalue) {
+            unimplementedCode("PTRSUB arrayvalue case");
+        }
+
+        if (need_to_pop_astnode) {
+            popASTNode();
+        }
+
+    } else if (ct->getMetatype() == TYPE_ARRAY) {
+
+        // ------------ TYPE_ARRAY ------------
+        unimplementedCode("PTRSUB ct ARRAY");
+    } else {
+        // we won't get here - main decompiler fails in this case
+        throw LowlevelError("PTRSUB off of non structured pointer type");
+    }
 }
 
 void ASTBuilder::opSegmentOp(const PcodeOp *op)

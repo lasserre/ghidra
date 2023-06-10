@@ -548,7 +548,7 @@ void* ValueDecl::doAccept(ASTVisitor* v, void* context)
 }
 
 VarDecl::VarDecl(int id, Symbol* sym)
-    : ValueDecl(id), _sym(sym), _name(""), _type(nullptr)
+    : ValueDecl(id), _sym(sym), _name(""), _type(nullptr), _ghidra_type(sym->getType())
 {
     if (sym) {
         _name = sym->getName();
@@ -557,12 +557,12 @@ VarDecl::VarDecl(int id, Symbol* sym)
 }
 
 VarDecl::VarDecl(int id, string name, Type* type)
-    : ValueDecl(id), _sym(nullptr), _name(name), _type(type)
+    : ValueDecl(id), _sym(nullptr), _name(name), _type(type), _ghidra_type(nullptr)
 {
 }
 
 VarDecl::VarDecl(int id, string name, const Datatype* dt)
-    : ValueDecl(id), _sym(nullptr), _name(name), _type(nullptr)
+    : ValueDecl(id), _sym(nullptr), _name(name), _type(nullptr), _ghidra_type(dt)
 {
     _type = callbacks->toAstType(dt);
 }

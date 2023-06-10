@@ -698,6 +698,15 @@ public:
     inline std::string opcode() { return _opcode; }
     inline Type* type() { return _type; }
 
+    /**
+     * @brief simply sets the type, so if you need to free existing type
+     * do so manually first!
+    */
+    void setType(Type* type)
+    {
+        _type = type;
+    }
+
     int precedence();
     bool isLRAssociative();
     // for unary operators, children are always on its right!
@@ -774,6 +783,14 @@ public:
     }
 
     inline Symbol* ghidra_sym() { return _sym; }
+    inline const Datatype* ghidra_dtype()
+    {
+        if (_sym) {
+            return _sym->getType();
+        }
+        return _ghidra_type;
+    }
+
     inline string name() { return _name; }
     inline Type* type() { return _type; }
 
@@ -788,6 +805,7 @@ protected:
     Symbol* _sym;
     string _name;
     Type* _type;
+    const Datatype* _ghidra_type;
 };
 
 /**

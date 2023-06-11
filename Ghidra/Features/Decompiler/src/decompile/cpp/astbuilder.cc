@@ -121,6 +121,10 @@ ASTBuilder::ASTBuilder(Architecture* ghidra, string logfolder)
         return this->toAstType(dt);
         // return ((ASTBuilder*)context)->toAstType(dt);
     };
+    _ast_callbacks.unimplementedCodeCallback = [this](string msg) {
+        unimplementedCode(msg);
+    };
+
     initASTCallbacks(&_ast_callbacks);
 }
 

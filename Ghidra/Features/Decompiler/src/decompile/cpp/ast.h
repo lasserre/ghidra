@@ -33,6 +33,8 @@ struct ASTCallbacks
     // Type* (*toAstTypeCallback)(const Datatype* dt, void* context);
     // void* context;
 
+    std::function<void(string)> unimplementedCodeCallback;
+
     // this one is actually called by AST classes
     Type* toAstType(const Datatype* dt)
     {
@@ -501,7 +503,7 @@ public:
      */
     inline const Datatype* ghidra_dtype() { return _ghidra_dt; }
 
-    inline string name() { return _name; }
+    virtual string name() { return _name; }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -527,11 +529,21 @@ public:
     /** @brief True if signed, false if unsigned */
     bool isSigned();
 
+    /** @brief True if the ghidra metatype was TYPE_BOOL */
+    bool isBool();
+
+    virtual string name();
+
+    /** @brief The name Ghidra uses for this data type (could be a typedef) */
+    string ghidra_name() { return _ghidra_name; }
+
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
+    bool _is_bool;
     bool _is_floating;
     bool _is_signed;
     int _size;
+    string _ghidra_name;
 };
 
 /**

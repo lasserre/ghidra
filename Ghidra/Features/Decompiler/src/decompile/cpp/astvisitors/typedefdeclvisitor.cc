@@ -151,18 +151,23 @@ void TypedefDeclVisitor::insertNewTypedef(Type* alias_type, Type* real_type, Att
     _typedefs_to_add.insert({alias_type->name(), td});
 }
 
-void* TypedefDeclVisitor::visitBuiltinType(BuiltinType* bit, void* atu)
-{
-    const Datatype* dt = bit->ghidra_dtype();
+// ------------
+// CLS: taking this away in favor of bit->ghidra_name and not caring about their
+// names/typedefs (because our model won't care)
+// ------------
+// void* TypedefDeclVisitor::visitBuiltinType(BuiltinType* bit, void* atu)
+// {
+//     const Datatype* dt = bit->ghidra_dtype();
 
-    if (dt->getTypedef()) {
-        // this is a typedef...need to capture it
-        auto real_type = _builder->toAstType(dt->getTypedef());
-        insertNewTypedef(bit, real_type, (AttachedTypeUpdate*)atu);
-    }
+//     while (dt->getTypedef()) {
+//         // this is a typedef...need to capture it
+//         auto real_type = _builder->toAstType(dt->getTypedef());
+//         insertNewTypedef(bit, real_type, (AttachedTypeUpdate*)atu);
+//         dt = dt->getTypedef();      // follow this down until we're at a "real" type
+//     }
 
-    return nullptr;
-}
+//     return nullptr;
+// }
 
 void* TypedefDeclVisitor::visitType(Type* type, void* atu)
 {

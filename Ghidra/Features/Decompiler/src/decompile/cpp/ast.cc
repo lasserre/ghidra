@@ -407,13 +407,56 @@ void* Type::doAccept(ASTVisitor* v, void* context)
 }
 
 BuiltinType::BuiltinType(const Datatype* dt)
-    : Type(dt), _size(0), _is_floating(false), _is_signed(false)
+    : Type(dt), _size(0), _is_floating(false), _is_signed(false), _ghidra_name("")
 {
+    if (dt) {
+        _ghidra_name = dt->getName();
+    }
 }
 
 BuiltinType::BuiltinType(string name, int size, bool isFloatingPoint, bool sign)
-    : Type(name), _size(size), _is_floating(isFloatingPoint), _is_signed(sign)
+    : Type(name), _size(size), _is_floating(isFloatingPoint), _is_signed(sign), _ghidra_name(name)
 {
+}
+
+string BuiltinType::name()
+{
+    if (isBool()) {
+        return "bool";
+    }
+
+    if (isFloatingPoint()) {
+        switch (size()) {
+            case 4:
+                return "float";
+            case 8:
+                return "double";
+            default:
+                callbacks->unimplementedCodeCallback("UNHANDLED BuiltinType FLOAT SIZE of " + size());
+                return "UNHANDLED_FLOAT_SIZE_" + size();
+        }
+    }
+
+    // on my x86_64 laptop:
+    // char - 1B
+    // short - 2B
+    // int - 4B
+    // long - 8B
+    // long long - 8B
+
+    switch(size()) {
+        case 1:
+            return isSigned() ? "char" : "unsigned char";
+        case 2:
+            return isSigned() ? "short" : "unsigned short";
+        case 4:
+            return isSigned() ? "int" : "unsigned int";
+        case 8:
+            return isSigned() ? "long" : "unsigned long";
+        default:
+            callbacks->unimplementedCodeCallback("UNHANDLED BuiltinType INT SIZE of " + size());
+            return "UNHANDLED_INT_SIZE_" + size();
+    }
 }
 
 int BuiltinType::size()
@@ -433,6 +476,14 @@ bool BuiltinType::isSigned()
         return meta == TYPE_INT || meta == TYPE_BOOL || meta == TYPE_FLOAT;
     }
     return _is_signed;
+}
+
+bool BuiltinType::isBool()
+{
+    if (_ghidra_dt) {
+        return _ghidra_dt->getMetatype() == TYPE_BOOL;
+    }
+    return false;
 }
 
 void* BuiltinType::doAccept(ASTVisitor* v, void* context)

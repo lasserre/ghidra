@@ -116,6 +116,7 @@ void* JsonASTVisitor::visitBuiltinType(BuiltinType* bit, void* context)
     json bit_j;
     bit_j["kind"] = "BuiltinType";
     bit_j["name"] = bit->name();
+    bit_j["ghidra_name"] = bit->ghidra_name();
     bit_j["is_floating_point"] = bit->isFloatingPoint();
     bit_j["is_signed"] = bit->isSigned();
     bit_j["size"] = bit->size();

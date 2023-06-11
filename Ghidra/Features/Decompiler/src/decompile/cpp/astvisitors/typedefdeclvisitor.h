@@ -48,7 +48,7 @@ public:
     void insertTypedefs(ASTNode* parent);
 
     // -------------- PROCESS NODE TYPES
-    virtual void* visitBuiltinType(BuiltinType*, void*);
+    // virtual void* visitBuiltinType(BuiltinType*, void*);
     virtual void* visitConstantArrayType(ConstantArrayType*, void*);
     virtual void* visitType(Type*, void*);
     // CLS: don't think we need this? if there is a TypedefType

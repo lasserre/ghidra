@@ -1459,6 +1459,7 @@ CStyleCastExpr* ASTBuilder::createTypeCast(Datatype* dt)
     return cast;
 }
 
+// this corresponds to opTypeCast(op)
 void ASTBuilder::processTypeCastExpression(const PcodeOp* op)
 {
     Datatype* dt = op->getOut()->getHigh()->getType();
@@ -1776,9 +1777,23 @@ void ASTBuilder::opPiece(const PcodeOp *op)
     unimplementedOp("opPiece");
 }
 
+// SUB
+// extract a subset of bytes
 void ASTBuilder::opSubpiece(const PcodeOp *op)
 {
-    unimplementedOp("opSubpiece");
+    if (op->doesSpecialPrinting()) {
+        unimplementedCode("SUBPIECE special printing case");
+        return;
+    }
+
+    if (castStrategy->isSubpieceCast(op->getOut()->getHighTypeDefFacing(),
+                        op->getIn(0)->getHighTypeReadFacing(op),
+                        (uint4)op->getIn(1)->getOffset()))
+    {
+        processTypeCastExpression(op);
+    } else {
+        unimplementedCode("SUBPIECE opFunc");
+    }
 }
 
 void ASTBuilder::opCast(const PcodeOp *op)

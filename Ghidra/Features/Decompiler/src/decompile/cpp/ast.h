@@ -705,19 +705,19 @@ protected:
 class UnaryOperator : public ASTNode
 {
 public:
-    UnaryOperator(std::string opcode, Type* type);
+    UnaryOperator(std::string opcode);//, Type* type);
 
     inline std::string opcode() { return _opcode; }
-    inline Type* type() { return _type; }
+    // inline Type* type() { return _type; }
 
     /**
      * @brief simply sets the type, so if you need to free existing type
      * do so manually first!
     */
-    void setType(Type* type)
-    {
-        _type = type;
-    }
+    // void setType(Type* type)
+    // {
+    //     _type = type;
+    // }
 
     int precedence();
     bool isLRAssociative();
@@ -727,7 +727,7 @@ public:
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
     std::string _opcode;
-    Type* _type;    // output datatype of operator
+    // Type* _type;    // output datatype of operator
 };
 
 /**

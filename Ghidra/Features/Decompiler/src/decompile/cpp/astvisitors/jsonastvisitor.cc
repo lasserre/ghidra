@@ -453,7 +453,7 @@ void* JsonASTVisitor::visitUnaryOperator(UnaryOperator* uo, void* context)
     uo_json["kind"] = "UnaryOperator";
     uo_json["inner"] = json::array();
     uo_json["opcode"] = uo->opcode();
-    uo_json["dtype"] = typeToJson(uo->type());
+    // uo_json["dtype"] = typeToJson(uo->type());
     // uo_json["dtype_name"] = datatypeToJson(uo->type()->ghidra_dtype());
     addMessages(uo, uo_json);
     return copy_to_parent(uo_json, context);

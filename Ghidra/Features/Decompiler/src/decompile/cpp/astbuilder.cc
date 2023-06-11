@@ -1120,7 +1120,7 @@ void ASTBuilder::opLoad(const PcodeOp *op)
         expr->ast_op = currentASTNode();
     }
     else {
-        UnaryOperator* deref = new UnaryOperator("*", toAstType(op->getOut()->getType()));
+        UnaryOperator* deref = new UnaryOperator("*");
         currentASTNode()->addChild(deref);
         expr->ast_op = deref;
     }
@@ -1129,9 +1129,47 @@ void ASTBuilder::opLoad(const PcodeOp *op)
     _pending_expressions.push_back(expr);
 }
 
+// * or ->
+// store a value to memory, through a pointer
 void ASTBuilder::opStore(const PcodeOp *op)
 {
-    unimplementedOp("opStore");
+    // we assume the STORE is a statement
+    BinaryOperator* binop = new BinaryOperator("=");
+    currentASTNode()->addChild(binop);
+
+    uint4 m = mods;
+    bool usearray = checkArrayDeref(op->getIn(1));
+
+    if (usearray && (!isSet(force_pointer))) {
+        /** NOTE: not sure if setting this flag will have the same effect for me as PrintC... */
+        m |= print_store_value;
+
+        PendingExpr* expr = new PendingExpr();
+        expr->ast_op = binop;
+        PendingNode* lhs = buildNodeImplied(op->getIn(1), op, m);
+        PendingNode* rhs = buildNodeImplied(op->getIn(2), op, mods);
+        expr->parts.push_back(lhs);
+        expr->parts.push_back(rhs);
+        _pending_expressions.push_back(expr);
+    } else {
+        UnaryOperator* deref = new UnaryOperator("*");
+        binop->addChild(deref);     // LHS
+
+        // split up the LHS/RHS expressions into separate pending expressions since
+        // their expr->ast_ops are different!
+
+        PendingExpr* lhs_expr = new PendingExpr();
+        lhs_expr->ast_op = deref;
+        PendingNode* lhs = buildNodeImplied(op->getIn(1), op, mods);
+        lhs_expr->parts.push_back(lhs);
+        _pending_expressions.push_back(lhs_expr);
+
+        PendingExpr* rhs_expr = new PendingExpr();
+        rhs_expr->ast_op = binop;
+        PendingNode* rhs = buildNodeImplied(op->getIn(2), op, mods);
+        rhs_expr->parts.push_back(rhs);
+        _pending_expressions.push_back(rhs_expr);
+    }
 }
 
 void ASTBuilder::opBranch(const PcodeOp *op)
@@ -1829,11 +1867,7 @@ void ASTBuilder::opPtrsub(const PcodeOp *op)
 
         if (!valueon) {
             // EMIT &name
-            Type* declreftype = nullptr;
-            if (symbol) {
-                declreftype = toAstType(symbol->getType());
-            }
-            UnaryOperator* unary = new UnaryOperator("&", declreftype);
+            UnaryOperator* unary = new UnaryOperator("&");
             currentASTNode()->addChild(unary);
             pushASTNode(unary);
             need_to_pop_astnode = true;

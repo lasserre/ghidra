@@ -548,8 +548,8 @@ void* TypedefType::doAccept(ASTVisitor* v, void* context)
     return v->visitTypedefType(this, context);
 }
 
-UnaryOperator::UnaryOperator(std::string opcode, Type* type)
-    : _opcode(opcode), _type(type)
+UnaryOperator::UnaryOperator(std::string opcode)//, Type* type)
+    : _opcode(opcode) //, _type(type)
 {
 }
 
@@ -557,9 +557,11 @@ int UnaryOperator::precedence()
 {
     if (_opcode == "*") {
         return 3;
+    } else if (_opcode == "&") {
+        return 3;
     }
     else {
-        _messages.push_back("TODO - map UnaryOperator precedence for '" + _opcode + "'");
+        callbacks->unimplementedCodeCallback("TODO - map UnaryOperator precedence for '" + _opcode + "'");
         return -1;
     }
 }

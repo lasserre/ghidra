@@ -43,6 +43,7 @@ public:
     virtual void* visitCompoundStmt(CompoundStmt*, void*);
     virtual void* visitConstantArrayType(ConstantArrayType*, void*);
     virtual void* visitConstantExpr(ConstantExpr*, void*);
+    virtual void* visitCopyPlaceholder(CopyPlaceholder*, void*);
     virtual void* visitCStyleCastExpr(CStyleCastExpr*, void*);
     virtual void* visitDeclRefExpr(DeclRefExpr*, void*);
     virtual void* visitDeclStmt(DeclStmt*, void*);

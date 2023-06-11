@@ -334,7 +334,7 @@ void DecompileAt::rawAction(void)
 	  (ghidra->allacts.getCurrentName() == "decompile"))
         ghidra->print->docFunction(fd);
 
-        // export AST if requested
+        // export AST if requestedd
         static char* config_file_path = getenv("GHIDRA_AST_CONFIG_FILE");
         if (config_file_path) {
             exportFunctionAst(ghidra, fd, config_file_path);

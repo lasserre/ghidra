@@ -47,6 +47,11 @@ void* ASTVisitor::visitConstantExpr(ConstantExpr*, void*)
     return nullptr;
 }
 
+void* ASTVisitor::visitCopyPlaceholder(CopyPlaceholder*, void*)
+{
+    return nullptr;
+}
+
 void* ASTVisitor::visitCStyleCastExpr(CStyleCastExpr*, void*)
 {
     return nullptr;

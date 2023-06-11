@@ -151,6 +151,9 @@ int BinaryOperator::precedence()
     else if (_opcode == "==" || _opcode == "!=") {
         return 10;
     }
+    else if (_opcode == "&") {
+        return 11;
+    }
     else if (_opcode == "=") {
         return 16;
     }
@@ -204,6 +207,11 @@ BreakStmt::BreakStmt()
 void* BreakStmt::doAccept(ASTVisitor* v, void* context)
 {
     return v->visitBreakStmt(this, context);
+}
+
+void* CopyPlaceholder::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitCopyPlaceholder(this, context);
 }
 
 CallExpr::CallExpr()

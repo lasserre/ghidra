@@ -162,6 +162,31 @@ protected:
 };
 
 /**
+ * @brief This is a placeholder node for the COPY pcode op
+ *
+ * We need to be able to insert a placeholder into the AST for the COPY
+ * operation and then later on process its sub-expression. Eventually, we
+ * will emit JSON which ignores this node and simply puts its child expression
+ * here.
+ *
+ * The case I was hitting that made me decide to insert this was in CallExpr,
+ * some of the parameters were COPY nodes. I was just saving the CallExpr as
+ * the ast op (for param 1) and then adding a pending expression to be processed
+ * later. In the meantime, I processed param 2 and added it to CallExpr.children
+ * ...but now it is sitting in param1's spot! To avoid this I need to keep the
+ * CopyPlaceholder node in spot 1 and this will preserve the param ordering
+ */
+class CopyPlaceholder : public ASTNode
+{
+public:
+    CopyPlaceholder()
+    { }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+};
+
+/**
  * First child: reference to callee
  * Second child: param 1
  * Third child: param 2

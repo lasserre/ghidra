@@ -1103,8 +1103,11 @@ void ASTBuilder::opCopy(const PcodeOp *op)
 {
     // LHS has already been processed, create our own expression
     // for RHS (assignment is currentASTNode)
+    CopyPlaceholder* placeholder = new CopyPlaceholder();
+    currentASTNode()->addChild(placeholder);
+
     PendingExpr* expr = new PendingExpr();
-    expr->ast_op = currentASTNode();
+    expr->ast_op = placeholder;
     expr->parts.push_back(buildNodeImplied(op->getIn(0), op, mods));
     _pending_expressions.push_back(expr);
 }
@@ -1294,7 +1297,10 @@ void ASTBuilder::opReturn(const PcodeOp *op)
 
     if (op->numInput() > 1) {
         // returns a value?
-        unimplementedOp("opReturn RETURN VALUE");
+        PendingExpr* expr = new PendingExpr();
+        expr->ast_op = rs;
+        expr->parts.push_back(buildNodeImplied(op->getIn(1), op, mods));
+        _pending_expressions.push_back(expr);
     }
 }
 
@@ -1604,7 +1610,7 @@ void ASTBuilder::opIntXor(const PcodeOp *op)
 
 void ASTBuilder::opIntAnd(const PcodeOp *op)
 {
-    unimplementedOp("opIntAnd");
+    binaryOperator("&", op);
 }
 
 void ASTBuilder::opIntOr(const PcodeOp *op)

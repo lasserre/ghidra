@@ -198,6 +198,13 @@ void* JsonASTVisitor::visitConstantExpr(ConstantExpr* cexpr, void* context)
     return copy_to_parent(cexpr_j, context);
 }
 
+void* JsonASTVisitor::visitCopyPlaceholder(CopyPlaceholder* cp, void* context)
+{
+    // we just want the child node to be added in this node's place...let's see if
+    // this works
+    return context;
+}
+
 void* JsonASTVisitor::visitCStyleCastExpr(CStyleCastExpr* cast_expr, void* context)
 {
     json cast;

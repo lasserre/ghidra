@@ -344,7 +344,7 @@ void* FieldDecl::doAccept(ASTVisitor* v, void* context)
 }
 
 RecordDecl::RecordDecl(StructType stype)
-    : _sid(stype.sid())
+    : _sid(stype.sid()), _name(stype.name())
 {
     for (TypeField ghidra_field : getStructFields(stype.ghidra_struct())) {
         auto ast_type = callbacks->toAstType(ghidra_field.type);

@@ -416,10 +416,12 @@ public:
     RecordDecl(StructType stype);
 
     int sid() { return _sid; }
+    string name() { return _name; }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
     int _sid;
+    string _name;
 };
 
 class ReturnStmt : public ASTNode

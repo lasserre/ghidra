@@ -300,6 +300,7 @@ void* JsonASTVisitor::visitRecordDecl(RecordDecl* rd, void* context)
     json rd_j;
     rd_j["kind"] = "RecordDecl";
     rd_j["sid"] = rd->sid();
+    rd_j["name"] = rd->name();
     addMessages(rd, rd_j);
     return copy_to_parent(rd_j, context);
 }

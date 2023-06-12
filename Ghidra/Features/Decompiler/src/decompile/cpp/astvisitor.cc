@@ -92,6 +92,11 @@ void* ASTVisitor::visitLogMsg(LogMsg*, void*)
     return nullptr;
 }
 
+void* ASTVisitor::visitMemberExpr(MemberExpr*, void*)
+{
+    return nullptr;
+}
+
 void* ASTVisitor::visitParenExpr(ParenExpr*, void*)
 {
     return nullptr;

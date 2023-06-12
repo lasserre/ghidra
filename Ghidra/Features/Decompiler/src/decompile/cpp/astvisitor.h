@@ -34,6 +34,7 @@ public:
     virtual void* visitIfStmt(IfStmt*, void*);
     virtual void* visitIntegerLiteral(IntegerLiteral*, void*);
     virtual void* visitLogMsg(LogMsg*, void*);
+    virtual void* visitMemberExpr(MemberExpr*, void*);
     virtual void* visitParenExpr(ParenExpr*, void*);
     virtual void* visitFieldDecl(FieldDecl*, void*);
     virtual void* visitRecordDecl(RecordDecl*, void*);

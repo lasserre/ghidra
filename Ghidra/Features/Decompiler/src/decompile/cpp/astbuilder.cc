@@ -336,22 +336,6 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
     int4 arch_wordsize = glb->getDefaultSize();
     // glb->getDefaultCodeSpace()->getAddrSize()
 
-    // ---------------------------------
-    // TODO: FIRST, generate RecordDecl's for structures underneath TranslationUnitDecl
-    // putting these here allows TypeDef visitor to be able to generate any further-needed typedefs
-    // if that's even possible...
-    // (we should already have built up the structure map via builder->_head_translation_unit.structures)
-    // ---------------------------------
-    // RecordDecl - fwd declaration or definition of a struct
-        // sid
-        // inner
-            // FieldDecl
-            // FieldDecl
-            // ...
-            // [these are present for definition, absent for fwd decl]
-    // --> only reason to include FieldDecl here (instead of dynamic lookup
-    // in TU._structs) is for validation with clang AST
-
     for (auto stype : _type_lib.getMappedStructs()) {
         _head_translation_unit->addChild(new RecordDecl(stype));
     }
@@ -1861,6 +1845,54 @@ static bool isValueFlexible(const Varnode *vn)
   return false;
 }
 
+/**
+ * @brief Walk inside the newly-created MemberExpr (carefully, using
+ * dynamic_cast to verify the structure is what we expect) and retreive
+ * the SID from underlying VarDecl's StructType
+ *
+ * @param memexpr
+ * @return int
+ */
+static int getSidFromMemberExprChild(MemberExpr* memexpr)
+{
+    // this looks really hacky but if we are in this case we should always
+    // end up with this structure (after processPendingNode(structNode)):
+    // MemberExpr.inner[0] (DeclRefExpr*)
+    //      DeclRefExpr.ref (VarDecl*)
+    //          VarDecl.type() (StructType*)
+    int sid = -1;
+    ASTNode* child = memexpr->children()->front();
+    DeclRefExpr* declref = dynamic_cast<DeclRefExpr*>(child);
+    if (declref) {
+        ValueDecl* val = declref->ref();
+        VarDecl* vardecl = dynamic_cast<VarDecl*>(val);
+        if (vardecl) {
+            Type* vtype = vardecl->type();
+            StructType* stype = nullptr;
+
+            // isArrow means this is a pointer to StructType, otherwise it's just StructType
+            if (memexpr->isArrow()) {
+                PointerType* ptype = dynamic_cast<PointerType*>(vtype);
+                if (ptype) {
+                    stype = dynamic_cast<StructType*>(ptype->children()->front());
+                }
+            } else {
+                stype = dynamic_cast<StructType*>(vtype);
+            }
+
+            if (stype) {
+                sid = stype->sid();
+            }
+        }
+    }
+
+    if (sid == -1) {
+        throw LowlevelError("We failed to access the SID from a MemberExpr");
+    }
+
+    return sid;
+}
+
 // PTRSUB . or -> - Dereference a subfield from a pointer
 void ASTBuilder::opPtrsub(const PcodeOp *op)
 {
@@ -1899,8 +1931,84 @@ void ASTBuilder::opPtrsub(const PcodeOp *op)
     if (ct->getMetatype() == TYPE_STRUCT || ct->getMetatype() == TYPE_UNION) {
 
         // ------------ TYPE_STRUCT | TYPE_UNION ------------
-        unimplementedCode("PTRSUB ct STRUCT or UNION case");
-        return;
+        uintb suboff = in1const;    // how far into container
+        if (ptrel) {
+            unimplementedCode("PTRSUB TYPE_STRUCT ptrel non-NULL");
+            return;
+        }
+        suboff = AddrSpace::addressToByte(suboff, ptype->getWordSize());
+        string fieldname;
+        Datatype *fieldtype;
+        int4 fieldid;
+        int4 newoff;
+        if (ct->getMetatype() == TYPE_UNION) {
+            unimplementedCode("PTRSUB TYPE_UNION case");
+            return;
+        } else {
+            // TYPE_STRUCT
+            const TypeField *fld = ct->findTruncation((int4)suboff,0,op,0,newoff);
+            if (fld == nullptr) {
+                unimplementedCode("PTRSUB TYPE_STRUCT fld == nullptr");
+                return;
+            } else {
+                fieldname = fld->name;
+                fieldtype = fld->type;
+                fieldid = fld->ident;
+            }
+        }
+
+        arrayvalue = false;
+        // The '&' is dropped if the output type is an array
+        if (fieldtype && (fieldtype->getMetatype()==TYPE_ARRAY)) {
+            arrayvalue = valueon;	// If printing value, use [0]
+            valueon = true;		// Don't print &
+        }
+
+        if (!valueon) {
+            // print an ampersand
+            unimplementedCode("PTRSUB TYPE_STRUCT !valueon case");
+            return;
+        } else {
+            // no ampersand
+            if (arrayvalue) {
+                unimplementedCode("PTRSUB TYPE_STRUCT arrayvalue case");
+                return;
+            }
+            if (flex) {
+                // EMIT ( ).name
+                unimplementedCode("PTRSUB TYPE_STRUCT flex case");
+                return;
+            } else {
+                // EMIT ( )->name
+
+                if (ptrel) {
+                    unimplementedCode("PTRSUB TYPE_STRUCT !flex ptrel");
+                    return;
+                }
+
+                // in0 is the var (the struct)
+                // fieldname is the field name
+                MemberExpr* memexpr = new MemberExpr(fieldname, suboff, /* isArrow = */ true);
+                currentASTNode()->addChild(memexpr);
+
+                PendingNode* structNode = buildNodeImplied(in0, op, m);
+                pushASTNode(memexpr);
+                processPendingNode(structNode);
+                popASTNode();
+                delete structNode;
+
+                // retrieve sid from memexpr's child node (just created above within
+                // processPendingNode(structNode))
+                memexpr->setSid(getSidFromMemberExprChild(memexpr));
+            }
+
+            if (arrayvalue) {
+                unimplementedCode("PTRSUB TYPE_STRUCT 2nd arrayvalue case?");
+                return;
+            }
+        }
+
+
     } else if (ct->getMetatype() == TYPE_SPACEBASE) {
 
         // ------------ TYPE_SPACEBASE ------------

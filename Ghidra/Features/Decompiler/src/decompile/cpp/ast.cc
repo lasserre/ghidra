@@ -56,8 +56,9 @@ ASTNode::~ASTNode()
  */
 bool needsParens(ASTNode* parent, ASTNode* child)
 {
-    if (dynamic_cast<CallExpr*>(parent) != nullptr) {
-        // call expressions already have parentheses - we don't need to add more!
+    if (dynamic_cast<CallExpr*>(parent) || dynamic_cast<ArraySubscriptExpr*>(parent)) {
+        // call expressions and array subscripts already have parentheses or brackets
+        // so we don't need to add more!
         return false;
     }
 
@@ -356,6 +357,11 @@ LogMsg::LogMsg(std::string msg)
 void* LogMsg::doAccept(ASTVisitor* v, void* context)
 {
     return v->visitLogMsg(this, context);
+}
+
+void* MemberExpr::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitMemberExpr(this, context);
 }
 
 ParenExpr::ParenExpr()

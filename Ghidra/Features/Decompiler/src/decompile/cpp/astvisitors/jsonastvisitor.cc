@@ -284,6 +284,17 @@ void* JsonASTVisitor::visitLogMsg(LogMsg* logmsg, void* context)
     return copy_to_parent(msg, context);
 }
 
+void* JsonASTVisitor::visitMemberExpr(MemberExpr* m, void* context)
+{
+    json m_j;
+    m_j["kind"] = "MemberExpr";
+    m_j["name"] = m->name();
+    m_j["sid"] = m->sid();
+    m_j["offset"] = m->offset();
+    addMessages(m, m_j);
+    return copy_to_parent(m_j, context);
+}
+
 void* JsonASTVisitor::visitParenExpr(ParenExpr* pe, void* context)
 {
     json paren;

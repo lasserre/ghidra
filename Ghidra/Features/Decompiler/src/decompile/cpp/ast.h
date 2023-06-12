@@ -147,6 +147,12 @@ public:
     ArraySubscriptExpr()
     { }
 
+    int precedence() { return 2; }
+    bool isLRAssociative() { return true; }
+    // not sure here...we have children before and after [, and before ]
+    // trying this for now
+    bool wouldNextChildBeLeftOfOp() { return false; }
+
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
 };
@@ -381,6 +387,40 @@ protected:
     std::string _msg;
 };
 
+class MemberExpr : public ASTNode
+{
+public:
+    MemberExpr(string name="", int offset=-1, bool isArrow=false, int sid=-1)
+        : _sid(sid), _offset(offset), _isArrow(isArrow), _name(name)
+    { }
+
+    int precedence() { return 2; }
+    bool isLRAssociative() { return true; }
+    // var is a child (e.g. var->field)
+    bool wouldNextChildBeLeftOfOp() { return true; }
+
+    /** @brief SID for the structure that contains this member */
+    int sid() { return _sid; }
+    /** @brief Offset of this member within its struct */
+    int offset() { return _offset; }
+    /** @brief This is a struct pointer dereference (arrow), e.g. X->Y instead of X.Y */
+    bool isArrow() { return _isArrow; }
+    /** @brief Name of the structure member */
+    string name() { return _name; }
+
+    void setSid(int sid) { _sid = sid; }
+    void setOffset(int offset) { _offset = offset; }
+    void setIsArrow(bool isArrow) { _isArrow = isArrow; }
+    void setName(string name) { _name = name; }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+    int _sid;
+    int _offset;
+    bool _isArrow;
+    string _name;
+};
+
 class ParenExpr : public ASTNode
 {
 public:
@@ -394,54 +434,6 @@ public:
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
-};
-
-/**
- * @brief Declaration of a structure field (mostly for compatibility with clang
- * AST for validation purposes...)
- */
-class FieldDecl : public ASTNode
-{
-public:
-    FieldDecl(string name, Type* dtype)
-        : _name(name), _dtype(dtype)
-    { }
-
-    ~FieldDecl()
-    {
-        delete _dtype;
-    }
-
-    string name() { return _name; }
-    Type* type() { return _dtype; }
-
-    inline void replace_type(Type* newtype)
-    {
-        delete _dtype;
-        _dtype = newtype;
-    }
-
-protected:
-    virtual void* doAccept(ASTVisitor* v, void* context);
-    string _name;
-    Type* _dtype;
-};
-
-/**
- * @brief Declaration of a structure, union, or class
- */
-class RecordDecl : public ASTNode
-{
-public:
-    RecordDecl(StructType stype);
-
-    int sid() { return _sid; }
-    string name() { return _name; }
-
-protected:
-    virtual void* doAccept(ASTVisitor* v, void* context);
-    int _sid;
-    string _name;
 };
 
 class ReturnStmt : public ASTNode
@@ -630,36 +622,6 @@ protected:
 };
 
 /**
- * @brief Describes a single field within a structure
- */
-// class StructField
-// {
-// public:
-//     StructField()
-//         : _name(""), _dtype(nullptr), _offset(0)
-//     { }
-
-//     StructField(string name, Type* dtype, int offset)
-//         : _name(name), _dtype(dtype), _offset(offset)
-//     { }
-
-//     ~StructField()
-//     {
-//         delete _dtype;
-//     }
-
-//     string name() { return _name; }
-//     Type* dtype() { return _dtype; }
-//     int offset() { return _offset; }
-
-// protected:
-//     string _name;
-//     Type* _dtype;   // we own this and need to clean it up
-//     int _offset;
-//     // StructType* _parent;
-// };
-
-/**
  * @brief Structure type
  *
  * Currently this is an immutable type, and as such the only one constructing
@@ -788,13 +750,60 @@ public:
      * @param id is a unique ID for this ValueDecl
      */
     ValueDecl(int id);
-    virtual ~ValueDecl() {}
 
     inline int id() { return _id; }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
     int _id;
+};
+
+/**
+ * @brief Declaration of a structure field (mostly for compatibility with clang
+ * AST for validation purposes...)
+ */
+class FieldDecl : public ASTNode
+{
+public:
+    FieldDecl(string name, Type* dtype)
+        : _name(name), _dtype(dtype)
+    { }
+
+    ~FieldDecl()
+    {
+        delete _dtype;
+    }
+
+    string name() { return _name; }
+    Type* type() { return _dtype; }
+
+    inline void replace_type(Type* newtype)
+    {
+        delete _dtype;
+        _dtype = newtype;
+    }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+    string _name;
+    Type* _dtype;
+};
+
+/**
+ * @brief Declaration of a structure, union, or class
+ */
+class RecordDecl : public ASTNode
+{
+public:
+    RecordDecl(StructType stype);
+
+    int sid() { return _sid; }
+    string name() { return _name; }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+    int _sid;
+    string _name;
 };
 
 /**

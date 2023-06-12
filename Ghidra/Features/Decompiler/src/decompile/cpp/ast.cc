@@ -425,6 +425,29 @@ StructTypeLibrary::StructTypeLibrary(int base_id /* = 0 */)
 {
 }
 
+int StructTypeLibrary::mapStruct(TypeStruct* ghidra_struct)
+{
+    auto name = ghidra_struct->getName();
+
+    if (isStructMapped(name)) {
+        return _mapped_structures[name].sid();
+    }
+
+    // not mapped - map it now
+    int sid = _next_id++;
+    _mapped_structures[name] = StructType(sid, ghidra_struct);
+
+    // **AFTER** SID IS MAPPED (don't move this before saving SID to _mapped_structures!!)
+    // ...now call toAstType() on each field to ensure we pick up/map any other
+    // structure definitions that may not be referenced elsewhere in the code
+    for (TypeField ghidra_field : getStructFields(ghidra_struct)) {
+        Type* ast_type = callbacks->toAstType(ghidra_field.type);
+        delete ast_type;
+    }
+
+    return sid;
+}
+
 TranslationUnitDecl::TranslationUnitDecl()
 {
 }

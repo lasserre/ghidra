@@ -918,18 +918,7 @@ public:
      * @param ghidra_struct
      * @return int
      */
-    int mapStruct(TypeStruct* ghidra_struct)
-    {
-        auto name = ghidra_struct->getName();
-
-        if (isStructMapped(name)) {
-            return _mapped_structures[name].sid();
-        }
-
-        // not mapped - map it now
-        _mapped_structures[name] = StructType(_next_id, ghidra_struct);
-        return _next_id++;
-    }
+    int mapStruct(TypeStruct* ghidra_struct);
 
     vector<StructType> getMappedStructs()
     {

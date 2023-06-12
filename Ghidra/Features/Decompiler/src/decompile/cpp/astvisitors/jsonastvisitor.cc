@@ -291,6 +291,7 @@ void* JsonASTVisitor::visitMemberExpr(MemberExpr* m, void* context)
     m_j["name"] = m->name();
     m_j["sid"] = m->sid();
     m_j["offset"] = m->offset();
+    m_j["isArrow"] = m->isArrow();
     addMessages(m, m_j);
     return copy_to_parent(m_j, context);
 }

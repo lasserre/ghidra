@@ -1813,9 +1813,41 @@ void ASTBuilder::opCast(const PcodeOp *op)
     processTypeCastExpression(op);
 }
 
+// PTRADD +
+// add an offset to a pointer
 void ASTBuilder::opPtradd(const PcodeOp *op)
 {
-    unimplementedOp("opPtradd");
+    bool printval = isSet(print_load_value|print_store_value);
+    uint4 m = mods & ~(print_load_value|print_store_value);
+
+    if (!printval) {
+        TypePointer *tp = (TypePointer *)op->getIn(0)->getHighTypeReadFacing(op);
+        if (tp->getMetatype() == TYPE_PTR) {
+            if (tp->getPtrTo()->getMetatype() == TYPE_ARRAY) {
+                printval = true;
+            }
+        }
+    }
+
+    PendingExpr* expr = new PendingExpr();
+
+    if (printval) {
+        // array notation
+        ArraySubscriptExpr* arrexpr = new ArraySubscriptExpr();
+        currentASTNode()->addChild(arrexpr);
+        expr->ast_op = arrexpr;
+    } else {
+        // simple + addition
+        BinaryOperator* binop = new BinaryOperator("+");
+        currentASTNode()->addChild(binop);
+        expr->ast_op = binop;
+    }
+
+    PendingNode* lhs = buildNodeImplied(op->getIn(0), op, m);
+    PendingNode* rhs = buildNodeImplied(op->getIn(1), op, m);
+    expr->parts.push_back(lhs);
+    expr->parts.push_back(rhs);
+    _pending_expressions.push_back(expr);
 }
 
 /** CLS: copied from printc.cc (it was local to that file) */

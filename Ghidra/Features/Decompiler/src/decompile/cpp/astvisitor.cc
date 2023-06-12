@@ -2,6 +2,11 @@
 
 // default implementation is to do nothing
 
+void* ASTVisitor::visitArraySubscriptExpr(ArraySubscriptExpr*, void*)
+{
+    return nullptr;
+}
+
 void* ASTVisitor::visitBinaryOperator(BinaryOperator*, void*)
 {
     return nullptr;

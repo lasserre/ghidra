@@ -16,6 +16,7 @@
 class ASTVisitor
 {
 public:
+    virtual void* visitArraySubscriptExpr(ArraySubscriptExpr*, void*);
     virtual void* visitBinaryOperator(BinaryOperator*, void*);
     virtual void* visitBreakStmt(BreakStmt*, void*);
     virtual void* visitBuiltinType(BuiltinType*, void*);

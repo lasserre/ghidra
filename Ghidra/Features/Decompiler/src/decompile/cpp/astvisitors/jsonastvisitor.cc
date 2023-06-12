@@ -93,6 +93,14 @@ void addMessages(ASTNode* node, json& jnode)
     }
 }
 
+void* JsonASTVisitor::visitArraySubscriptExpr(ArraySubscriptExpr* ase, void* context)
+{
+    json ase_j;
+    ase_j["kind"] = "ArraySubscriptExpr";
+    addMessages(ase, ase_j);
+    return copy_to_parent(ase_j, context);
+}
+
 void* JsonASTVisitor::visitBinaryOperator(BinaryOperator* b, void* context)
 {
     json binop;

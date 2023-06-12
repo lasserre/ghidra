@@ -133,6 +133,24 @@ protected:
     std::vector<string> _messages;  // diagnostic/error messages for validation
 };
 
+/**
+ * @brief Array subscripting
+ *
+ * First child: LHS expr (array variable)
+ * Second child: RHS expr (expr inside brackets)
+ *
+ * i.e.: LHS[RHS]
+ */
+class ArraySubscriptExpr : public ASTNode
+{
+public:
+    ArraySubscriptExpr()
+    { }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+};
+
 class BinaryOperator : public ASTNode
 {
 public:

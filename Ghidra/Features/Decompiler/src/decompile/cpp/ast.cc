@@ -151,6 +151,11 @@ void ASTNode::accept(ASTVisitor* v, void* parent_context /*=nullptr*/)
     }
 }
 
+void* ArraySubscriptExpr::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitArraySubscriptExpr(this, context);
+}
+
 BinaryOperator::BinaryOperator(std::string opcode)
     : _opcode(opcode)
 {

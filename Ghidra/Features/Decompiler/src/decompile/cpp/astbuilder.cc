@@ -1336,16 +1336,22 @@ void ASTBuilder::opIntLessEqual(const PcodeOp *op)
 
 void ASTBuilder::opIntZext(const PcodeOp *op,const PcodeOp *readOp)
 {
-    // CLS: we can change this if desired, but I think I want to
-    // consider zero-extension implicit in the AST and simply
-    // emit the argument, not "ZEXT816()" or similar
+    if (castStrategy->isZextCast(op->getOut()->getHighTypeDefFacing(), op->getIn(0)->getHighTypeReadFacing(op))) {
+        if (option_hide_exts && castStrategy->isExtensionCastImplied(op, readOp)) {
+            unimplementedCode("opIntZext: hidden func case");
+        } else {
+            processTypeCastExpression(op);
+        }
+    } else {
+        unimplementedCode("opIntZext: opFunc case");
+    }
 
-    PendingExpr* expr = new PendingExpr();
-    expr->ast_op = currentASTNode();
-    expr->parts.push_back(
-        buildNodeImplied(op->getIn(0), op, mods)
-    );
-    _pending_expressions.push_back(expr);
+    // PendingExpr* expr = new PendingExpr();
+    // expr->ast_op = currentASTNode();
+    // expr->parts.push_back(
+    //     buildNodeImplied(op->getIn(0), op, mods)
+    // );
+    // _pending_expressions.push_back(expr);
 }
 
 // corresponds to pushType()...just working out how we want to

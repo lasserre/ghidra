@@ -2,6 +2,25 @@
 #include "astvisitor.h"
 #include "astbuilder.h"
 
+string getValidCLanguageName(string ghidra_name)
+{
+    /**
+     * Ghidra displays invalid C variable names in the decompiler window (like "file-local"),
+     * but when I convert it to C using the flat API (DecompiledFunction.getC())
+     * Ghidra first converts invalid names like this to valid C names (like "file_local")
+     */
+    string valid_name = ghidra_name;
+
+    for (int i = 0; i < valid_name.length(); i++) {
+        char c = valid_name[i];
+        if (!std::isalpha(c) && !std::isdigit(c) && c != '_') {
+            valid_name[i] = '_';
+        }
+    }
+
+    return valid_name;
+}
+
 static ASTCallbacks* callbacks;
 void initASTCallbacks(ASTCallbacks* cb)
 {
@@ -37,6 +56,11 @@ ASTNode::~ASTNode()
  */
 bool needsParens(ASTNode* parent, ASTNode* child)
 {
+    if (dynamic_cast<CallExpr*>(parent) != nullptr) {
+        // call expressions already have parentheses - we don't need to add more!
+        return false;
+    }
+
     if (parent->hasPrecedence() && child->hasPrecedence()) {
         if (child->precedence() == parent->precedence()) {
             // determine by associativity
@@ -612,18 +636,18 @@ VarDecl::VarDecl(int id, Symbol* sym)
     : ValueDecl(id), _sym(sym), _name(""), _type(nullptr), _ghidra_type(sym->getType())
 {
     if (sym) {
-        _name = sym->getName();
+        _name = getValidCLanguageName(sym->getName());
         _type = callbacks->toAstType(sym->getType());
     }
 }
 
 VarDecl::VarDecl(int id, string name, Type* type)
-    : ValueDecl(id), _sym(nullptr), _name(name), _type(type), _ghidra_type(nullptr)
+    : ValueDecl(id), _sym(nullptr), _name(getValidCLanguageName(name)), _type(type), _ghidra_type(nullptr)
 {
 }
 
 VarDecl::VarDecl(int id, string name, const Datatype* dt)
-    : ValueDecl(id), _sym(nullptr), _name(name), _type(nullptr), _ghidra_type(dt)
+    : ValueDecl(id), _sym(nullptr), _name(getValidCLanguageName(name)), _type(nullptr), _ghidra_type(dt)
 {
     _type = callbacks->toAstType(dt);
 }

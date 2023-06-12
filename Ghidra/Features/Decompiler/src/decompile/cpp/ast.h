@@ -1,6 +1,6 @@
 #pragma once
 
-
+#include <cctype>
 #include <vector>
 #include <string>
 #include <functional>
@@ -18,6 +18,8 @@ class StructType;
 // using namespace std;
 using std::string;
 using namespace ghidra;
+
+string getValidCLanguageName(string ghidra_name);
 
 /**
  * @brief Yes, this is bad design but I need to leave the unimplementedCode

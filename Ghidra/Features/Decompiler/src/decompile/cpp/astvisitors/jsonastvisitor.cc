@@ -420,7 +420,7 @@ json JsonASTVisitor::buildStructFields(TypeStruct* ghidra_struct)
 
 json JsonASTVisitor::buildStructuresById(StructTypeLibrary* type_lib)
 {
-    json structs_by_id;
+    json structs_by_id = json::object();
 
     for (auto stype : type_lib->getMappedStructs()) {
         string sid_str = std::to_string(stype.sid());

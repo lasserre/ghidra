@@ -48,11 +48,14 @@ public:
     virtual void* visitCStyleCastExpr(CStyleCastExpr*, void*);
     virtual void* visitDeclRefExpr(DeclRefExpr*, void*);
     virtual void* visitDeclStmt(DeclStmt*, void*);
+    virtual void* visitForStmt(ForStmt*, void*);
     virtual void* visitFunctionDecl(FunctionDecl*, void*);
     virtual void* visitIfStmt(IfStmt*, void*);
     virtual void* visitIntegerLiteral(IntegerLiteral*, void*);
+    virtual void* visitLabelStmt(LabelStmt*, void*);
     virtual void* visitLogMsg(LogMsg*, void*);
     virtual void* visitMemberExpr(MemberExpr*, void*);
+    virtual void* visitNullNode(NullNode*, void*);
     virtual void* visitParenExpr(ParenExpr*, void*);
     virtual void* visitFieldDecl(FieldDecl*, void*);
     virtual void* visitRecordDecl(RecordDecl*, void*);

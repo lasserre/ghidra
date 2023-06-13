@@ -340,6 +340,23 @@ protected:
 };
 
 /**
+ * @brief ForStmt children are:
+ * - Optional init statement
+ * - Optional conditional statement
+ * - Optional increment statement
+ * - Loop body
+ */
+class ForStmt : public ASTNode
+{
+public:
+    ForStmt()
+    { }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+};
+
+/**
  * IfStmt children are:
  * - Conditional
  * - Then block
@@ -366,6 +383,20 @@ protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
     uintb _value;
     Type* _type;
+};
+
+class LabelStmt : public ASTNode
+{
+public:
+    LabelStmt(string name)
+        : _name(name)
+    { }
+
+    string name() { return _name; }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+    string _name;
 };
 
 /**
@@ -419,6 +450,15 @@ protected:
     int _offset;
     bool _isArrow;
     string _name;
+};
+
+class NullNode : public ASTNode
+{
+public:
+    NullNode() { }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
 };
 
 class ParenExpr : public ASTNode

@@ -989,8 +989,150 @@ void ASTBuilder::emitBlockIf(const BlockIf *bl)
     popMod();
 }
 
+/** @brief mostly copied from PrintC */
+LabelStmt* ASTBuilder::emitAnyLabelStatement(const FlowBlock *bl)
+{
+    if (bl->isLabelBumpUp()) {
+        return nullptr; // Label printed by someone else
+    }
+    bl = bl->getFrontLeaf();
+    if (bl == (FlowBlock *)0) {
+        return nullptr;
+    }
+    return emitLabelStatement(bl);
+}
+
+/** CLS: mostly copied from PrintC */
+LabelStmt* ASTBuilder::emitLabelStatement(const FlowBlock *bl)
+{
+    if (isSet(only_branch)) {
+        return nullptr;
+    }
+
+    if (isSet(flat)) { // Printing flat version
+        if (!bl->isJumpTarget()) {
+            return nullptr; // Print all jump targets
+        }
+    }
+    else {			// Printing structured version
+        if (!bl->isUnstructuredTarget()) {
+            return nullptr;
+        }
+        if (bl->getType() != FlowBlock::t_copy) {
+            return nullptr;
+        }
+        // Only print labels that have unstructured jump to them
+    }
+
+    return emitLabel(bl);
+}
+
+/** CLS: mostly copied from PrintC */
+LabelStmt* ASTBuilder::emitLabel(const FlowBlock *bl)
+{
+    bl = bl->getFrontLeaf();
+    if (!bl) {
+        return nullptr;
+    }
+
+    BlockBasic *bb = (BlockBasic *)bl->subBlock(0);
+    Address addr = bb->getEntryAddr();
+    const AddrSpace *spc = addr.getSpace();
+    uintb off = addr.getOffset();
+
+    if (!bb->hasSpecialLabel()) {
+        if (bb->getType() == FlowBlock::t_basic) {
+            const Scope *symScope = ((const BlockBasic *)bb)->getFuncdata()->getScopeLocal();
+            Symbol *sym = symScope->queryCodeLabel(addr);
+            if (sym) {
+                LabelStmt* ls = new LabelStmt(sym->getName());
+                currentASTNode()->addChild(ls);
+                pushASTNode(ls);
+                return ls;
+            }
+        }
+    }
+
+    ostringstream lb;
+    if (bb->isJoined()) {
+        lb << "joined_";
+    } else if (bb->isDuplicated()) {
+        lb << "dup_";
+    } else {
+        lb << "code_";
+    }
+    lb << addr.getShortcut();
+    addr.printRaw(lb);
+    LabelStmt* ls = new LabelStmt(lb.str());
+    currentASTNode()->addChild(ls);
+    pushASTNode(ls);
+    return ls;
+}
+
+void ASTBuilder::emitForLoop(const BlockWhileDo* bl)
+{
+    // ForStmt
+    // 1) init statement
+    // 2) conditional
+    // 3) increment
+    // 4) body
+    const PcodeOp* op;
+
+    pushMod();
+    unsetMod(no_branch|only_branch);
+    // if != nullptr, this has been pushed as currentASTNode
+    LabelStmt* ls = emitAnyLabelStatement(bl);
+    FlowBlock* condBlock = bl->getBlock(0);
+    // op = condBlock->lastOp();    // CLS: we don't use this...
+    pushMod();
+    setMod(comma_separate);
+    op = bl->getInitializeOp();     // optional initializer statement
+
+    ForStmt* forstmt = new ForStmt();
+    currentASTNode()->addChild(forstmt);
+    pushASTNode(forstmt);
+
+    // 1) initializer statement
+    if (op) {
+        emitExpression(op);
+    } else {
+        currentASTNode()->addChild(new NullNode());
+    }
+
+    // 2) conditional statement
+    condBlock->emit(this);
+    if (forstmt->children()->size() < 2) {
+        forstmt->addChild(new NullNode());  // add placeholder if no cond statement
+    }
+
+    // 3) increment statement
+    op = bl->getIterateOp();
+    emitExpression(op);
+    if (forstmt->children()->size() < 3) {
+        forstmt->addChild(new NullNode());  // add placeholder if no increment statement
+    }
+
+    popMod();
+    setMod(no_branch); // Dont print goto at bottom of clause
+
+    // 4) loop body
+    bl->getBlock(1)->emit(this);
+
+    popMod();
+
+    popASTNode();   // pop ForStmt
+    if (ls) {
+        popASTNode();   // pop LabelStmt
+    }
+}
+
 void ASTBuilder::emitBlockWhileDo(const BlockWhileDo *bl)
 {
+    if (bl->getIterateOp()) {
+        emitForLoop(bl);
+        return;
+    }
+
     unimplementedCode("emitBlockWhileDo");
 }
 

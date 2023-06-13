@@ -60,6 +60,12 @@ public:
     virtual void emitBlockSwitch(const BlockSwitch *bl);
     // --- END BlockVisitor interface
 
+    // hides PrintC functions:
+    LabelStmt* emitAnyLabelStatement(const FlowBlock *bl);
+    LabelStmt* emitLabelStatement(const FlowBlock *bl);
+    LabelStmt* emitLabel(const FlowBlock *bl);
+    void emitForLoop(const BlockWhileDo* bl);
+
     virtual void emitExpression(const PcodeOp *op);
 
     // analogous to opBinary, just wanted a different name

@@ -319,6 +319,11 @@ void* DeclStmt::doAccept(ASTVisitor* v, void* context)
     return v->visitDeclStmt(this, context);
 }
 
+void* ForStmt::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitForStmt(this, context);
+}
+
 FunctionDecl::FunctionDecl(int id, Funcdata* fd)
     : ValueDecl(id), _fd(fd)
 {
@@ -349,6 +354,11 @@ void* IntegerLiteral::doAccept(ASTVisitor* v, void* context)
     return v->visitIntegerLiteral(this, context);
 }
 
+void* LabelStmt::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitLabelStmt(this, context);
+}
+
 LogMsg::LogMsg(std::string msg)
     : _msg(msg)
 {
@@ -362,6 +372,11 @@ void* LogMsg::doAccept(ASTVisitor* v, void* context)
 void* MemberExpr::doAccept(ASTVisitor* v, void* context)
 {
     return v->visitMemberExpr(this, context);
+}
+
+void* NullNode::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitNullNode(this, context);
 }
 
 ParenExpr::ParenExpr()

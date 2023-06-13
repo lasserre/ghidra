@@ -72,6 +72,11 @@ void* ASTVisitor::visitDeclStmt(DeclStmt*, void*)
     return nullptr;
 }
 
+void* ASTVisitor::visitForStmt(ForStmt*, void*)
+{
+    return nullptr;
+}
+
 void* ASTVisitor::visitFunctionDecl(FunctionDecl*, void*)
 {
     return nullptr;
@@ -87,12 +92,22 @@ void* ASTVisitor::visitIntegerLiteral(IntegerLiteral*, void*)
     return nullptr;
 }
 
+void* ASTVisitor::visitLabelStmt(LabelStmt*, void*)
+{
+    return nullptr;
+}
+
 void* ASTVisitor::visitLogMsg(LogMsg*, void*)
 {
     return nullptr;
 }
 
 void* ASTVisitor::visitMemberExpr(MemberExpr*, void*)
+{
+    return nullptr;
+}
+
+void* ASTVisitor::visitNullNode(NullNode*, void*)
 {
     return nullptr;
 }

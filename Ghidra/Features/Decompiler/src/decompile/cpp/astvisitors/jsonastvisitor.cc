@@ -241,6 +241,15 @@ void* JsonASTVisitor::visitDeclStmt(DeclStmt* ds, void* context)
     return copy_to_parent(declstmt, context);
 }
 
+void* JsonASTVisitor::visitForStmt(ForStmt* fs, void* context)
+{
+    json fs_j;
+    fs_j["kind"] = "ForStmt";
+    fs_j["inner"] = json::array();
+    addMessages(fs, fs_j);
+    return copy_to_parent(fs_j, context);
+}
+
 void* JsonASTVisitor::visitFunctionDecl(FunctionDecl* fd, void* context)
 {
     // basic function node info
@@ -265,6 +274,15 @@ void* JsonASTVisitor::visitIntegerLiteral(IntegerLiteral* lit, void* context)
     // int_lit["dtype_name"] = datatypeToJson(lit->type()->ghidra_dtype());
     addMessages(lit, int_lit);
     return copy_to_parent(int_lit, context);
+}
+
+void* JsonASTVisitor::visitLabelStmt(LabelStmt* ls, void* context)
+{
+    json ls_j;
+    ls_j["kind"] = "LabelStmt";
+    ls_j["name"] = ls->name();
+    addMessages(ls, ls_j);
+    return copy_to_parent(ls_j, context);
 }
 
 void* JsonASTVisitor::visitIfStmt(IfStmt* stmt, void* context)
@@ -294,6 +312,14 @@ void* JsonASTVisitor::visitMemberExpr(MemberExpr* m, void* context)
     m_j["isArrow"] = m->isArrow();
     addMessages(m, m_j);
     return copy_to_parent(m_j, context);
+}
+
+void* JsonASTVisitor::visitNullNode(NullNode* n, void* context)
+{
+    json n_j;
+    n_j["kind"] = "NullNode";
+    addMessages(n, n_j);
+    return copy_to_parent(n_j, context);
 }
 
 void* JsonASTVisitor::visitParenExpr(ParenExpr* pe, void* context)

@@ -52,6 +52,11 @@ void* ASTVisitor::visitConstantExpr(ConstantExpr*, void*)
     return nullptr;
 }
 
+void* ASTVisitor::visitContinueStmt(ContinueStmt*, void*)
+{
+    return nullptr;
+}
+
 void* ASTVisitor::visitCopyPlaceholder(CopyPlaceholder*, void*)
 {
     return nullptr;
@@ -78,6 +83,11 @@ void* ASTVisitor::visitForStmt(ForStmt*, void*)
 }
 
 void* ASTVisitor::visitFunctionDecl(FunctionDecl*, void*)
+{
+    return nullptr;
+}
+
+void* ASTVisitor::visitGotoStmt(GotoStmt*, void*)
 {
     return nullptr;
 }

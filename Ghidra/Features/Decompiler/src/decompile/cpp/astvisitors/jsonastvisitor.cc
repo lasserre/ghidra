@@ -206,6 +206,14 @@ void* JsonASTVisitor::visitConstantExpr(ConstantExpr* cexpr, void* context)
     return copy_to_parent(cexpr_j, context);
 }
 
+void* JsonASTVisitor::visitContinueStmt(ContinueStmt* cs, void* context)
+{
+    json cs_j;
+    cs_j["kind"] = "ContinueStmt";
+    addMessages(cs, cs_j);
+    return copy_to_parent(cs_j, context);
+}
+
 void* JsonASTVisitor::visitCopyPlaceholder(CopyPlaceholder* cp, void* context)
 {
     // we just want the child node to be added in this node's place...let's see if
@@ -263,6 +271,15 @@ void* JsonASTVisitor::visitFunctionDecl(FunctionDecl* fd, void* context)
     // fdecl["return_dtype_name"] = datatypeToJson(fd->return_type()->ghidra_dtype());
     addMessages(fd, fdecl);
     return copy_to_parent(fdecl, context);
+}
+
+void* JsonASTVisitor::visitGotoStmt(GotoStmt* gs, void* context)
+{
+    json gs_j;
+    gs_j["kind"] = "GotoStmt";
+    gs_j["label_name"] = gs->label_name();
+    addMessages(gs, gs_j);
+    return copy_to_parent(gs_j, context);
 }
 
 void* JsonASTVisitor::visitIntegerLiteral(IntegerLiteral* lit, void* context)

@@ -290,6 +290,11 @@ void* ConstantExpr::doAccept(ASTVisitor* v, void* context)
     return v->visitConstantExpr(this, context);
 }
 
+void* ContinueStmt::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitContinueStmt(this, context);
+}
+
 CStyleCastExpr::CStyleCastExpr(Type* type)
     : _type(type)
 {
@@ -322,6 +327,11 @@ void* DeclStmt::doAccept(ASTVisitor* v, void* context)
 void* ForStmt::doAccept(ASTVisitor* v, void* context)
 {
     return v->visitForStmt(this, context);
+}
+
+void* GotoStmt::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitGotoStmt(this, context);
 }
 
 FunctionDecl::FunctionDecl(int id, Funcdata* fd)

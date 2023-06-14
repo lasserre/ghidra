@@ -44,12 +44,14 @@ public:
     virtual void* visitCompoundStmt(CompoundStmt*, void*);
     virtual void* visitConstantArrayType(ConstantArrayType*, void*);
     virtual void* visitConstantExpr(ConstantExpr*, void*);
+    virtual void* visitContinueStmt(ContinueStmt*, void*);
     virtual void* visitCopyPlaceholder(CopyPlaceholder*, void*);
     virtual void* visitCStyleCastExpr(CStyleCastExpr*, void*);
     virtual void* visitDeclRefExpr(DeclRefExpr*, void*);
     virtual void* visitDeclStmt(DeclStmt*, void*);
     virtual void* visitForStmt(ForStmt*, void*);
     virtual void* visitFunctionDecl(FunctionDecl*, void*);
+    virtual void* visitGotoStmt(GotoStmt*, void*);
     virtual void* visitIfStmt(IfStmt*, void*);
     virtual void* visitIntegerLiteral(IntegerLiteral*, void*);
     virtual void* visitLabelStmt(LabelStmt*, void*);

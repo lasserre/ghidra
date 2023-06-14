@@ -280,6 +280,16 @@ protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
 };
 
+class ContinueStmt : public ASTNode
+{
+public:
+    ContinueStmt()
+    { }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+};
+
 class CStyleCastExpr : public ASTNode
 {
 public:
@@ -354,6 +364,25 @@ public:
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
+};
+
+class GotoStmt : public ASTNode
+{
+public:
+    // GotoStmt(LabelStmt* label)
+    /**
+     * CLS: not sure what I want here...just starting with name for simplicity,
+     * but if it becomes important than we can add a LabelStmt or an ID or something
+     */
+    GotoStmt(string label_name)
+        : _label_name(label_name)
+    { }
+
+    string label_name() { return _label_name; }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+    string _label_name;
 };
 
 /**

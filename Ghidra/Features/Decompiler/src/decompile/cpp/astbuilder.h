@@ -64,6 +64,25 @@ public:
     LabelStmt* emitAnyLabelStatement(const FlowBlock *bl);
     LabelStmt* emitLabelStatement(const FlowBlock *bl);
     LabelStmt* emitLabel(const FlowBlock *bl);
+    /**
+     * @brief Performs the emitLabel logic from PrintC to determine the
+     * label name, but returns it as a string instead of a LabelStmt*.
+     * This allows other functions (emitGotoStatement) to generate the label
+     * name without the LabelStmt
+     *
+     * An empty string indicates no label was generated, and a null LabelStmt
+     * should be returned if called from emitLabel
+     *
+     * @param bl
+     * @return string
+     */
+    string ASTBuilder::getEmitLabelName(const FlowBlock *bl);
+
+    /**
+     * @brief This can return a BreakStmt, ContinueStmt, or GotoStmt depending
+     * on the supplied type
+     */
+    void emitGotoStatement(const FlowBlock *bl,const FlowBlock *exp_bl,uint4 type);
     void emitForLoop(const BlockWhileDo* bl);
 
     virtual void emitExpression(const PcodeOp *op);

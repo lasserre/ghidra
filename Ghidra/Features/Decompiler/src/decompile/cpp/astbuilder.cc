@@ -884,7 +884,15 @@ void ASTBuilder::emitBlockCopy(const BlockCopy *bl)
 
 void ASTBuilder::emitBlockGoto(const BlockGoto *bl)
 {
-    unimplementedCode("emitBlockGoto");
+    pushMod();
+    setMod(no_branch);
+    bl->getBlock(0)->emit(this);
+    popMod();
+                    // Make sure we don't print goto, if it is the
+                    // next block to be printed
+    if (bl->gotoPrints()) {
+        emitGotoStatement(bl->getBlock(0),bl->getGotoTarget(),bl->getGotoType());
+    }
 }
 
 void ASTBuilder::emitBlockLs(const BlockList *bl)
@@ -956,10 +964,8 @@ void ASTBuilder::emitBlockIf(const BlockIf *bl)
     popMod();
 
     if (bl->getGotoTarget() != nullptr) {
-        /** TODO: emit goto statement */
-        unimplementedCode("goto statement in BlockIf");
-    }
-    else {
+        emitGotoStatement(condBlock, bl->getGotoTarget(), bl->getGotoType());
+    } else {
         // don't emit the branches at end of if/else blocks (these are
         // implicit at AST level from structure)
         setMod(no_branch);
@@ -1027,12 +1033,12 @@ LabelStmt* ASTBuilder::emitLabelStatement(const FlowBlock *bl)
     return emitLabel(bl);
 }
 
-/** CLS: mostly copied from PrintC */
-LabelStmt* ASTBuilder::emitLabel(const FlowBlock *bl)
+/** CLS: mostly copied from PrintC::emitLabel */
+string ASTBuilder::getEmitLabelName(const FlowBlock *bl)
 {
     bl = bl->getFrontLeaf();
     if (!bl) {
-        return nullptr;
+        return "";
     }
 
     BlockBasic *bb = (BlockBasic *)bl->subBlock(0);
@@ -1045,10 +1051,7 @@ LabelStmt* ASTBuilder::emitLabel(const FlowBlock *bl)
             const Scope *symScope = ((const BlockBasic *)bb)->getFuncdata()->getScopeLocal();
             Symbol *sym = symScope->queryCodeLabel(addr);
             if (sym) {
-                LabelStmt* ls = new LabelStmt(sym->getName());
-                currentASTNode()->addChild(ls);
-                pushASTNode(ls);
-                return ls;
+                return sym->getName();
             }
         }
     }
@@ -1063,10 +1066,40 @@ LabelStmt* ASTBuilder::emitLabel(const FlowBlock *bl)
     }
     lb << addr.getShortcut();
     addr.printRaw(lb);
-    LabelStmt* ls = new LabelStmt(lb.str());
+    return lb.str();
+}
+
+LabelStmt* ASTBuilder::emitLabel(const FlowBlock *bl)
+{
+    string label_name = getEmitLabelName(bl);
+    if (label_name == "") {
+        return nullptr;
+    }
+
+    LabelStmt* ls = new LabelStmt(label_name);
     currentASTNode()->addChild(ls);
     pushASTNode(ls);
     return ls;
+}
+
+void ASTBuilder::emitGotoStatement(const FlowBlock *bl,const FlowBlock *exp_bl,uint4 type)
+{
+    string label_name = "";
+
+    switch(type) {
+        case FlowBlock::f_break_goto:
+            currentASTNode()->addChild(new BreakStmt());
+            break;
+        case FlowBlock::f_continue_goto:
+            currentASTNode()->addChild(new ContinueStmt());
+            break;
+        case FlowBlock::f_goto_goto:
+            label_name = getEmitLabelName(exp_bl);
+            currentASTNode()->addChild(new GotoStmt(label_name));
+            break;
+        default:
+            throw LowlevelError("Unrecognized goto type " + type);
+    }
 }
 
 void ASTBuilder::emitForLoop(const BlockWhileDo* bl)

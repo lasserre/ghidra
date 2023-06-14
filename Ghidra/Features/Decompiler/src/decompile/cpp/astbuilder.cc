@@ -639,7 +639,7 @@ void ASTBuilder::processPendingSymbol(PendingNode* node)
                 auto existing_size = vd->ghidra_dtype()->getSize();
                 if (node->vnode->getSize() == existing_size) {
                     // use this one
-                    sym_decl = vd;
+                    sym_decl = vd->clone();
                 }
             }
         }
@@ -665,21 +665,20 @@ void ASTBuilder::processPendingSymbol(PendingNode* node)
     VarDecl* sym_decl = nullptr;
 
     if (_locals.count(node->sym)) {
-        sym_decl = _locals.at(node->sym);
+        sym_decl = _locals.at(node->sym)->clone();
     }
     else if (_parameters.count(node->sym)) {
-        sym_decl = _parameters.at(node->sym);
+        sym_decl = _parameters.at(node->sym)->clone();
     }
     else if (_globals.count(node->sym)) {
-        sym_decl = _globals.at(node->sym);
+        sym_decl = _globals.at(node->sym)->clone();
     }
     else {
         // this is the only way I can figure out so far to "discover" globals
         if (node->sym->getScope()->isGlobal()) {
             // add it to globals map
-            VarDecl* global_decl = new VarDecl(_next_vdecl_id++, node->sym);
-            _globals[node->sym] = global_decl;
-            sym_decl = _globals.at(node->sym);
+            sym_decl = new VarDecl(_next_vdecl_id++, node->sym);
+            _globals[node->sym] = sym_decl;
         }
         else {
             // symbol not found!

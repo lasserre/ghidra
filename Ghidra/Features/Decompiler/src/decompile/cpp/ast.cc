@@ -271,6 +271,13 @@ CharacterLiteral::CharacterLiteral(BuiltinType* type, uintb value)
 {
 }
 
+CharacterLiteral* CharacterLiteral::clone_my_members(ASTNode* node)
+{
+    auto lit = (CharacterLiteral*)ASTNode::clone_my_members(node);
+    lit->_type = _type->clone();
+    return lit;
+}
+
 void* CharacterLiteral::doAccept(ASTVisitor* v, void* context)
 {
     return v->visitCharacterLiteral(this, context);
@@ -304,6 +311,13 @@ CStyleCastExpr::CStyleCastExpr(Type* type)
 {
 }
 
+CStyleCastExpr* CStyleCastExpr::clone_my_members(ASTNode* node)
+{
+    auto cast = (CStyleCastExpr*)ASTNode::clone_my_members(node);
+    cast->_type = _type->clone();
+    return cast;
+}
+
 void* CStyleCastExpr::doAccept(ASTVisitor* v, void* context)
 {
     return v->visitCStyleCastExpr(this, context);
@@ -312,6 +326,13 @@ void* CStyleCastExpr::doAccept(ASTVisitor* v, void* context)
 DeclRefExpr::DeclRefExpr(ValueDecl* referencedDecl)
     : _ref(referencedDecl)
 {
+}
+
+DeclRefExpr* DeclRefExpr::clone_my_members(ASTNode* node)
+{
+    auto declref = (DeclRefExpr*)ASTNode::clone_my_members(node);
+    declref->_ref = _ref->clone();
+    return declref;
 }
 
 void* DeclRefExpr::doAccept(ASTVisitor* v, void* context)
@@ -361,6 +382,13 @@ void* IfStmt::doAccept(ASTVisitor* v, void* context)
 IntegerLiteral::IntegerLiteral(Type* type, uintb value)
     : _value(value), _type(type)
 {
+}
+
+IntegerLiteral* IntegerLiteral::clone_my_members(ASTNode* node)
+{
+    auto lit = (IntegerLiteral*)ASTNode::clone_my_members(node);
+    lit->_type = _type->clone();
+    return lit;
 }
 
 void* IntegerLiteral::doAccept(ASTVisitor* v, void* context)

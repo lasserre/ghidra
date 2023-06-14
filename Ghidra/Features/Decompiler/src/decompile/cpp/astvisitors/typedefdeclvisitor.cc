@@ -38,7 +38,9 @@ void NewTypedef::addUse(AttachedTypeUpdate* atu, Type* type)
         }
     } else {
         if (tree_node_uses.count(type)) {
-            printf("hmm...\n");
+            // TODO: probably want to remove this eventually and just don't add it
+            // in this case...but for now I want to make sure this isn't still happening
+            throw LowlevelError("Using the sampe type pointer twice in the AST (did we forget to type->clone() somewhere?)");
         } else {
             tree_node_uses[type] = type;
         }

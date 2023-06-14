@@ -55,6 +55,22 @@ class ASTNode
 public:
     ASTNode();
     virtual ~ASTNode();
+    virtual ASTNode* clone() = 0;
+
+    /**
+     * @brief Clone the specialized members associated with this node in the
+     * hierarchy. If this gets overriden, it should call ASTNode::clone_my_members()
+     * first
+     */
+    virtual ASTNode* clone_my_members(ASTNode* node)
+    {
+        std::vector<ASTNode*> clones;
+        for (auto child : _children) {
+            clones.push_back(child->clone());
+        }
+        node->_children = clones;
+        return node;
+    }
 
     inline ASTNode* parent() { return _parent; }
     /**
@@ -153,6 +169,10 @@ class ArraySubscriptExpr : public ASTNode
 public:
     ArraySubscriptExpr()
     { }
+    virtual ArraySubscriptExpr* clone()
+    {
+        return (ArraySubscriptExpr*)clone_my_members(new ArraySubscriptExpr(*this));
+    }
 
     int precedence() { return 2; }
     bool isLRAssociative() { return true; }
@@ -168,6 +188,10 @@ class BinaryOperator : public ASTNode
 {
 public:
     BinaryOperator(std::string opcode);
+    virtual BinaryOperator* clone()
+    {
+        return (BinaryOperator*)clone_my_members(new BinaryOperator(*this));
+    }
 
     inline std::string opcode() { return _opcode; }
 
@@ -189,6 +213,10 @@ class BreakStmt : public ASTNode
 {
 public:
     BreakStmt();
+    virtual BreakStmt* clone()
+    {
+        return (BreakStmt*)clone_my_members(new BreakStmt(*this));
+    }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -214,6 +242,10 @@ class CopyPlaceholder : public ASTNode
 public:
     CopyPlaceholder()
     { }
+    virtual CopyPlaceholder* clone()
+    {
+        return (CopyPlaceholder*)clone_my_members(new CopyPlaceholder(*this));
+    }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -229,6 +261,10 @@ class CallExpr : public ASTNode
 {
 public:
     CallExpr();
+    virtual CallExpr* clone()
+    {
+        return (CallExpr*)clone_my_members(new CallExpr(*this));
+    }
 
     int precedence() { return 2; }
     bool isLRAssociative() { return true; }
@@ -246,6 +282,10 @@ class CaseStmt : public ASTNode
 {
 public:
     CaseStmt();
+    virtual CaseStmt* clone()
+    {
+        return (CaseStmt*)clone_my_members(new CaseStmt(*this));
+    }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -256,6 +296,12 @@ class CharacterLiteral : public ASTNode
 public:
     CharacterLiteral(BuiltinType* type, uintb value);
     virtual ~CharacterLiteral() { delete _type; }
+    virtual CharacterLiteral* clone_my_members(ASTNode* node);
+
+    virtual CharacterLiteral* clone()
+    {
+        return (CharacterLiteral*)clone_my_members(new CharacterLiteral(*this));
+    }
 
     inline uintb value() { return _value; }
     inline BuiltinType* type() { return _type; }
@@ -273,6 +319,10 @@ class CompoundStmt : public ASTNode
 {
 public:
     CompoundStmt();
+    virtual CompoundStmt* clone()
+    {
+        return (CompoundStmt*)clone_my_members(new CompoundStmt(*this));
+    }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -282,6 +332,10 @@ class ConstantExpr : public ASTNode
 {
 public:
     ConstantExpr();
+    virtual ConstantExpr* clone()
+    {
+        return (ConstantExpr*)clone_my_members(new ConstantExpr(*this));
+    }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -292,6 +346,10 @@ class ContinueStmt : public ASTNode
 public:
     ContinueStmt()
     { }
+    virtual ContinueStmt* clone()
+    {
+        return (ContinueStmt*)clone_my_members(new ContinueStmt(*this));
+    }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -301,6 +359,13 @@ class CStyleCastExpr : public ASTNode
 {
 public:
     CStyleCastExpr(Type* type);
+
+    virtual CStyleCastExpr* clone_my_members(ASTNode* node);
+
+    virtual CStyleCastExpr* clone()
+    {
+        return (CStyleCastExpr*)clone_my_members(new CStyleCastExpr(*this));
+    }
 
     inline Type* type() { return _type; }
 
@@ -336,6 +401,11 @@ public:
      * DOES NOT OWN this memory and must not delete it.
      */
     DeclRefExpr(ValueDecl* referencedDecl);
+    virtual DeclRefExpr* clone_my_members(ASTNode* node);
+    virtual DeclRefExpr* clone()
+    {
+        return (DeclRefExpr*)clone_my_members(new DeclRefExpr(*this));
+    }
 
     inline ValueDecl* ref() { return _ref; }
 
@@ -351,6 +421,10 @@ class DeclStmt : public ASTNode
 {
 public:
     DeclStmt();
+    virtual DeclStmt* clone()
+    {
+        return (DeclStmt*)clone_my_members(new DeclStmt(*this));
+    }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -368,6 +442,10 @@ class ForStmt : public ASTNode
 public:
     ForStmt()
     { }
+    virtual ForStmt* clone()
+    {
+        return (ForStmt*)clone_my_members(new ForStmt(*this));
+    }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -384,6 +462,10 @@ public:
     GotoStmt(string label_name)
         : _label_name(label_name)
     { }
+    virtual GotoStmt* clone()
+    {
+        return (GotoStmt*)clone_my_members(new GotoStmt(*this));
+    }
 
     string label_name() { return _label_name; }
 
@@ -402,6 +484,10 @@ class IfStmt : public ASTNode
 {
 public:
     IfStmt();
+    virtual IfStmt* clone()
+    {
+        return (IfStmt*)clone_my_members(new IfStmt(*this));
+    }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -411,6 +497,11 @@ class IntegerLiteral : public ASTNode
 {
 public:
     IntegerLiteral(Type* type, uintb value);
+    virtual IntegerLiteral* clone_my_members(ASTNode* node);
+    virtual IntegerLiteral* clone()
+    {
+        return (IntegerLiteral*)clone_my_members(new IntegerLiteral(*this));
+    }
 
     inline uintb value() { return _value; }
     inline Type* type() { return _type; }
@@ -427,6 +518,10 @@ public:
     LabelStmt(string name)
         : _name(name)
     { }
+    virtual LabelStmt* clone()
+    {
+        return (LabelStmt*)clone_my_members(new LabelStmt(*this));
+    }
 
     string name() { return _name; }
 
@@ -446,6 +541,10 @@ class LogMsg : public ASTNode
 {
 public:
     LogMsg(std::string msg);
+    virtual LogMsg* clone()
+    {
+        return (LogMsg*)clone_my_members(new LogMsg(*this));
+    }
 
     inline std::string message() { return _msg; }
 
@@ -460,6 +559,10 @@ public:
     MemberExpr(string name="", int offset=-1, bool isArrow=false, int sid=-1)
         : _sid(sid), _offset(offset), _isArrow(isArrow), _name(name)
     { }
+    virtual MemberExpr* clone()
+    {
+        return (MemberExpr*)clone_my_members(new MemberExpr(*this));
+    }
 
     int precedence() { return 2; }
     bool isLRAssociative() { return true; }
@@ -492,6 +595,10 @@ class NullNode : public ASTNode
 {
 public:
     NullNode() { }
+    virtual NullNode* clone()
+    {
+        return (NullNode*)clone_my_members(new NullNode(*this));
+    }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -503,6 +610,10 @@ public:
     ParenExpr(bool hidden=false)
         : _hidden(hidden)
     { }
+    virtual ParenExpr* clone()
+    {
+        return (ParenExpr*)clone_my_members(new ParenExpr(*this));
+    }
 
     int precedence() { return 2; }
     bool isLRAssociative() { return true; }     // actually L->R
@@ -524,6 +635,10 @@ class ReturnStmt : public ASTNode
 {
 public:
     ReturnStmt();
+    virtual ReturnStmt* clone()
+    {
+        return (ReturnStmt*)clone_my_members(new ReturnStmt(*this));
+    }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -533,6 +648,10 @@ class StringLiteral : public ASTNode
 {
 public:
     StringLiteral(string value);
+    virtual StringLiteral* clone()
+    {
+        return (StringLiteral*)clone_my_members(new StringLiteral(*this));
+    }
 
     inline string value() { return _value; }
 
@@ -553,6 +672,10 @@ class SwitchStmt : public ASTNode
 {
 public:
     SwitchStmt();
+    virtual SwitchStmt* clone()
+    {
+        return (SwitchStmt*)clone_my_members(new SwitchStmt(*this));
+    }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -565,6 +688,10 @@ class TranslationUnitDecl : public ASTNode
 {
 public:
     TranslationUnitDecl();
+    virtual TranslationUnitDecl* clone()
+    {
+        return (TranslationUnitDecl*)clone_my_members(new TranslationUnitDecl(*this));
+    }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -619,6 +746,12 @@ class Type : public ASTNode
 public:
     Type(const Datatype* dt);
     Type(string name);
+    virtual Type* clone()
+    {
+        // don't copy _ghidra_dt - this is already a pointer to Ghidra's memory
+        // that we shouldn't delete
+        return (Type*)clone_my_members(new Type(*this));
+    }
 
     /**
      * @brief The Ghidra Datatype associated with this Type if one exists,
@@ -642,6 +775,10 @@ class BuiltinType : public Type
 public:
     BuiltinType(const Datatype* dt);
     BuiltinType(string name, int size, bool isFloatingPoint, bool sign);
+    virtual BuiltinType* clone()
+    {
+        return (BuiltinType*)clone_my_members(new BuiltinType(*this));
+    }
 
     /** @brief Size of type in bytes */
     int size();
@@ -685,6 +822,10 @@ public:
      */
     ConstantArrayType(const Datatype* elementType, int numElements);
     ConstantArrayType(const TypeArray* arrType);
+    virtual ConstantArrayType* clone()
+    {
+        return (ConstantArrayType*)clone_my_members(new ConstantArrayType(*this));
+    }
 
     inline int numElements() { return _num_elements; }
 
@@ -700,6 +841,10 @@ class PointerType : public Type
 {
 public:
     PointerType(const Datatype* pointedToType);
+    virtual PointerType* clone()
+    {
+        return (PointerType*)clone_my_members(new PointerType(*this));
+    }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -721,6 +866,11 @@ public:
     StructType()
         : Type(""), _sid(-1)
     {}
+
+    virtual StructType* clone()
+    {
+        return (StructType*)clone_my_members(new StructType(*this));
+    }
 
     /** @brief Structure ID */
     int sid() const { return _sid; }
@@ -757,6 +907,10 @@ class VoidType : public Type
 {
 public:
     VoidType() : Type("void") {}
+    virtual VoidType* clone()
+    {
+        return (VoidType*)clone_my_members(new VoidType(*this));
+    }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -770,6 +924,10 @@ class TypedefDecl : public ASTNode
 {
 public:
     TypedefDecl(string name);
+    virtual TypedefDecl* clone()
+    {
+        return (TypedefDecl*)clone_my_members(new TypedefDecl(*this));
+    }
 
     inline string name() { return _name; }
 
@@ -786,6 +944,16 @@ class TypedefType: public Type
 {
 public:
     TypedefType(TypedefDecl* decl);
+    virtual TypedefType* clone_my_members(ASTNode* node)
+    {
+        auto tdtype = (TypedefType*)Type::clone_my_members(node);
+        tdtype->_decl = _decl->clone();
+        return tdtype;
+    }
+    virtual TypedefType* clone()
+    {
+        return (TypedefType*)clone_my_members(new TypedefType(*this));
+    }
 
     /** @brief Returns a pointer to the declaration of this typedef */
     inline TypedefDecl* getDecl() { return _decl; }
@@ -800,17 +968,12 @@ class UnaryOperator : public ASTNode
 public:
     UnaryOperator(std::string opcode);//, Type* type);
 
-    inline std::string opcode() { return _opcode; }
-    // inline Type* type() { return _type; }
+    virtual UnaryOperator* clone()
+    {
+        return (UnaryOperator*)clone_my_members(new UnaryOperator(*this));
+    }
 
-    /**
-     * @brief simply sets the type, so if you need to free existing type
-     * do so manually first!
-    */
-    // void setType(Type* type)
-    // {
-    //     _type = type;
-    // }
+    inline std::string opcode() { return _opcode; }
 
     int precedence();
     bool isLRAssociative();
@@ -820,7 +983,6 @@ public:
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
     std::string _opcode;
-    // Type* _type;    // output datatype of operator
 };
 
 /**
@@ -834,6 +996,10 @@ public:
      * @param id is a unique ID for this ValueDecl
      */
     ValueDecl(int id);
+    virtual ValueDecl* clone()
+    {
+        return (ValueDecl*)clone_my_members(new ValueDecl(*this));
+    }
 
     inline int id() { return _id; }
 
@@ -856,6 +1022,17 @@ public:
     ~FieldDecl()
     {
         delete _dtype;
+    }
+
+    virtual FieldDecl* clone_my_members(ASTNode* node)
+    {
+        auto fd = (FieldDecl*)ASTNode::clone_my_members(node);
+        fd->_dtype = _dtype->clone();
+        return fd;
+    }
+    virtual FieldDecl* clone()
+    {
+        return (FieldDecl*)clone_my_members(new FieldDecl(*this));
     }
 
     string name() { return _name; }
@@ -881,6 +1058,11 @@ class RecordDecl : public ASTNode
 public:
     RecordDecl(StructType stype);
 
+    virtual RecordDecl* clone()
+    {
+        return (RecordDecl*)clone_my_members(new RecordDecl(*this));
+    }
+
     int sid() { return _sid; }
     string name() { return _name; }
 
@@ -897,6 +1079,16 @@ class FunctionDecl : public ValueDecl
 {
 public:
     FunctionDecl(int id, Funcdata* fd);
+    virtual FunctionDecl* clone_my_members(ASTNode* node)
+    {
+        auto fd = (FunctionDecl*)ValueDecl::clone_my_members(node);
+        fd->_return_type = _return_type->clone();
+        return fd;
+    }
+    virtual FunctionDecl* clone()
+    {
+        return (FunctionDecl*)clone_my_members(new FunctionDecl(*this));
+    }
 
     inline std::string name() { return _fd->getName(); }
     inline uintb address() { return _fd->getAddress().getOffset(); }
@@ -934,10 +1126,16 @@ public:
         delete _type;
     }
 
-    // virtual VarDecl* clone()
-    // {
-    //     return new VarDecl(_id, _name, _type.clone
-    // }
+    virtual VarDecl* clone_my_members(ASTNode* node)
+    {
+        auto vd = (VarDecl*)ValueDecl::clone_my_members(node);
+        vd->_type = _type->clone();
+        return vd;
+    }
+    virtual VarDecl* clone()
+    {
+        return (VarDecl*)clone_my_members(new VarDecl(*this));
+    }
 
     inline Symbol* ghidra_sym() { return _sym; }
     inline const Datatype* ghidra_dtype()
@@ -972,6 +1170,10 @@ class ParmVarDecl : public VarDecl
 {
 public:
     ParmVarDecl(int id, ProtoParameter* param);
+    virtual ParmVarDecl* clone()
+    {
+        return (ParmVarDecl*)clone_my_members(new ParmVarDecl(*this));
+    }
 
     /** @brief The backing ProtoParameter for this ParmVarDecl */
     inline ProtoParameter* param() { return _param; }

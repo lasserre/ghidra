@@ -89,6 +89,8 @@ public:
 
     // analogous to opBinary, just wanted a different name
     void binaryOperator(string opcode, const PcodeOp* op, string negateOpcode="");
+    // analagous to opUnary, just wanted a different name
+    void unaryOperator(string opcode, const PcodeOp* op);
 
     virtual void opCopy(const PcodeOp *op);
     virtual void opLoad(const PcodeOp *op);

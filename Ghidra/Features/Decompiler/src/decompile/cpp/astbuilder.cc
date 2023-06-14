@@ -1707,6 +1707,16 @@ void ASTBuilder::opIntSext(const PcodeOp *op,const PcodeOp *readOp)
     }
 }
 
+void ASTBuilder::unaryOperator(string opcode, const PcodeOp* op)
+{
+    UnaryOperator* unop = new UnaryOperator(opcode);
+
+    PendingExpr* expr = new PendingExpr();
+    expr->ast_op = unop;
+    expr->parts.push_back(buildNodeImplied(op->getIn(0), op, mods));
+    _pending_expressions.push_back(expr);
+}
+
 void ASTBuilder::binaryOperator(string opcode, const PcodeOp* op, string negateOpcode/*=""*/)
 {
     string opcode_used = opcode;
@@ -1740,7 +1750,7 @@ void ASTBuilder::opIntAdd(const PcodeOp *op)
 
 void ASTBuilder::opIntSub(const PcodeOp *op)
 {
-    unimplementedOp("opIntSub");
+    binaryOperator("-", op);
 }
 
 void ASTBuilder::opIntCarry(const PcodeOp *op)
@@ -1758,9 +1768,10 @@ void ASTBuilder::opIntSborrow(const PcodeOp *op)
     unimplementedOp("opIntSborrow");
 }
 
+// integer two's complement (-X)
 void ASTBuilder::opInt2Comp(const PcodeOp *op)
 {
-    unimplementedOp("opInt2Comp");
+    unaryOperator("-", op);
 }
 
 void ASTBuilder::opIntNegate(const PcodeOp *op)
@@ -1785,17 +1796,17 @@ void ASTBuilder::opIntOr(const PcodeOp *op)
 
 void ASTBuilder::opIntLeft(const PcodeOp *op)
 {
-    unimplementedOp("opIntLeft");
+    binaryOperator("<<", op);
 }
 
 void ASTBuilder::opIntRight(const PcodeOp *op)
 {
-    unimplementedOp("opIntRight");
+    binaryOperator(">>", op);
 }
 
 void ASTBuilder::opIntSright(const PcodeOp *op)
 {
-    unimplementedOp("opIntSright");
+    binaryOperator(">>", op);
 }
 
 void ASTBuilder::opIntMult(const PcodeOp *op)

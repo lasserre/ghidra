@@ -175,6 +175,9 @@ int BinaryOperator::precedence()
     else if (_opcode == "+" || _opcode == "-") {
         return 6;
     }
+    else if (_opcode == "<<" || _opcode == ">>") {
+        return 7;
+    }
     else if (_opcode == "<" || _opcode == ">" || _opcode == "<=" || _opcode == ">=") {
         return 9;
     }
@@ -646,12 +649,9 @@ UnaryOperator::UnaryOperator(std::string opcode)//, Type* type)
 
 int UnaryOperator::precedence()
 {
-    if (_opcode == "*") {
+    if (_opcode == "*" || _opcode == "&" || _opcode == "-" || _opcode == "+") {
         return 3;
-    } else if (_opcode == "&") {
-        return 3;
-    }
-    else {
+    } else {
         callbacks->unimplementedCodeCallback("TODO - map UnaryOperator precedence for '" + _opcode + "'");
         return -1;
     }

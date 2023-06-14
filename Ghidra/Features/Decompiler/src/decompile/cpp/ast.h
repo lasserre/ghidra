@@ -57,6 +57,13 @@ public:
     virtual ~ASTNode();
 
     inline ASTNode* parent() { return _parent; }
+    /**
+     * @brief You should normally never need to do this, I just have a few
+     * unique situations where I need to update the parent (these could probably
+     * be rearchitected such that I don't even need this function...but I'm in
+     * a hurry)
+    */
+    void setParent(ASTNode* parent) { _parent = parent; }
     inline std::vector<ASTNode*>* children() { return &_children; }
     inline std::vector<string>* messages() { return &_messages; }
 
@@ -493,7 +500,9 @@ protected:
 class ParenExpr : public ASTNode
 {
 public:
-    ParenExpr();
+    ParenExpr(bool hidden=false)
+        : _hidden(hidden)
+    { }
 
     int precedence() { return 2; }
     bool isLRAssociative() { return true; }     // actually L->R
@@ -501,8 +510,14 @@ public:
     // right of opening paren '('
     bool wouldNextChildBeLeftOfOp() { return false; }
 
+    /** @brief True if this is a hidden paren expr (just how I'm implementing
+     * PrintC's opHiddenFunc() logic...this will not persist into the
+     * final AST)*/
+    bool hidden() { return _hidden; }
+
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
+    bool _hidden;
 };
 
 class ReturnStmt : public ASTNode
@@ -918,6 +933,11 @@ public:
     {
         delete _type;
     }
+
+    // virtual VarDecl* clone()
+    // {
+    //     return new VarDecl(_id, _name, _type.clone
+    // }
 
     inline Symbol* ghidra_sym() { return _sym; }
     inline const Datatype* ghidra_dtype()

@@ -1687,6 +1687,29 @@ Type* ASTBuilder::toAstType(const Datatype* dt)
     // TYPE_PARTIALUNION = 0		///< Part of a union
 }
 
+void ASTBuilder::opHiddenFunc(const PcodeOp *op)
+{
+    /**
+     * CLS: if I understand correctly from their comment, the only purpose of this
+     * is to add a parenthetical placeholder that will essentially be evaluated
+     * later (as to whether or not it is needed)
+     *
+     * So I think the easiest way to implement this would be to simply add a
+     * ParenExpr with a hidden=true attribute. Then after we've constructed the
+     * whole AST, we send a visitor back through all ParenExpr's to evaluate whether
+     * or not the hidden ones are still needed. If so, they are left alone. If not,
+     * they can be extracted from the AST and replaced with their single child
+     * node in the same spot safely
+     */
+    ParenExpr* parens = new ParenExpr(/*hidden = */ true);
+    currentASTNode()->addChild(parens, /*append =*/ true, /*check_parens =*/ false);
+
+    PendingExpr* expr = new PendingExpr();
+    expr->ast_op = parens;
+    expr->parts.push_back(buildNodeImplied(op->getIn(0), op, mods));
+    _pending_expressions.push_back(expr);
+}
+
 void ASTBuilder::opIntSext(const PcodeOp *op,const PcodeOp *readOp)
 {
     Datatype* outType = op->getOut()->getHigh()->getType();
@@ -1694,8 +1717,7 @@ void ASTBuilder::opIntSext(const PcodeOp *op,const PcodeOp *readOp)
     if (castStrategy->isSextCast(outType, inType)) {
         /** QUESTION: does option_hide_exts even make sense here? */
         if (option_hide_exts && castStrategy->isExtensionCastImplied(op, readOp)) {
-            // opHiddenFunc
-            unimplementedCode("opHiddenFunc case in opIntSext");
+            opHiddenFunc(op);
         }
         else {
             processTypeCastExpression(op);

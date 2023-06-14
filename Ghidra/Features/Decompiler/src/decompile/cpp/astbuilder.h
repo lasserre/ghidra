@@ -61,6 +61,7 @@ public:
     // --- END BlockVisitor interface
 
     // hides PrintC functions:
+    void opHiddenFunc(const PcodeOp *op);
     LabelStmt* emitAnyLabelStatement(const FlowBlock *bl);
     LabelStmt* emitLabelStatement(const FlowBlock *bl);
     LabelStmt* emitLabel(const FlowBlock *bl);

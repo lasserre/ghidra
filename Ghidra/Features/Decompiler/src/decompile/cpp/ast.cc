@@ -56,9 +56,10 @@ ASTNode::~ASTNode()
  */
 bool needsParens(ASTNode* parent, ASTNode* child)
 {
-    if (dynamic_cast<CallExpr*>(parent) || dynamic_cast<ArraySubscriptExpr*>(parent)) {
-        // call expressions and array subscripts already have parentheses or brackets
-        // so we don't need to add more!
+    if (dynamic_cast<CallExpr*>(parent) || dynamic_cast<ArraySubscriptExpr*>(parent)
+        || dynamic_cast<ParenExpr*>(parent)) {
+        // call expressions, array subscripts, and parenthetical expressions
+        //  already have parentheses or brackets so we don't need to add more!
         return false;
     }
 
@@ -390,10 +391,6 @@ void* MemberExpr::doAccept(ASTVisitor* v, void* context)
 void* NullNode::doAccept(ASTVisitor* v, void* context)
 {
     return v->visitNullNode(this, context);
-}
-
-ParenExpr::ParenExpr()
-{
 }
 
 void* ParenExpr::doAccept(ASTVisitor* v, void* context)

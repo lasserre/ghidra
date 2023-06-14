@@ -37,12 +37,17 @@ void NewTypedef::addUse(AttachedTypeUpdate* atu, Type* type)
             attached_uses.push_back(new AttachedTypeUpdate(*atu));
         }
     } else {
-        tree_node_uses.push_back(type);
+        if (tree_node_uses.count(type)) {
+            printf("hmm...\n");
+        } else {
+            tree_node_uses[type] = type;
+        }
+        // tree_node_uses.push_back(type);
     }
 }
 
 TypedefDeclVisitor::TypedefDeclVisitor(ASTBuilder* builder)
-    : _typedefs_to_add(), _builder(builder)
+    : _typedefs_to_add(), _builder(builder), _hidden_parens_to_remove()
 {
 }
 
@@ -55,7 +60,8 @@ void TypedefDeclVisitor::insertTypedefs(ASTNode* parent)
         parent->addChild(entry.second.decl, /* append =*/ false, /*check_parens = */ false);
 
         // replace each use of this typedef
-        for (Type* typedef_use : entry.second.tree_node_uses) {
+        for (auto typedef_use_pair : entry.second.tree_node_uses) {
+            Type* typedef_use = typedef_use_pair.second;
             typedef_use->replaceWith(new TypedefType(entry.second.decl));
             delete typedef_use;     // clean up the original
         }
@@ -67,6 +73,23 @@ void TypedefDeclVisitor::insertTypedefs(ASTNode* parent)
             );
 
             delete attached_update;     // done with this now
+        }
+    }
+
+    for (ParenExpr* pexpr : _hidden_parens_to_remove) {
+        ASTNode* parent = pexpr->parent();
+        ASTNode* child = pexpr->children()->front();
+
+        for (int i = 0; i < parent->children()->size(); i++) {
+            if ((*parent->children())[i] == pexpr) {
+                // replace ParenExpr with child node
+                (*parent->children())[i] = child;
+                child->setParent(parent);
+                // clear child node handles from pexpr's list so they don't get
+                // deleted when we delete pexpr (child now lives in parent!)
+                pexpr->children()->clear();
+                delete pexpr;
+            }
         }
     }
 }
@@ -305,5 +328,33 @@ void* TypedefDeclVisitor::visitVarDecl(VarDecl* vdecl, void* context)
     vdecl->type()->accept(this, type_update);
 
     delete type_update;
+    return nullptr;
+}
+
+void* TypedefDeclVisitor::visitParenExpr(ParenExpr* pexpr, void* context)
+{
+    if (pexpr->hidden()) {
+        // this logic corresponds to PrintLanguage::parentheses()
+        ASTNode* parent = pexpr->parent();
+
+        if (pexpr->children()->size() < 1) {
+            // something went wrong - ignore this node
+            return nullptr;
+        }
+
+        ASTNode* child = pexpr->children()->front();
+
+        // we only consider keeping parens if this is part of a binary or unary operation
+        if (dynamic_cast<BinaryOperator*>(parent) || dynamic_cast<UnaryOperator*>(parent)) {
+            if (parent->precedence() >= child->precedence()) {
+                // keep parens - don't change anything
+                return nullptr;
+            }
+        }
+
+        // if we get here we don't need the parens
+        _hidden_parens_to_remove.push_back(pexpr);
+    }
+
     return nullptr;
 }

@@ -12,7 +12,10 @@ struct NewTypedef
 
     // these are proper nodes in the tree and must be replaced by preserving
     // parent/child links
-    vector<Type*> tree_node_uses;
+    // vector<Type*> tree_node_uses;
+
+    // try a map to ensure we only have one entry per pointer
+    map<void*, Type*> tree_node_uses;
 
     // these are Type* instances which are properties of nodes in the tree
     // (attached to these nodes) but not actual children. Thus there is no
@@ -62,6 +65,9 @@ public:
     virtual void* visitParmVarDecl(ParmVarDecl*, void*);
     virtual void* visitVarDecl(VarDecl*, void*);
 
+    /** CLS: HIJACKING THIS CLASS TO DO SOMETHING DIFFERENT */
+    virtual void* visitParenExpr(ParenExpr*, void*);
+
 protected:
 
     void insertNewTypedef(Type* alias_type, Type* real_type, AttachedTypeUpdate* atu = nullptr);
@@ -69,6 +75,9 @@ protected:
     // forward-decl nodes to add when finished traversing
     // the AST (so we don't modify _parent's children while traversing)
     map<string, NewTypedef> _typedefs_to_add;
+    // hidden parens to remove when finished traversing
+    // the AST (so we don't modify _parent's children while traversing)
+    vector<ParenExpr*> _hidden_parens_to_remove;
     // HACK: this is for access to builder.toAstType() because I'm rushing...
     // if someone has time to rearchitect this could have a cleaner solution :)
     ASTBuilder* _builder;

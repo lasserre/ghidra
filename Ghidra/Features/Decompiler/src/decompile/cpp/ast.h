@@ -81,7 +81,6 @@ public:
     */
     void setParent(ASTNode* parent) { _parent = parent; }
     inline std::vector<ASTNode*>* children() { return &_children; }
-    inline std::vector<string>* messages() { return &_messages; }
 
     /**
      * @brief Adds child to this node's children, if it is not already
@@ -153,7 +152,6 @@ protected:
     ASTNode* _parent;       // pointer to existing parent, not our memory
     // dynamically-allocated child pointers we must free when destructed
     std::vector<ASTNode*> _children;
-    std::vector<string> _messages;  // diagnostic/error messages for validation
 };
 
 /**
@@ -528,29 +526,6 @@ public:
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
     string _name;
-};
-
-/**
- * @brief Not really part of the AST...
- * I don't want to lose errors or warnings I need to be aware of,
- * and the way the Ghidra decompiler runs in a separate process I may
- * not readily notice silent issues. This allows me to pass through
- * errors into the output JSON for now (later there may be a better way)
- */
-class LogMsg : public ASTNode
-{
-public:
-    LogMsg(std::string msg);
-    virtual LogMsg* clone()
-    {
-        return (LogMsg*)clone_my_members(new LogMsg(*this));
-    }
-
-    inline std::string message() { return _msg; }
-
-protected:
-    virtual void* doAccept(ASTVisitor* v, void* context);
-    std::string _msg;
 };
 
 class MemberExpr : public ASTNode

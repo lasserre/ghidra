@@ -28,7 +28,7 @@ void initASTCallbacks(ASTCallbacks* cb)
 }
 
 ASTNode::ASTNode()
-    : _parent(nullptr), _children(), _messages()
+    : _parent(nullptr), _children()
 {
 }
 
@@ -85,7 +85,7 @@ void ASTNode::addChild(ASTNode* child, bool append /*= true*/, bool check_parens
     if (check_parens) {
         if (!append && _children.size() > 0) {
             // ERROR: this won't work if we mess with the order of children!
-            _messages.push_back("ERROR: Prepending child will mess up paren calculations!");
+            callbacks->unimplementedCodeCallback("ERROR: Prepending child will mess up paren calculations!");
         }
 
         if (needsParens(this, child)) {
@@ -188,11 +188,17 @@ int BinaryOperator::precedence()
     else if (_opcode == "&") {
         return 11;
     }
+    else if (_opcode == "&&") {
+        return 14;
+    }
+    else if (_opcode == "||") {
+        return 15;
+    }
     else if (_opcode == "=") {
         return 16;
     }
     else {
-        _messages.push_back("No precedence mapped for binary operator '" + _opcode + "'");
+        callbacks->unimplementedCodeCallback("No precedence mapped for binary operator '" + _opcode + "'");
         return -1;
     }
 }
@@ -399,16 +405,6 @@ void* IntegerLiteral::doAccept(ASTVisitor* v, void* context)
 void* LabelStmt::doAccept(ASTVisitor* v, void* context)
 {
     return v->visitLabelStmt(this, context);
-}
-
-LogMsg::LogMsg(std::string msg)
-    : _msg(msg)
-{
-}
-
-void* LogMsg::doAccept(ASTVisitor* v, void* context)
-{
-    return v->visitLogMsg(this, context);
 }
 
 void* MemberExpr::doAccept(ASTVisitor* v, void* context)

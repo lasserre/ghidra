@@ -295,7 +295,7 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
         ss << " not decompiled";
         _logfile << ss.str();
         _logfile.close();
-        return new LogMsg(ss.str());
+        return nullptr;
     }
     else if (fd->hasNoStructBlocks()) {
         // not fully decompiled, no structure present
@@ -304,7 +304,7 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
         ss << " not fully decompiled (no structure present)";
         _logfile << ss.str();
         _logfile.close();
-        return new LogMsg(ss.str());
+        return nullptr;
     }
 
     _logfile << "Building AST for " << fd->getName() << "\n";
@@ -1030,6 +1030,7 @@ static string getRegName(const Varnode* vn)
 
 void ASTBuilder::emitBlockBasic(const BlockBasic *bb)
 {
+    emitLabelStatement(bb);
     if (isSet(only_branch)) {
         const PcodeOp* instr = bb->lastOp();
         if (instr->isBranch()) {
@@ -1081,8 +1082,11 @@ void ASTBuilder::emitBlockGraph(const BlockGraph *bl)
 
 void ASTBuilder::emitBlockCopy(const BlockCopy *bl)
 {
-    FlowBlock* sub = bl->subBlock(0);
-    sub->emit(this);
+    auto label = emitAnyLabelStatement(bl);
+    bl->subBlock(0)->emit(this);
+    if (label) {
+        popASTNode();   // label
+    }
 }
 
 void ASTBuilder::emitBlockGoto(const BlockGoto *bl)
@@ -1371,15 +1375,21 @@ void ASTBuilder::emitForLoop(const BlockWhileDo* bl)
         forstmt->addChild(new NullNode());  // add placeholder if no increment statement
     }
 
+    popASTNode();   // pop ForStmt
+
     popMod();
     setMod(no_branch); // Dont print goto at bottom of clause
 
     // 4) loop body
+    CompoundStmt* cpd_stmt = new CompoundStmt();
+    forstmt->addChild(cpd_stmt);
+
+    pushASTNode(cpd_stmt);
     bl->getBlock(1)->emit(this);
+    popASTNode();   // pop CompoundStmt
 
     popMod();
 
-    popASTNode();   // pop ForStmt
     if (ls) {
         popASTNode();   // pop LabelStmt
     }
@@ -1890,8 +1900,6 @@ Type* ASTBuilder::toAstType(const Datatype* dt)
             return new Type(dt);
         case TYPE_SPACEBASE:    // fall-through
         default:
-            // _messages.push_back("UNHANDLED metatype " + string(dt->getMetatype())
-                // + " for " + dt->getName());
             unimplementedCode("UNHANDLED metatype " + std::to_string((int)dt->getMetatype()) +
                               " for " + dt->getName());
             return new Type(dt);

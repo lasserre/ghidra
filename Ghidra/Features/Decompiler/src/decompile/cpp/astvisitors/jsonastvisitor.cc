@@ -25,6 +25,11 @@ json buildAstForFunction(Architecture* ghidra, Funcdata* fd, ExportAstConfig* co
 {
     ASTBuilder builder(ghidra, config->output_folder);
     ASTNode* ast = builder.buildAST(fd);
+    if (!ast) {
+        json err;
+        err["message"] = "AST for function " + fd->getName() + " failed. See log file for details";
+        return err;
+    }
 
     JsonASTVisitor visitor(&builder);
     ast->accept(&visitor);
@@ -79,25 +84,10 @@ json* JsonASTVisitor::copy_to_parent(json& data, void* parent_context)
     }
 }
 
-/**
- * @brief Add messages key to dict if this node has any diagnostic or
- * error messages
- */
-void addMessages(ASTNode* node, json& jnode)
-{
-    if (node->messages()->size() > 0) {
-        jnode["messages"] = json::array();
-        for (auto msg : *node->messages()) {
-            jnode["messages"].push_back(msg);
-        }
-    }
-}
-
 void* JsonASTVisitor::visitArraySubscriptExpr(ArraySubscriptExpr* ase, void* context)
 {
     json ase_j;
     ase_j["kind"] = "ArraySubscriptExpr";
-    addMessages(ase, ase_j);
     return copy_to_parent(ase_j, context);
 }
 
@@ -107,7 +97,6 @@ void* JsonASTVisitor::visitBinaryOperator(BinaryOperator* b, void* context)
     binop["kind"] = "BinaryOperator";
     binop["inner"] = json::array();
     binop["opcode"] = b->opcode();
-    addMessages(b, binop);
     return copy_to_parent(binop, context);
 }
 
@@ -115,7 +104,6 @@ void* JsonASTVisitor::visitBreakStmt(BreakStmt* bs, void* context)
 {
     json bs_j;
     bs_j["kind"] = "BreakStmt";
-    addMessages(bs, bs_j);
     return copy_to_parent(bs_j, context);
 }
 
@@ -128,7 +116,6 @@ void* JsonASTVisitor::visitBuiltinType(BuiltinType* bit, void* context)
     bit_j["is_floating_point"] = bit->isFloatingPoint();
     bit_j["is_signed"] = bit->isSigned();
     bit_j["size"] = bit->size();
-    addMessages(bit, bit_j);
     return copy_to_parent(bit_j, context);
 }
 
@@ -144,7 +131,6 @@ void* JsonASTVisitor::visitCaseStmt(CaseStmt* cs, void* context)
     json cs_j;
     cs_j["kind"] = "CaseStmt";
     cs_j["inner"] = json::array();
-    addMessages(cs, cs_j);
     return copy_to_parent(cs_j, context);
 }
 
@@ -174,7 +160,6 @@ void* JsonASTVisitor::visitCharacterLiteral(CharacterLiteral* cl, void* context)
     cl_json["dtype"] = typeToJson(cl->type());
     // cl_json["dtype_name"] = datatypeToJson(cl->type()->ghidra_dtype());
     cl_json["value"] = cl->value();
-    addMessages(cl, cl_json);
     return copy_to_parent(cl_json, context);
 }
 
@@ -183,7 +168,6 @@ void* JsonASTVisitor::visitCompoundStmt(CompoundStmt* cs, void* context)
     json cmp_stmt;
     cmp_stmt["kind"] = "CompoundStmt";
     cmp_stmt["inner"] = json::array();
-    addMessages(cs, cmp_stmt);
     return copy_to_parent(cmp_stmt, context);
 }
 
@@ -193,7 +177,6 @@ void* JsonASTVisitor::visitConstantArrayType(ConstantArrayType* cat, void* conte
     cat_j["kind"] = "ConstantArrayType";
     cat_j["inner"] = json::array();
     cat_j["num_elements"] = cat->numElements();
-    addMessages(cat, cat_j);
     return copy_to_parent(cat_j, context);
 }
 
@@ -202,7 +185,6 @@ void* JsonASTVisitor::visitConstantExpr(ConstantExpr* cexpr, void* context)
     json cexpr_j;
     cexpr_j["kind"] = "ConstantExpr";
     cexpr_j["inner"] = json::array();
-    addMessages(cexpr, cexpr_j);
     return copy_to_parent(cexpr_j, context);
 }
 
@@ -210,7 +192,6 @@ void* JsonASTVisitor::visitContinueStmt(ContinueStmt* cs, void* context)
 {
     json cs_j;
     cs_j["kind"] = "ContinueStmt";
-    addMessages(cs, cs_j);
     return copy_to_parent(cs_j, context);
 }
 
@@ -227,7 +208,6 @@ void* JsonASTVisitor::visitCStyleCastExpr(CStyleCastExpr* cast_expr, void* conte
     cast["kind"] = "CStyleCastExpr";
     cast["dtype"] = typeToJson(cast_expr->type());
     // cast["dtype_name"] = datatypeToJson(cast_expr->type()->ghidra_dtype());
-    addMessages(cast_expr, cast);
     return copy_to_parent(cast, context);
 }
 
@@ -236,7 +216,6 @@ void* JsonASTVisitor::visitDeclRefExpr(DeclRefExpr* dr, void* context)
     json decl_ref;
     decl_ref["kind"] = "DeclRefExpr";
     decl_ref["referencedDecl_id"] = dr->ref()->id();
-    addMessages(dr, decl_ref);
     return copy_to_parent(decl_ref, context);
 }
 
@@ -245,7 +224,6 @@ void* JsonASTVisitor::visitDeclStmt(DeclStmt* ds, void* context)
     json declstmt;
     declstmt["kind"] = "DeclStmt";
     declstmt["inner"] = json::array();
-    addMessages(ds, declstmt);
     return copy_to_parent(declstmt, context);
 }
 
@@ -254,7 +232,6 @@ void* JsonASTVisitor::visitForStmt(ForStmt* fs, void* context)
     json fs_j;
     fs_j["kind"] = "ForStmt";
     fs_j["inner"] = json::array();
-    addMessages(fs, fs_j);
     return copy_to_parent(fs_j, context);
 }
 
@@ -269,7 +246,6 @@ void* JsonASTVisitor::visitFunctionDecl(FunctionDecl* fd, void* context)
     fdecl["address"] = to_hex(fd->address());
     fdecl["return_dtype"] = typeToJson(fd->return_type());
     // fdecl["return_dtype_name"] = datatypeToJson(fd->return_type()->ghidra_dtype());
-    addMessages(fd, fdecl);
     return copy_to_parent(fdecl, context);
 }
 
@@ -278,7 +254,6 @@ void* JsonASTVisitor::visitGotoStmt(GotoStmt* gs, void* context)
     json gs_j;
     gs_j["kind"] = "GotoStmt";
     gs_j["label_name"] = gs->label_name();
-    addMessages(gs, gs_j);
     return copy_to_parent(gs_j, context);
 }
 
@@ -289,7 +264,6 @@ void* JsonASTVisitor::visitIntegerLiteral(IntegerLiteral* lit, void* context)
     int_lit["value"] = lit->value();
     int_lit["dtype"] = typeToJson(lit->type());
     // int_lit["dtype_name"] = datatypeToJson(lit->type()->ghidra_dtype());
-    addMessages(lit, int_lit);
     return copy_to_parent(int_lit, context);
 }
 
@@ -298,7 +272,6 @@ void* JsonASTVisitor::visitLabelStmt(LabelStmt* ls, void* context)
     json ls_j;
     ls_j["kind"] = "LabelStmt";
     ls_j["name"] = ls->name();
-    addMessages(ls, ls_j);
     return copy_to_parent(ls_j, context);
 }
 
@@ -307,16 +280,7 @@ void* JsonASTVisitor::visitIfStmt(IfStmt* stmt, void* context)
     json ifstmt;
     ifstmt["kind"] = "IfStmt";
     ifstmt["inner"] = json::array();
-    addMessages(stmt, ifstmt);
     return copy_to_parent(ifstmt, context);
-}
-
-void* JsonASTVisitor::visitLogMsg(LogMsg* logmsg, void* context)
-{
-    json msg;
-    msg["kind"] = "LogMsg";
-    msg["message"] = logmsg->message();
-    return copy_to_parent(msg, context);
 }
 
 void* JsonASTVisitor::visitMemberExpr(MemberExpr* m, void* context)
@@ -327,7 +291,6 @@ void* JsonASTVisitor::visitMemberExpr(MemberExpr* m, void* context)
     m_j["sid"] = m->sid();
     m_j["offset"] = m->offset();
     m_j["isArrow"] = m->isArrow();
-    addMessages(m, m_j);
     return copy_to_parent(m_j, context);
 }
 
@@ -335,7 +298,6 @@ void* JsonASTVisitor::visitNullNode(NullNode* n, void* context)
 {
     json n_j;
     n_j["kind"] = "NullNode";
-    addMessages(n, n_j);
     return copy_to_parent(n_j, context);
 }
 
@@ -344,7 +306,6 @@ void* JsonASTVisitor::visitParenExpr(ParenExpr* pe, void* context)
     json paren;
     paren["kind"] = "ParenExpr";
     paren["inner"] = json::array();
-    addMessages(pe, paren);
     return copy_to_parent(paren, context);
 }
 
@@ -354,7 +315,6 @@ void* JsonASTVisitor::visitFieldDecl(FieldDecl* fd, void* context)
     fd_j["kind"] = "FieldDecl";
     fd_j["name"] = fd->name();
     fd_j["dtype"] = typeToJson(fd->type());
-    addMessages(fd, fd_j);
     return copy_to_parent(fd_j, context);
 }
 
@@ -364,7 +324,6 @@ void* JsonASTVisitor::visitRecordDecl(RecordDecl* rd, void* context)
     rd_j["kind"] = "RecordDecl";
     rd_j["sid"] = rd->sid();
     rd_j["name"] = rd->name();
-    addMessages(rd, rd_j);
     return copy_to_parent(rd_j, context);
 }
 
@@ -378,7 +337,6 @@ void* JsonASTVisitor::visitParmVarDecl(ParmVarDecl* pv, void* context)
     }
     pvdecl["dtype"] = typeToJson(pv->type());
     // pvdecl["dtype_name"] = datatypeToJson(pv->type()->ghidra_dtype());
-    addMessages(pv, pvdecl);
     return copy_to_parent(pvdecl, context);
 }
 
@@ -387,7 +345,6 @@ void* JsonASTVisitor::visitPointerType(PointerType* pt, void* context)
     json pt_j;
     pt_j["kind"] = "PointerType";
     pt_j["inner"] = json::array();
-    addMessages(pt, pt_j);
     return copy_to_parent(pt_j, context);
 }
 
@@ -396,7 +353,6 @@ void* JsonASTVisitor::visitStructType(StructType* st, void* context)
     json st_j;
     st_j["kind"] = "StructType";
     st_j["sid"] = st->sid();
-    addMessages(st, st_j);
     return copy_to_parent(st_j, context);
 }
 
@@ -404,7 +360,6 @@ void* JsonASTVisitor::visitVoidType(VoidType* vt, void* context)
 {
     json vt_j;
     vt_j["kind"] = "VoidType";
-    addMessages(vt, vt_j);
     return copy_to_parent(vt_j, context);
 }
 
@@ -413,7 +368,6 @@ void* JsonASTVisitor::visitReturnStmt(ReturnStmt* rs, void* context)
     json rs_j;
     rs_j["kind"] = "ReturnStmt";
     rs_j["inner"] = json::array();
-    addMessages(rs, rs_j);
     return copy_to_parent(rs_j, context);
 }
 
@@ -422,7 +376,6 @@ void* JsonASTVisitor::visitStringLiteral(StringLiteral* lit, void* context)
     json lit_j;
     lit_j["kind"] = "StringLiteral";
     lit_j["value"] = lit->value();
-    addMessages(lit, lit_j);
     return copy_to_parent(lit_j, context);
 }
 
@@ -431,7 +384,6 @@ void* JsonASTVisitor::visitSwitchStmt(SwitchStmt* ss, void* context)
     json ss_j;
     ss_j["kind"] = "SwitchStmt";
     ss_j["inner"] = json::array();
-    addMessages(ss, ss_j);
     return copy_to_parent(ss_j, context);
 }
 
@@ -485,7 +437,6 @@ void* JsonASTVisitor::visitTranslationUnitDecl(TranslationUnitDecl* td, void* co
     tudecl["kind"] = "TranslationUnitDecl";
     tudecl["inner"] = json::array();
     tudecl["structures_by_id"] = buildStructuresById(_builder->type_library());
-    addMessages(td, tudecl);
     return copy_to_parent(tudecl, context);
 }
 
@@ -494,7 +445,6 @@ void* JsonASTVisitor::visitType(Type* type, void* context)
     json type_j;
     type_j["kind"] = "Type";
     type_j["name"] = type->name();
-    addMessages(type, type_j);
     return copy_to_parent(type_j, context);
 }
 
@@ -504,7 +454,6 @@ void* JsonASTVisitor::visitTypedefDecl(TypedefDecl* td, void* context)
     td_j["kind"] = "TypedefDecl";
     td_j["name"] = td->name();
     td_j["inner"] = json::array();
-    addMessages(td, td_j);
     return copy_to_parent(td_j, context);
 }
 
@@ -514,7 +463,6 @@ void* JsonASTVisitor::visitTypedefType(TypedefType* tdtype, void* context)
     tdtype_j["kind"] = "TypedefType";
     tdtype_j["name"] = tdtype->name();
     /** QUESTION: should we do anything with the decl? */
-    addMessages(tdtype, tdtype_j);
     return copy_to_parent(tdtype_j, context);
 }
 
@@ -526,7 +474,6 @@ void* JsonASTVisitor::visitUnaryOperator(UnaryOperator* uo, void* context)
     uo_json["opcode"] = uo->opcode();
     // uo_json["dtype"] = typeToJson(uo->type());
     // uo_json["dtype_name"] = datatypeToJson(uo->type()->ghidra_dtype());
-    addMessages(uo, uo_json);
     return copy_to_parent(uo_json, context);
 }
 
@@ -534,7 +481,6 @@ void* JsonASTVisitor::visitValueDecl(ValueDecl* vd, void* context)
 {
     json value_decl;
     value_decl["id"] = vd->id();
-    addMessages(vd, value_decl);
     return copy_to_parent(value_decl, context);
 }
 
@@ -546,6 +492,5 @@ void* JsonASTVisitor::visitVarDecl(VarDecl* vd, void* context)
     var_decl["dtype"] = typeToJson(vd->type());
     // var_decl["dtype_name"] = datatypeToJson(vd->type()->ghidra_dtype());
     var_decl["name"] = vd->name();
-    addMessages(vd, var_decl);
     return copy_to_parent(var_decl, context);
 }

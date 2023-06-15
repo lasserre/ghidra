@@ -246,6 +246,15 @@ protected:
      */
     void processPendingSymbol(PendingNode* node);
 
+    void pushSymbolAST(Symbol* sym);
+
+    // similar to PrintC version but no const
+    void pushMismatchSymbolAST(Symbol *sym,int4 off,int4 sz,
+            const Varnode *vn,const PcodeOp *op);
+
+    virtual void pushPartialSymbol(const Symbol *sym,int4 off,int4 sz,
+            const Varnode *vn,const PcodeOp *op,int4 inslot);
+
     /**
      * @brief Recursively process the expression stack, converting each
      * expression into ASTNodes and adding sub-expressions to the stack

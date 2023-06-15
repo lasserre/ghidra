@@ -83,6 +83,7 @@ public:
     Symbol* sym;
     HighVariable* high;
     uint4 mods;     // save current mod flags like PrintLanguage::recurse()
+    bool isRead;    // for processPendingSymbol (i.e. pushSymbolDetail)
 };
 
 PendingNode::PendingNode()
@@ -593,6 +594,7 @@ void ASTBuilder::processPendingTerminal(PendingNode* node)
     }
 
     if (node->sym) {
+        node->isRead = true;    // as passed to pushSymbolDetail() in pushVnExplicit()
         processPendingSymbol(node);
     }
     else {
@@ -601,84 +603,27 @@ void ASTBuilder::processPendingTerminal(PendingNode* node)
     }
 }
 
-void ASTBuilder::processPendingSymbol(PendingNode* node)
+// corresponds to PrintC:pushSymbol()
+// pushes a DeclRefExpr node to the AST
+void ASTBuilder::pushSymbolAST(Symbol* sym)
 {
-    /**
-     * CLS: this logic corresponds to pushVnExplicit()/pushVnLHS()
-     * - when I get to structs/arrays/unnamed locations then need to debug
-     * and make sure I handle appropriately
-     */
-    auto sym_offset = node->high->getSymbolOffset();
-    if (sym_offset == -1) {
-        // perfect match - all good, process below
-        // I've just kept this to preserve structure similar to
-        // Ghidra code
-    }
-    else if (sym_offset + node->vnode->getSize() <= node->sym->getType()->getSize()) {
-        // partial symbol => size+offset
-        // partial: STRUCT FIELDS/ARRAYS!
-        unimplementedCode("processPendingSymbol: STRUCT FIELD/ARRAY");
-        return;
-    }
-    else {
-        // mismatch
-        // save and index mismatch_globals by the original symbol (node->sym)
-        // which points to a list of decl's (one each for different mismatching
-        // accesses to that symbol)
-
-        if (!node->sym->getScope()->isGlobal()) {
-            unimplementedCode("processPendingSymbol: mismatch symbol NON GLOBAL");
-            return;
-        }
-
-        VarDecl* sym_decl = nullptr;
-
-        if (_mismatch_globals.count(node->sym)) {
-            // check size
-            for (VarDecl* vd : _mismatch_globals[node->sym]) {
-                auto existing_size = vd->ghidra_dtype()->getSize();
-                if (node->vnode->getSize() == existing_size) {
-                    // use this one
-                    sym_decl = vd->clone();
-                }
-            }
-        }
-
-        // node->sym not mapped OR we didn't find a size match
-        if (!sym_decl) {
-            sym_decl = new VarDecl(_next_vdecl_id++,
-                "_" + node->sym->getName(),
-                node->vnode->getType());    // use vnode type, not sym type
-
-            if (_mismatch_globals.count(node->sym)) {
-                _mismatch_globals[node->sym].push_back(sym_decl);
-            } else {
-                _mismatch_globals[node->sym] = {sym_decl};
-            }
-        }
-
-        DeclRefExpr* refexpr = new DeclRefExpr(sym_decl);
-        currentASTNode()->addChild(refexpr);
-        return;
-    }
-
     VarDecl* sym_decl = nullptr;
 
-    if (_locals.count(node->sym)) {
-        sym_decl = _locals.at(node->sym)->clone();
+    if (_locals.count(sym)) {
+        sym_decl = _locals.at(sym)->clone();
     }
-    else if (_parameters.count(node->sym)) {
-        sym_decl = _parameters.at(node->sym)->clone();
+    else if (_parameters.count(sym)) {
+        sym_decl = _parameters.at(sym)->clone();
     }
-    else if (_globals.count(node->sym)) {
-        sym_decl = _globals.at(node->sym)->clone();
+    else if (_globals.count(sym)) {
+        sym_decl = _globals.at(sym)->clone();
     }
     else {
         // this is the only way I can figure out so far to "discover" globals
-        if (node->sym->getScope()->isGlobal()) {
+        if (sym->getScope()->isGlobal()) {
             // add it to globals map
-            sym_decl = new VarDecl(_next_vdecl_id++, node->sym);
-            _globals[node->sym] = sym_decl;
+            sym_decl = new VarDecl(_next_vdecl_id++, sym);
+            _globals[sym] = sym_decl;
         }
         else {
             // symbol not found!
@@ -688,6 +633,263 @@ void ASTBuilder::processPendingSymbol(PendingNode* node)
 
     DeclRefExpr* refexpr = new DeclRefExpr(sym_decl);
     currentASTNode()->addChild(refexpr);
+}
+
+void ASTBuilder::pushMismatchSymbolAST(Symbol *sym,int4 off,int4 sz,
+            const Varnode *vn,const PcodeOp *op)
+{
+    if (off == 0) {
+        // The most common situation is when a user sees a reference
+        // to a variable and forces a symbol to be there but guesses
+        // the type (or size) incorrectly
+        // The address of the symbol is correct, but the size is too small
+
+        /** CLS: my comment: */
+        // save and index mismatch_globals by the original symbol (node->sym)
+        // which points to a list of decl's (one each for different mismatching
+        // accesses to that symbol)
+
+        if (!sym->getScope()->isGlobal()) {
+            unimplementedCode("pushMismatchSymbol NON GLOBAL");
+            return;
+        }
+
+        VarDecl* sym_decl = nullptr;
+
+        if (_mismatch_globals.count(sym)) {
+            // check size
+            for (VarDecl* vd : _mismatch_globals[sym]) {
+                auto existing_size = vd->ghidra_dtype()->getSize();
+                if (vn->getSize() == existing_size) {
+                    // use this one
+                    sym_decl = vd->clone();
+                }
+            }
+        }
+
+        // node->sym not mapped OR we didn't find a size match
+        if (!sym_decl) {
+            sym_decl = new VarDecl(_next_vdecl_id++,
+                "_" + sym->getName(),
+                vn->getType());    // use vnode type, not sym type
+
+            if (_mismatch_globals.count(sym)) {
+                _mismatch_globals[sym].push_back(sym_decl);
+            } else {
+                _mismatch_globals[sym] = {sym_decl};
+            }
+        }
+
+        DeclRefExpr* refexpr = new DeclRefExpr(sym_decl);
+        currentASTNode()->addChild(refexpr);
+        return;
+    }
+    else {
+        unimplementedCode("pushUnnamedLocation in pushMismatchSymbol");
+        return;
+    }
+}
+
+/**
+ * @brief My version of PartialSymbolEntry that contains the data I need
+ * to implement pushPartialSymbol
+ */
+struct ASTPartialSymEntry
+{
+    ASTNode* node;
+    int arr_idx;
+};
+
+void ASTBuilder::pushPartialSymbol(const Symbol *sym,int4 off,int4 sz,
+            const Varnode *vn,const PcodeOp *op,int4 inslot)
+{
+    // We need to print "bottom up" in order to get parentheses right
+    // I.e. we want to print globalstruct.arrayfield[0], rather than
+    //                       globalstruct.(arrayfield[0])
+
+    Datatype *finalcast = (Datatype *)0;
+
+    // for X.Y:
+    /**
+     * MemberExpr
+     * - name=Y
+     * - inner
+     *      DeclRefExpr (X)
+     */
+
+    // for X.Y.Z:
+    /**
+     * MemberExpr
+     * - name=Z
+     * - inner
+     *      MemberExpr
+     *      - name=Y
+     *      - inner
+     *          DeclRefExpr (X)
+     */
+    vector<ASTPartialSymEntry> ast_stack;
+
+    Datatype *ct = sym->getType();
+
+    while(ct) {
+        if (off == 0) {
+            if (sz == 0 || (sz == ct->getSize() && (!ct->needsResolution() || ct->getMetatype()==TYPE_PTR))) {
+                break;
+            }
+        }
+        bool succeeded = false;
+        if (ct->getMetatype()==TYPE_STRUCT) {
+            if (ct->needsResolution() && ct->getSize() == sz) {
+                Datatype *outtype = ct->findResolve(op, inslot);
+                if (outtype == ct) {
+                    break;  // Turns out we don't resolve to the field
+                }
+            }
+            const TypeField *field;
+            field = ct->findTruncation(off,sz,op,inslot,off);
+            if (field) {
+                ast_stack.emplace_back();
+                ASTPartialSymEntry &ast_entry(ast_stack.back());
+                StructType* stype = dynamic_cast<StructType*>(toAstType(ct));
+                if (!stype) {
+                    throw LowlevelError("unable to convert ct to StructType* when metatype == TYPE_STRUCT");
+                }
+                ast_entry.node = new MemberExpr(field->name, field->offset, /*isArrow=*/ false, stype->sid());
+                delete stype;   // saved sid so we're done with it now :)
+
+                ct = field->type;
+                succeeded = true;
+            }
+        } else if (ct->getMetatype() == TYPE_ARRAY) {
+            int4 el;
+            Datatype *arrayof = ((TypeArray *)ct)->getSubEntry(off,sz,&off,&el);
+            if (arrayof) {
+                ast_stack.emplace_back();
+                ASTPartialSymEntry &ast_entry(ast_stack.back());
+                ast_entry.node = new ArraySubscriptExpr();
+                ast_entry.arr_idx = el;
+
+                ct = arrayof;
+                succeeded = true;
+            }
+        } else if (ct->getMetatype() == TYPE_UNION) {
+            unimplementedCode("TYPE_UNION in pushPartialSymbol");
+            succeeded = false;
+
+            // const TypeField *field;
+            // field = ct->findTruncation(off,sz,op,inslot,off);
+            // if (field) {
+            //     stack.emplace_back();
+            //     PartialSymbolEntry &entry(stack.back());
+            //     entry.token = &object_member;       // this is '.' - i.e. X.Y
+            //     entry.field = field;
+            //     entry.parent = ct;
+            //     entry.fieldname = entry.field->name;
+            //     entry.hilite = EmitMarkup::no_color;
+            //     ct = field->type;
+            //     succeeded = true;
+            // } else if (ct->getSize() == sz) {
+            //     break;		// Turns out we don't need to resolve the field
+            // }
+        } else if (inslot >= 0) {
+            Datatype *outtype = vn->getHigh()->getType();
+            if (castStrategy->isSubpieceCastEndian(outtype,ct,off,
+                                sym->getFirstWholeMap()->getAddr().getSpace()->isBigEndian())) {
+                // Treat truncation as SUBPIECE style cast
+                finalcast = outtype;
+                ct = nullptr;
+                succeeded = true;
+            }
+        }
+
+        if (!succeeded) {       // Subtype was not good
+            ast_stack.emplace_back();
+            ASTPartialSymEntry &ast_entry(ast_stack.back());
+            if (sz == 0) {
+                sz = ct->getSize() - off;
+            }
+            ast_entry.node = new MemberExpr(unnamedField(off, sz), off, /*isArrow=*/ false);
+
+            ct = nullptr;
+        }
+    }
+
+    if (finalcast && !option_nocasts) {
+        createTypeCast(finalcast);
+    }
+
+    // we're walking the stack backwards (back->front) and pushing each item
+    // onto the AST top->down. so the last stack entry is the first item to be pushed
+
+    int arr_idx = 0;
+    bool pending_arr_idx = false;   // set this if we need to push an array idx next iteration
+
+    for (int i = ast_stack.size()-1; i >= 0; i--) {
+        currentASTNode()->addChild(ast_stack[i].node);
+
+        // handle a pending arr_idx first because we could have 2 of these in a row X[0][1]
+        if (pending_arr_idx) {
+            IntegerLiteral* lit = new IntegerLiteral(new BuiltinType("int", 4, false, true), arr_idx);
+            currentASTNode()->addChild(lit);
+            pending_arr_idx = false;
+        }
+
+        if (dynamic_cast<ArraySubscriptExpr*>(ast_stack[i].node)) {
+            // push RHS (array index expr) as the 2nd child of this node
+            // (so that has to be done next iteration)
+            pending_arr_idx = true;
+            arr_idx = ast_stack[i].arr_idx;
+        }
+
+        pushASTNode(ast_stack[i].node);     // we'll pop at the end
+    }
+
+    // base symbol name
+    // -> needs to be before the final pending_arr_idx check because if its
+    //    parent is ArraySubscriptExpr the LHS/first child should be sym
+    pushSymbolAST((Symbol*)sym);
+
+    // check one more time in case the final item had a pending idx
+    if (pending_arr_idx) {
+        IntegerLiteral* lit = new IntegerLiteral(new BuiltinType("int", 4, false, true), arr_idx);
+        currentASTNode()->addChild(lit);
+        pending_arr_idx = false;
+    }
+
+    // pop off all the AST nodes we just added
+    for (int i = 0; i < ast_stack.size(); i++) {
+        popASTNode();
+    }
+}
+
+void ASTBuilder::processPendingSymbol(PendingNode* node)
+{
+    /**
+     * CLS: this logic corresponds to pushVnExplicit()/pushVnLHS()
+     * (in the new Ghidra 10.3, looks like this corresponds to pushSymbolDetail)
+     * - when I get to structs/arrays/unnamed locations then need to debug
+     * and make sure I handle appropriately
+     */
+    int4 sym_offset = node->high->getSymbolOffset();
+    if (sym_offset == -1) {
+        // perfect match - all good, process below
+        // I've just kept this to preserve structure similar to
+        // Ghidra code
+        if (!node->sym->getType()->needsResolution()) {
+            pushSymbolAST(node->sym);
+            return;
+        }
+        sym_offset = 0;
+    }
+
+    if (sym_offset + node->vnode->getSize() <= node->sym->getType()->getSize()) {
+        // partial symbol => size+offset
+        // partial: STRUCT FIELDS/ARRAYS!
+        int4 inslot = node->isRead ? node->op->getSlot(node->vnode) : -1;
+        pushPartialSymbol(node->sym, sym_offset, node->vnode->getSize(), node->vnode, node->op, inslot);
+    } else {
+        pushMismatchSymbolAST(node->sym, sym_offset, node->vnode->getSize(), node->vnode, node->op);
+    }
 }
 
 // or processPendingExpressions()
@@ -771,6 +973,7 @@ PendingNode* ASTBuilder::buildNodeLHS(const Varnode* vnode, const PcodeOp* op)
         lhs->vnode = vnode;
         lhs->op = op;
         lhs->mods = mods;   // I don't think this matters here, but just in case
+        lhs->isRead = false;
     }
     else {
         // pushUnnamedLocation
@@ -801,6 +1004,7 @@ void ASTBuilder::emitExpression(const PcodeOp *op)
     }
     else if ((op->doesSpecialPrinting())) {
         // looks like this is for constructors?
+        // TODO: this spot also needs isRead = false!
         unimplementedCode("op->doesSpecialPrinting() in emitExpression");
     }
 
@@ -1496,20 +1700,13 @@ void ASTBuilder::opIntZext(const PcodeOp *op,const PcodeOp *readOp)
 {
     if (castStrategy->isZextCast(op->getOut()->getHighTypeDefFacing(), op->getIn(0)->getHighTypeReadFacing(op))) {
         if (option_hide_exts && castStrategy->isExtensionCastImplied(op, readOp)) {
-            unimplementedCode("opIntZext: hidden func case");
+            opHiddenFunc(op);
         } else {
             processTypeCastExpression(op);
         }
     } else {
         unimplementedCode("opIntZext: opFunc case");
     }
-
-    // PendingExpr* expr = new PendingExpr();
-    // expr->ast_op = currentASTNode();
-    // expr->parts.push_back(
-    //     buildNodeImplied(op->getIn(0), op, mods)
-    // );
-    // _pending_expressions.push_back(expr);
 }
 
 // corresponds to pushType()...just working out how we want to
@@ -2255,18 +2452,9 @@ void ASTBuilder::opPtrsub(const PcodeOp *op)
         } else {
             int4 off = high->getSymbolOffset();
             if (off == 0) {
-                PendingNode node;
-                node.high = high;
-                node.mods = mods;
-                node.node_type = ePendingNodeType::node_symbol;
-                node.op = op;
-                node.sym = symbol;
-                node.vnode = op->getIn(1);
-                // CLS: didn't originally envision this, but need to call this manually
-                // to handle mapping the variable decls
-                processPendingSymbol(&node);
+                pushSymbolAST(symbol);
             } else {
-                unimplementedCode("PTRSUB push partial symbol");
+                pushPartialSymbol(symbol, off, 0, nullptr, op, -1);
             }
         }
 

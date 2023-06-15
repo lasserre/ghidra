@@ -1137,7 +1137,30 @@ void ASTBuilder::emitBlockLs(const BlockList *bl)
 
 void ASTBuilder::emitBlockCondition(const BlockCondition *bl)
 {
-    unimplementedCode("emitBlockCondition");
+    // FIXME: get rid of parens and properly emit && and ||
+    if (isSet(no_branch)) {
+        bl->getBlock(0)->emit(this);
+        return;
+    }
+
+    if (isSet(only_branch) || isSet(comma_separate)) {
+        string opcode = bl->getOpcode() == CPUI_BOOL_AND ? "&&" : "||";
+        BinaryOperator* binop = new BinaryOperator(opcode);
+        currentASTNode()->addChild(binop);
+
+        // generate LHS/RHS of conditional
+        pushASTNode(binop);
+        bl->getBlock(0)->emit(this);    // this should be LHS of binop
+
+        pushMod();
+        unsetMod(only_branch);
+        setMod(comma_separate);     // Notice comma_separate placed only on second block
+
+        bl->getBlock(1)->emit(this);    // this should be RHS of binop
+
+        popMod();
+        popASTNode();   // pop binop
+    }
 }
 
 void ASTBuilder::emitBlockIf(const BlockIf *bl)
@@ -2444,7 +2467,10 @@ void ASTBuilder::opPtrsub(const PcodeOp *op)
             need_to_pop_astnode = true;
         } else {
             // EMIT name
-            unimplementedCode("PTRSUB valeuon case");
+            if (arrayvalue) {
+                // pushOp(subscript)
+                unimplementedCode("PTRSUB valeuon case (arrayvalue = TRUE)");
+            }
         }
 
         if (!symbol) {

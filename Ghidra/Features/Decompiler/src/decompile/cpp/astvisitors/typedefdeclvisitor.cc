@@ -40,7 +40,7 @@ void NewTypedef::addUse(AttachedTypeUpdate* atu, Type* type)
         if (tree_node_uses.count(type)) {
             // TODO: probably want to remove this eventually and just don't add it
             // in this case...but for now I want to make sure this isn't still happening
-            throw LowlevelError("Using the sampe type pointer twice in the AST (did we forget to type->clone() somewhere?)");
+            // throw LowlevelError("Using the sampe type pointer twice in the AST (did we forget to type->clone() somewhere?)");
         } else {
             tree_node_uses[type] = type;
         }
@@ -348,8 +348,17 @@ void* TypedefDeclVisitor::visitParenExpr(ParenExpr* pexpr, void* context)
 
         // we only consider keeping parens if this is part of a binary or unary operation
         if (dynamic_cast<BinaryOperator*>(parent) || dynamic_cast<UnaryOperator*>(parent)) {
-            if (parent->precedence() >= child->precedence()) {
-                // keep parens - don't change anything
+            /** NOTE: my condition here is OPPOSITE from PrintLanguage::parentheses()
+             * because their precedence scale is HIGH number === HIGH precedence (binds more tightly)
+             * my precedence scale is LOW number === HIGH precedence (binds more tightly)
+             *
+             * e.g. for my scale:
+             *          multiply (*) is 5 (binds more tightly than +)
+             *          add (+) is 6 (binds less tightly than *)
+             */
+            if (parent->precedence() <= child->precedence()) {
+                // need parens since parent has higher precedence and binds more tightly
+                // without parens - don't change anything
                 return nullptr;
             }
         }

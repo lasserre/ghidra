@@ -60,7 +60,9 @@ public:
     /**
      * @brief Clone the specialized members associated with this node in the
      * hierarchy. If this gets overriden, it should call ASTNode::clone_my_members()
-     * first
+     * first.
+     *
+     * ANYTHING DELETED SHOULD BE CLONED. ANYTHING NOT DELETED SHOULD NOT BE.
      */
     virtual ASTNode* clone_my_members(ASTNode* node)
     {
@@ -409,7 +411,7 @@ public:
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
-    ValueDecl* _ref;
+    ValueDecl* _ref;    // this points to the original - WE DO NOT OWN
 };
 
 /**
@@ -495,6 +497,12 @@ class IntegerLiteral : public ASTNode
 {
 public:
     IntegerLiteral(Type* type, uintb value);
+    ~IntegerLiteral()
+    {
+        if (_type) {
+            delete _type;
+        }
+    }
     virtual IntegerLiteral* clone_my_members(ASTNode* node);
     virtual IntegerLiteral* clone()
     {
@@ -507,7 +515,7 @@ public:
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
     uintb _value;
-    Type* _type;
+    Type* _type;    // we own this
 };
 
 class LabelStmt : public ASTNode
@@ -922,7 +930,8 @@ public:
     virtual TypedefType* clone_my_members(ASTNode* node)
     {
         auto tdtype = (TypedefType*)Type::clone_my_members(node);
-        tdtype->_decl = _decl->clone();
+        // do not delete: this Decl gets inserted into the AST and we just point!!
+        // tdtype->_decl = _decl->clone();
         return tdtype;
     }
     virtual TypedefType* clone()
@@ -935,7 +944,7 @@ public:
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
-    TypedefDecl* _decl;
+    TypedefDecl* _decl;     // we DO NOT OWN THIS!!!
 };
 
 class UnaryOperator : public ASTNode
@@ -1054,6 +1063,10 @@ class FunctionDecl : public ValueDecl
 {
 public:
     FunctionDecl(int id, Funcdata* fd);
+    ~FunctionDecl()
+    {
+        delete _return_type;
+    }
     virtual FunctionDecl* clone_my_members(ASTNode* node)
     {
         auto fd = (FunctionDecl*)ValueDecl::clone_my_members(node);

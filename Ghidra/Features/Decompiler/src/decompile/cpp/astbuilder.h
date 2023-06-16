@@ -235,7 +235,7 @@ protected:
     void processPendingTemporary(PendingNode* node);
 
     /** @brief Process a pending constant node */
-    void processPendingConstant(PendingNode* node);
+    void processPendingConstant(uintb value, Datatype* dt, const Varnode* vn, const PcodeOp* op);
 
     /** @brief Process a pending terminal node
      * (corresponds to pushVnExplicit) */
@@ -244,7 +244,7 @@ protected:
     /**
      * @brief Process a pending symbol node
      */
-    void processPendingSymbol(PendingNode* node);
+    void processSymbolDetail(PendingNode* node);
 
     void pushSymbolAST(Symbol* sym);
 
@@ -267,7 +267,7 @@ protected:
     bool createPtrCharConstant(TypePointer* pt, uintb value, const Varnode* vn, const PcodeOp* op);
     bool createPtrCodeConstant(TypePointer* pt, uintb value, const Varnode* vn, const PcodeOp* op);
     void processTypeCastExpression(const PcodeOp *op);
-    CStyleCastExpr* createTypeCast(Datatype* dt);
+    CStyleCastExpr* createAndPushTypeCast(Datatype* dt);
 
     /** temp functions for logging spots I need to implement */
     void unimplementedCode(std::string description);

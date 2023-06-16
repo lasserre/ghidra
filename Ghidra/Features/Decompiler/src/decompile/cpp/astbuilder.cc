@@ -83,7 +83,7 @@ public:
     Symbol* sym;
     HighVariable* high;
     uint4 mods;     // save current mod flags like PrintLanguage::recurse()
-    bool isRead;    // for processPendingSymbol (i.e. pushSymbolDetail)
+    bool isRead;    // for processSymbolDetail (i.e. pushSymbolDetail)
 };
 
 PendingNode::PendingNode()
@@ -410,7 +410,7 @@ void ASTBuilder::processPendingNode(PendingNode* node)
 
     switch (node->node_type) {
         case ePendingNodeType::node_symbol:
-            processPendingSymbol(node);
+            processSymbolDetail(node);
             break;
         case ePendingNodeType::node_temporary:
             processPendingTemporary(node);
@@ -509,11 +509,12 @@ bool ASTBuilder::createPtrCodeConstant(TypePointer* pt, uintb value, const Varno
     return false;
 }
 
-void ASTBuilder::processPendingConstant(PendingNode* node)
+void ASTBuilder::processPendingConstant(uintb value, Datatype* dt, const Varnode* vn,
+                                        const PcodeOp* op)
 {
-    auto value = node->vnode->getOffset();
-    HighVariable* high = node->vnode->getHigh();
-    Datatype* dt = high->getType();
+    // auto value = node->vnode->getOffset();
+    // HighVariable* high = node->vnode->getHigh();
+    // Datatype* dt = high->getType();
     Datatype* subtype = nullptr;
 
     /**
@@ -528,7 +529,7 @@ void ASTBuilder::processPendingConstant(PendingNode* node)
         case TYPE_UINT:
         case TYPE_INT:
             if (dt->isCharPrint()) {
-                createCharConstant((TypeChar*)dt, value, node->vnode);
+                createCharConstant((TypeChar*)dt, value, vn);
             }
             else if (dt->isEnumType()) {
                 unimplementedCode("enum constant");
@@ -556,11 +557,11 @@ void ASTBuilder::processPendingConstant(PendingNode* node)
             }
             subtype = ((TypePointer*)dt)->getPtrTo();
             if (subtype->isCharPrint()) {
-                if (createPtrCharConstant((TypePointer*)dt, value, node->vnode, node->op)) {
+                if (createPtrCharConstant((TypePointer*)dt, value, vn, op)) {
                     return;
                 }
             } else if (subtype->getMetatype() == TYPE_CODE) {
-                if (createPtrCodeConstant((TypePointer*)dt, value, node->vnode, node->op)) {
+                if (createPtrCodeConstant((TypePointer*)dt, value, vn, op)) {
                     return;
                 }
             }
@@ -574,13 +575,24 @@ void ASTBuilder::processPendingConstant(PendingNode* node)
             break;  // break out to default print below
     }
 
-    // insert type cast and the literal integer value for the constant
-    CStyleCastExpr* cast = createTypeCast(dt);
-    pushASTNode(cast);
+    if (!option_nocasts) {
+        // insert type cast and the literal integer value for the constant
+        createAndPushTypeCast(dt);
+    }
+
+    pushMod();
+    if (!isSet(force_dec)) {
+        setMod(force_hex);
+    }
     createIntLiteral(dt, value);
-    popASTNode();
+    popMod();
+
+    if (!option_nocasts) {
+        popASTNode();   // CStyleCastExpr
+    }
 }
 
+// corresponds to pushVnExplicit()
 void ASTBuilder::processPendingTerminal(PendingNode* node)
 {
     if (node->vnode->isAnnotation()) {
@@ -589,18 +601,14 @@ void ASTBuilder::processPendingTerminal(PendingNode* node)
     }
 
     if (node->vnode->isConstant()) {
-        processPendingConstant(node);
+        auto vn = node->vnode;
+        auto op = node->op;
+        processPendingConstant(vn->getOffset(),vn->getHighTypeReadFacing(op),vn,op);
         return;
     }
 
-    if (node->sym) {
-        node->isRead = true;    // as passed to pushSymbolDetail() in pushVnExplicit()
-        processPendingSymbol(node);
-    }
-    else {
-        // pushUnnamedLocation
-        unimplementedCode("processPendingTerminal: unnamed location");
-    }
+    node->isRead = true;    // as passed to pushSymbolDetail() in pushVnExplicit()
+    processSymbolDetail(node);
 }
 
 // corresponds to PrintC:pushSymbol()
@@ -610,13 +618,13 @@ void ASTBuilder::pushSymbolAST(Symbol* sym)
     VarDecl* sym_decl = nullptr;
 
     if (_locals.count(sym)) {
-        sym_decl = _locals.at(sym)->clone();
+        sym_decl = _locals.at(sym);     // trying without clone()
     }
     else if (_parameters.count(sym)) {
-        sym_decl = _parameters.at(sym)->clone();
+        sym_decl = _parameters.at(sym);     // trying without clone()
     }
     else if (_globals.count(sym)) {
-        sym_decl = _globals.at(sym)->clone();
+        sym_decl = _globals.at(sym);        // trying without clone()
     }
     else {
         // this is the only way I can figure out so far to "discover" globals
@@ -662,7 +670,7 @@ void ASTBuilder::pushMismatchSymbolAST(Symbol *sym,int4 off,int4 sz,
                 auto existing_size = vd->ghidra_dtype()->getSize();
                 if (vn->getSize() == existing_size) {
                     // use this one
-                    sym_decl = vd->clone();
+                    sym_decl = vd;  // trying without clone()
                 }
             }
         }
@@ -814,8 +822,9 @@ void ASTBuilder::pushPartialSymbol(const Symbol *sym,int4 off,int4 sz,
         }
     }
 
-    if (finalcast && !option_nocasts) {
-        createTypeCast(finalcast);
+    // if (finalcast && !option_nocasts) {
+    if ((finalcast != (Datatype *)0)&&(!option_nocasts)) {
+        createAndPushTypeCast(finalcast);
     }
 
     // we're walking the stack backwards (back->front) and pushing each item
@@ -860,35 +869,41 @@ void ASTBuilder::pushPartialSymbol(const Symbol *sym,int4 off,int4 sz,
     for (int i = 0; i < ast_stack.size(); i++) {
         popASTNode();
     }
+
+    if ((finalcast != (Datatype *)0)&&(!option_nocasts)) {
+        popASTNode();   // createAndPushTypeCast()
+    }
 }
 
-void ASTBuilder::processPendingSymbol(PendingNode* node)
+void ASTBuilder::processSymbolDetail(PendingNode* node)
 {
-    /**
-     * CLS: this logic corresponds to pushVnExplicit()/pushVnLHS()
-     * (in the new Ghidra 10.3, looks like this corresponds to pushSymbolDetail)
-     * - when I get to structs/arrays/unnamed locations then need to debug
-     * and make sure I handle appropriately
-     */
-    int4 sym_offset = node->high->getSymbolOffset();
-    if (sym_offset == -1) {
-        // perfect match - all good, process below
-        // I've just kept this to preserve structure similar to
-        // Ghidra code
-        if (!node->sym->getType()->needsResolution()) {
-            pushSymbolAST(node->sym);
-            return;
-        }
-        sym_offset = 0;
-    }
+    /** CLS: this logic corresponds to pushSymbolDetail */
+    Symbol* sym = node->sym;
 
-    if (sym_offset + node->vnode->getSize() <= node->sym->getType()->getSize()) {
-        // partial symbol => size+offset
-        // partial: STRUCT FIELDS/ARRAYS!
-        int4 inslot = node->isRead ? node->op->getSlot(node->vnode) : -1;
-        pushPartialSymbol(node->sym, sym_offset, node->vnode->getSize(), node->vnode, node->op, inslot);
+    if (!sym) {
+        // pushUnnamedLocation
+        unimplementedCode("processPendingTerminal: unnamed location");
     } else {
-        pushMismatchSymbolAST(node->sym, sym_offset, node->vnode->getSize(), node->vnode, node->op);
+        int4 symboloff = node->high->getSymbolOffset();
+        if (symboloff == -1) {
+            // perfect match - all good, process below
+            // I've just kept this to preserve structure similar to
+            // Ghidra code
+            if (!sym->getType()->needsResolution()) {
+                pushSymbolAST(sym);
+                return;
+            }
+            symboloff = 0;
+        }
+
+        if (symboloff + node->vnode->getSize() <= sym->getType()->getSize()) {
+            // partial symbol => size+offset
+            // partial: STRUCT FIELDS/ARRAYS!
+            int4 inslot = node->isRead ? node->op->getSlot(node->vnode) : -1;
+            pushPartialSymbol(sym, symboloff, node->vnode->getSize(), node->vnode, node->op, inslot);
+        } else {
+            pushMismatchSymbolAST(sym, symboloff, node->vnode->getSize(), node->vnode, node->op);
+        }
     }
 }
 
@@ -965,20 +980,15 @@ PendingNode* ASTBuilder::buildNodeLHS(const Varnode* vnode, const PcodeOp* op)
 
     HighVariable* hv = vnode->getHigh();
     Symbol* sym = hv->getSymbol();
-    if (sym) {
-        lhs = new PendingNode();
-        lhs->node_type = ePendingNodeType::node_symbol;
-        lhs->high = hv;
-        lhs->sym = sym;
-        lhs->vnode = vnode;
-        lhs->op = op;
-        lhs->mods = mods;   // I don't think this matters here, but just in case
-        lhs->isRead = false;
-    }
-    else {
-        // pushUnnamedLocation
-        unimplementedCode("buildNodeLHS: unnamed location");
-    }
+
+    lhs = new PendingNode();
+    lhs->node_type = ePendingNodeType::node_symbol;
+    lhs->high = hv;
+    lhs->sym = sym;
+    lhs->vnode = vnode;
+    lhs->op = op;
+    lhs->mods = mods;   // I don't think this matters here, but just in case
+    lhs->isRead = false;
 
     return lhs;
 }
@@ -996,7 +1006,7 @@ void ASTBuilder::emitExpression(const PcodeOp *op)
 
         // have to process this now/first before RHS or order can be wrong
         pushASTNode(assignment);
-        processPendingNode(lhs);
+        processSymbolDetail(lhs);   // isRead = false set in buildNodeLHS
         popASTNode();
 
         if (lhs)
@@ -1577,27 +1587,51 @@ void ASTBuilder::opBranch(const PcodeOp *op)
 
 void ASTBuilder::opCbranch(const PcodeOp *op)
 {
+    bool yesif = isSet(flat);
+    bool yesparen = !isSet(comma_separate);
     // flipped => we take branch if condition is NOT true
     bool booleanflip = op->isBooleanFlip();
     uint4 m = mods;
 
-    // do some magic checking for how to handle negation case
+    if (yesif) {
+        unimplementedCode("CLS: I thought we wouldn't be running in flat mode?");
+    }
+
+    if (yesparen) {
+        // ParenExpr* parens = new ParenExpr();
+        // currentASTNode()->addChild(parens);
+        // pushASTNode(parens);
+    }
     if (booleanflip) {
+        // do some magic checking for how to handle negation case
         if (checkPrintNegation(op->getIn(1))) {
             m |= PrintLanguage::negatetoken;
             booleanflip = false;
         }
     }
-
     if (booleanflip) {
         /** TODO: prepend/insert boolean NOT operator (!) */
         unimplementedCode("insert boolean NOT operator (!) in opCbranch");
     }
 
+    // this corresponds to pushVn(op->getIn(1)); recurse();
     PendingExpr* expr = new PendingExpr();
     expr->ast_op = currentASTNode();    // should be the IfStmt node
     expr->parts.push_back(buildNodeImplied(op->getIn(1), op, m));
+    // PendingNode* node = buildNodeImplied(op->getIn(1), op, m);
+    /** NOTE: not sure if we should do THIS or processPendingExpressions() */
+    // processPendingNode(node);
     _pending_expressions.push_back(expr);
+    processExpressionStack();
+    // delete node;
+
+    if (yesparen) {
+        // popASTNode();   // parens
+    }
+
+    if (yesif) {
+        unimplementedCode("CLS: I thought we wouldn't be running in flat mode? (2nd location)");
+    }
 }
 
 void ASTBuilder::opBranchind(const PcodeOp *op)
@@ -1852,24 +1886,31 @@ std::string ASTBuilder::getTypeStringEnd(const Datatype* dt)
     return type_str;
 }
 
-CStyleCastExpr* ASTBuilder::createTypeCast(Datatype* dt)
+// creates, adds, and pushed the type cast to the AST
+CStyleCastExpr* ASTBuilder::createAndPushTypeCast(Datatype* dt)
 {
     CStyleCastExpr* cast = new CStyleCastExpr(toAstType(dt));
     currentASTNode()->addChild(cast);
+    pushASTNode(cast);
     return cast;
 }
 
 // this corresponds to opTypeCast(op)
 void ASTBuilder::processTypeCastExpression(const PcodeOp* op)
 {
-    Datatype* dt = op->getOut()->getHigh()->getType();
-    auto cast = createTypeCast(dt);
+    if (!option_nocasts) {
+        createAndPushTypeCast(op->getOut()->getHighTypeDefFacing());
+    }
 
     PendingExpr* expr = new PendingExpr();
-    expr->ast_op = cast;
+    expr->ast_op = currentASTNode();
     PendingNode* node = buildNodeImplied(op->getIn(0), op, mods);
     expr->parts.push_back(node);
     _pending_expressions.push_back(expr);
+
+    if (!option_nocasts) {
+        popASTNode();   // CStyleCastExpr
+    }
 }
 
 Type* ASTBuilder::toAstType(const Datatype* dt)
@@ -1939,8 +1980,8 @@ void ASTBuilder::opHiddenFunc(const PcodeOp *op)
 
 void ASTBuilder::opIntSext(const PcodeOp *op,const PcodeOp *readOp)
 {
-    Datatype* outType = op->getOut()->getHigh()->getType();
-    Datatype* inType = op->getIn(0)->getHigh()->getType();
+    Datatype* outType = op->getOut()->getHighTypeDefFacing();
+    Datatype* inType = op->getIn(0)->getHighTypeReadFacing(op);
     if (castStrategy->isSextCast(outType, inType)) {
         /** QUESTION: does option_hide_exts even make sense here? */
         if (option_hide_exts && castStrategy->isExtensionCastImplied(op, readOp)) {
@@ -1959,6 +2000,7 @@ void ASTBuilder::opIntSext(const PcodeOp *op,const PcodeOp *readOp)
 void ASTBuilder::unaryOperator(string opcode, const PcodeOp* op)
 {
     UnaryOperator* unop = new UnaryOperator(opcode);
+    currentASTNode()->addChild(unop);
 
     PendingExpr* expr = new PendingExpr();
     expr->ast_op = unop;

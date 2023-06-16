@@ -57,7 +57,7 @@ ASTNode::~ASTNode()
 bool needsParens(ASTNode* parent, ASTNode* child)
 {
     if (dynamic_cast<CallExpr*>(parent) || dynamic_cast<ArraySubscriptExpr*>(parent)
-        || dynamic_cast<ParenExpr*>(parent)) {
+        || dynamic_cast<ParenExpr*>(parent) || dynamic_cast<IfStmt*>(parent)) {
         // call expressions, array subscripts, and parenthetical expressions
         //  already have parentheses or brackets so we don't need to add more!
         return false;
@@ -72,8 +72,10 @@ bool needsParens(ASTNode* parent, ASTNode* child)
             // needs parens if not on side that's eval'd first
             return !child_on_first_eval_side;
         } else {
-            // lower CHILD precedence -> need parens!
+            // lower CHILD precedence (bigger magnitude) -> need parens!
             // (remember, highest is 1, lowest is 17...)
+            //      HIGH precedence = 1 => small magnitude
+            //      LOW precedence = 17 => big magnitude
             return child->precedence() > parent->precedence();
         }
     }
@@ -82,6 +84,12 @@ bool needsParens(ASTNode* parent, ASTNode* child)
 
 void ASTNode::addChild(ASTNode* child, bool append /*= true*/, bool check_parens /*= true*/)
 {
+    // verify this child pointer is not already in our children list
+    bool child_in_list = std::find(_children.begin(), _children.end(), child) != _children.end();
+    if (child_in_list) {
+        throw LowlevelError("Attempting to add the same child multiple times!!");
+    }
+
     if (check_parens) {
         if (!append && _children.size() > 0) {
             // ERROR: this won't work if we mess with the order of children!
@@ -120,8 +128,8 @@ ASTNode* ASTNode::replaceWith(ASTNode* new_node)
     }
 
     // 1. make new node point to parent/children
-    new_node->_parent = _parent;
-    new_node->_children = _children;    // copy children vector over (child pointers ok to stay as-is)
+    new_node->_parent = this->_parent;
+    new_node->_children = this->_children;    // copy children vector over (child pointers ok to stay as-is)
 
     // 2. make children point to new_node
     for (ASTNode* child : new_node->_children) {
@@ -137,7 +145,8 @@ ASTNode* ASTNode::replaceWith(ASTNode* new_node)
 
     // reset this node's children vector, otherwise deleting it
     // will delete old children pointers hanging around
-    _children = {};
+    this->_children = {};
+    this->_parent = nullptr;
 
     return this;
 }
@@ -280,6 +289,7 @@ CharacterLiteral::CharacterLiteral(BuiltinType* type, uintb value)
 CharacterLiteral* CharacterLiteral::clone_my_members(ASTNode* node)
 {
     auto lit = (CharacterLiteral*)ASTNode::clone_my_members(node);
+    // CLS: this is ok because we OWN it and it doesn't exist elsewhere in the AST
     lit->_type = _type->clone();
     return lit;
 }
@@ -320,6 +330,7 @@ CStyleCastExpr::CStyleCastExpr(Type* type)
 CStyleCastExpr* CStyleCastExpr::clone_my_members(ASTNode* node)
 {
     auto cast = (CStyleCastExpr*)ASTNode::clone_my_members(node);
+    // OK because we own _type (it doesn't exist elsewhere in the AST)
     cast->_type = _type->clone();
     return cast;
 }
@@ -337,7 +348,8 @@ DeclRefExpr::DeclRefExpr(ValueDecl* referencedDecl)
 DeclRefExpr* DeclRefExpr::clone_my_members(ASTNode* node)
 {
     auto declref = (DeclRefExpr*)ASTNode::clone_my_members(node);
-    declref->_ref = _ref->clone();
+    // CLS: don't clone - we do not own this memory
+    // declref->_ref = _ref->clone();
     return declref;
 }
 

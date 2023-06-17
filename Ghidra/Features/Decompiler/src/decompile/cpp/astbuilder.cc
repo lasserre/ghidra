@@ -148,7 +148,7 @@ ASTBuilder::ASTBuilder(Architecture* ghidra, string logfolder)
     _head_translation_unit(nullptr), _next_vdecl_id(0),
     _original_ghidra_printlang_name(ghidra->print->getName())
 {
-    // TODO: initialize AST callbacks...
+    // initialize AST callbacks...
     _ast_callbacks.toAstTypeCallback = [this](const Datatype* dt) {
         return this->toAstType(dt);
         // return ((ASTBuilder*)context)->toAstType(dt);
@@ -487,24 +487,247 @@ void ASTBuilder::processPendingTemporary(PendingNode* node)
     }
 }
 
-void ASTBuilder::createIntLiteral(Datatype* dt, uintb value)
+bool ASTBuilder::pushEquate(uintb val,int4 sz,const EquateSymbol *sym, const Varnode *vn,const PcodeOp *op)
 {
-    IntegerLiteral* lit = new IntegerLiteral(toAstType(dt), value);
+    uintb mask = calc_mask(sz);
+    uintb baseval = sym->getValue();
+    uintb modval = baseval & mask;
+    if (modval != baseval) {                    // If 1-bits are getting masked
+        if (sign_extend(modval,sz,sizeof(uintb)) != baseval) {  // make sure we only mask sign extension bits
+            return false;
+        }
+    }
+    if (modval == val) {
+        pushSymbolAST(const_cast<EquateSymbol*>(sym));
+        return true;
+    }
+    modval = (~baseval) & mask;
+    if (modval == val) {        // Negation
+        UnaryOperator* unop = new UnaryOperator("~");
+        currentASTNode()->addChild(unop);
+        pushASTNode(unop);
+        pushSymbolAST(const_cast<EquateSymbol*>(sym));
+        popASTNode();
+        return true;
+    }
+    modval = (-baseval) & mask;
+    if (modval == val) {        // twos complement
+        UnaryOperator* unop = new UnaryOperator("-");
+        currentASTNode()->addChild(unop);
+        pushASTNode(unop);
+        pushSymbolAST(const_cast<EquateSymbol*>(sym));
+        popASTNode();
+        return true;
+    }
+    modval = (baseval + 1) & mask;
+    if (modval == val) {
+        BinaryOperator* binop = new BinaryOperator("+");
+        currentASTNode()->addChild(binop);
+        pushASTNode(binop);
+        pushSymbolAST(const_cast<EquateSymbol*>(sym));
+        push_integer(1, sz, false, (const Varnode *)0, (const PcodeOp *)0);
+        popASTNode();
+        return true;
+    }
+    modval = (baseval - 1) & mask;
+    if (modval == val) {
+        BinaryOperator* binop = new BinaryOperator("-");
+        currentASTNode()->addChild(binop);
+        pushASTNode(binop);
+        pushSymbolAST(const_cast<EquateSymbol*>(sym));
+        push_integer(1, sz, false, (const Varnode *)0, (const PcodeOp *)0);
+        popASTNode();
+        return true;
+    }
+    return false;
+}
+
+// have to mirror some of this logic because it could result in a call to pushEquate()
+void ASTBuilder::push_integer(uintb val,int4 sz,bool sign, const Varnode *vn,const PcodeOp *op)
+{
+    push_integer(nullptr, val, sz, sign, vn, op);
+}
+
+void ASTBuilder::push_integer(Datatype* dt, uintb val,int4 sz,bool sign, const Varnode *vn,const PcodeOp *op)
+{
+    bool print_negsign;
+    bool force_unsigned_token;
+    bool force_sized_token;
+    uint4 displayFormat = 0;
+
+    force_unsigned_token = false;
+    force_sized_token = false;
+    if ((vn != (const Varnode *)0)&&(!vn->isAnnotation())) {
+        HighVariable *high = vn->getHigh();
+        Symbol *sym = high->getSymbol();
+        if (sym) {
+            if (sym->isNameLocked() && (sym->getCategory() == Symbol::equate)) {
+                if (pushEquate(val,sz,(EquateSymbol *)sym,vn,op)) {
+                    return;
+                }
+            }
+            displayFormat = sym->getDisplayFormat();
+        }
+        force_unsigned_token = vn->isUnsignedPrint();
+        force_sized_token = vn->isLongPrint();
+        if (displayFormat == 0) {   // The symbol's formatting overrides any formatting on the data-type
+            displayFormat = high->getType()->getDisplayFormat();
+        }
+    }
+    if (sign && displayFormat != Symbol::force_char) { // Print the constant as signed
+        uintb mask = calc_mask(sz);
+        uintb flip = val^mask;
+        print_negsign = (flip < val);
+        if (print_negsign) {
+            val = flip+1;
+        }
+        force_unsigned_token = false;
+    }
+    else {
+        print_negsign = false;
+    }
+
+                    // Figure whether to print as hex or decimal
+    if (displayFormat != 0) {
+        // Format is forced by the Symbol
+    }
+    else if ((mods & force_hex)!=0) {
+        displayFormat = Symbol::force_hex;
+    }
+    else if ((val<=10)||((mods & force_dec))) {
+        displayFormat = Symbol::force_dec;
+    }
+    else {			// Otherwise decide if dec or hex is more natural
+        displayFormat = (PrintLanguage::mostNaturalBase(val)==16) ? Symbol::force_hex : Symbol::force_dec;
+    }
+
+    ostringstream t;
+    if (print_negsign) {
+        t << '-';   // original PrintC code, doesn't matter here but keeping for clarity
+
+        /**
+         * CLS: this explicitly turns into a UnaryOperator '-' in the AST so
+         * generate it that way here
+         * (and thus we also have to compute the two's complement magnitude
+         * since we are rendering -MAGNITUDE instead of TWOS_COMPL_VALUE)
+        */
+        UnaryOperator* unop = new UnaryOperator("-");
+        currentASTNode()->addChild(unop);
+
+        // compute magnitude of negative 2's complement number
+        // int magnitude = (~val) + 1;
+
+        Type* int_dt = dt ? toAstType(dt) : new BuiltinType("int", 4, false, true);
+        IntegerLiteral* lit = new IntegerLiteral(int_dt, val);
+        unop->addChild(lit);
+        return;
+    }
+    if (displayFormat == Symbol::force_hex)
+        t << hex << "0x" << val;
+    else if (displayFormat == Symbol::force_dec)
+        t << dec << val;
+    else if (displayFormat == Symbol::force_oct)
+        t << oct << '0' << val;
+    else if (displayFormat == Symbol::force_char) {
+        // need to push a char literal for this case
+        BuiltinType* builtin = new BuiltinType("char", 1, false, true);
+        CharacterLiteral* chr = new CharacterLiteral(builtin, val);
+        currentASTNode()->addChild(chr);
+
+        // printing details we don't care about...
+        // if (doEmitWideCharPrefix() && sz > 1) {
+        //     t << 'L';			// Print symbol indicating wide character
+        // }
+        // t << '\'';			// char is surrounded with single quotes
+        // if (sz == 1 && val >= 0x80) {
+        //     printCharHexEscape(t,(int4)val);
+        // }
+        // else {
+        //     printUnicode(t,(int4)val);
+        // }
+        // t << '\'';
+    }
+    else {	// Must be Symbol::force_bin
+        t << "0b";
+        formatBinary(t, val);
+    }
+    if (force_unsigned_token)
+        t << 'U';			// Force unsignedness explicitly
+    if (force_sized_token)
+        t << sizeSuffix;
+
+    // push int literal
+    Type* int_dt = dt ? toAstType(dt) : new BuiltinType("int", 4, false, true);
+    IntegerLiteral* lit = new IntegerLiteral(int_dt, val);
     currentASTNode()->addChild(lit);
 }
 
-void ASTBuilder::createCharConstant(Datatype* dt, uintb value, const Varnode* vn)
+void ASTBuilder::createCharConstant(Datatype* ct, uintb val, const Varnode* vn, const PcodeOp* op)
 {
-    BuiltinType* builtin = new BuiltinType(dt);
-    CharacterLiteral* chr = new CharacterLiteral(builtin, value);
+    uint4 displayFormat = 0;
+    bool isSigned = (ct->getMetatype() == TYPE_INT);
+
+    if (vn && (!vn->isAnnotation())) {
+        HighVariable *high = vn->getHigh();
+        Symbol *sym = high->getSymbol();
+        if (sym) {
+            if (sym->isNameLocked() && (sym->getCategory() == Symbol::equate)) {
+                if (pushEquate(val,vn->getSize(),(EquateSymbol *)sym,vn,op)) {
+                    return;
+                }
+            }
+            displayFormat = sym->getDisplayFormat();
+        }
+        if (displayFormat == 0) {
+            displayFormat = high->getType()->getDisplayFormat();
+        }
+    }
+    if (displayFormat != 0 && displayFormat != Symbol::force_char) {
+        if (!castStrategy->caresAboutCharRepresentation(vn, op)) {
+            push_integer(val, ct->getSize(), isSigned, vn, op);
+            return;
+        }
+    }
+    if ((ct->getSize()==1)&&(val >= 0x80)) {
+        // For byte characters, the encoding is assumed to be ASCII, UTF-8, or some other
+        // code-page that extends ASCII. At 0x80 and above, we cannot treat the value as a
+        // unicode code-point. Its either part of a multi-byte UTF-8 encoding or an unknown
+        // code-page value. In either case, we print as an integer or an escape sequence.
+        if (displayFormat != Symbol::force_hex && displayFormat != Symbol::force_char) {
+            push_integer(val, 1, isSigned, vn, op);
+            return;
+        }
+        displayFormat = Symbol::force_hex;	// Fallthru but force a hex representation
+    }
+
+    BuiltinType* builtin = new BuiltinType(ct);
+    CharacterLiteral* chr = new CharacterLiteral(builtin, val);
     currentASTNode()->addChild(chr);
-    // CLS: is this sufficient? or do we need to go handle all the cases
-    // and print formats like Ghidra does?
-    // -> for now let's try this, I think it might be sufficient since the
-    //    Ghidra code is primarily display-oriented. If we need to we can
-    //    come back and add some logic back in if it e.g. changes data types
-    //    to int in some cases (also the EquateSymbol case)
-    //    If so, just reuse their functions and convert the stringstream
+
+    /**
+     * below here is original code from PrintC::pushCharConstant()
+     * ----------
+     * CLS: from here below the logic is related to printing/formatting the
+     * character, so I think we can ignore and simply generate a CharacterLiteral
+     * here (whereas above we possibly generate an IntegerLiteral, etc)
+     */
+    // ostringstream t;
+    // // From here we assume, the constant value is a direct unicode code-point.
+    // // The value could be an illegal code-point (surrogates or beyond the max code-point),
+    // // but this will just be emitted as an escape sequence.
+    // if (doEmitWideCharPrefix() && ct->getSize() > 1) {
+    //     t << 'L';       // Print symbol indicating wide character
+    // }
+    // t << '\'';          // char is surrounded with single quotes
+    // if (displayFormat == Symbol::force_hex) {
+    //     printCharHexEscape(t,(int4)val);
+    // }
+    // else {
+    //     printUnicode(t,(int4)val);
+    // }
+
+    // t << '\'';
+    // pushAtom(Atom(t.str(),vartoken,EmitMarkup::const_color,op,vn));
 }
 
 bool ASTBuilder::createPtrCharConstant(TypePointer* pt, uintb value, const Varnode* vn, const PcodeOp* op)
@@ -558,6 +781,7 @@ bool ASTBuilder::createPtrCodeConstant(TypePointer* pt, uintb value, const Varno
     return false;
 }
 
+// corresponds to pushConstant()
 void ASTBuilder::processPendingConstant(uintb value, Datatype* dt, const Varnode* vn,
                                         const PcodeOp* op)
 {
@@ -578,17 +802,17 @@ void ASTBuilder::processPendingConstant(uintb value, Datatype* dt, const Varnode
         case TYPE_UINT:
         case TYPE_INT:
             if (dt->isCharPrint()) {
-                createCharConstant((TypeChar*)dt, value, vn);
+                createCharConstant((TypeChar*)dt, value, vn, op);
             }
             else if (dt->isEnumType()) {
                 unimplementedCode("enum constant");
             }
             else {
-                createIntLiteral(dt, value);  // int/uint
+                push_integer(dt, value, dt->getSize(), !is_uint, vn, op);
             }
             return;
         case TYPE_UNKNOWN:
-            createIntLiteral(dt, value);
+            push_integer(dt, value, dt->getSize(), false, vn, op);
             return;
         case TYPE_BOOL:
             unimplementedCode("bool constant");
@@ -633,7 +857,7 @@ void ASTBuilder::processPendingConstant(uintb value, Datatype* dt, const Varnode
     if (!isSet(force_dec)) {
         setMod(force_hex);
     }
-    createIntLiteral(dt, value);
+    push_integer(dt, value, dt->getSize(), false, vn, op);
     popMod();
 
     if (!option_nocasts) {

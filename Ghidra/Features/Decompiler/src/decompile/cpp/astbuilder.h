@@ -271,6 +271,9 @@ protected:
     virtual void pushPartialSymbol(const Symbol *sym,int4 off,int4 sz,
             const Varnode *vn,const PcodeOp *op,int4 inslot);
 
+    virtual bool pushEquate(uintb val,int4 sz,const EquateSymbol *sym,
+                const Varnode *vn,const PcodeOp *op);
+
     /**
      * @brief Recursively process the expression stack, converting each
      * expression into ASTNodes and adding sub-expressions to the stack
@@ -278,8 +281,12 @@ protected:
      */
     void processExpressionStack();
 
-    void createIntLiteral(Datatype* dt, uintb value);
-    void createCharConstant(Datatype* dt, uintb value, const Varnode* vn);
+    // override PrintC::push_integer for when we don't know the datatype
+    virtual void push_integer(uintb val,int4 sz,bool sign, const Varnode *vn,const PcodeOp *op);
+    // this is the version to call if we DO know the datatype
+    void push_integer(Datatype* dt, uintb val,int4 sz,bool sign, const Varnode *vn,const PcodeOp *op);
+
+    void createCharConstant(Datatype* ct, uintb val, const Varnode* vn, const PcodeOp* op);
     bool createPtrCharConstant(TypePointer* pt, uintb value, const Varnode* vn, const PcodeOp* op);
     bool createPtrCodeConstant(TypePointer* pt, uintb value, const Varnode* vn, const PcodeOp* op);
     void processTypeCastExpression(const PcodeOp *op);

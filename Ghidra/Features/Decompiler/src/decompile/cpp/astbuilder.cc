@@ -9,6 +9,36 @@
 
 using namespace std;
 
+// Constructing this registers the capability
+ASTBuilderCapability ASTBuilderCapability::astBuilderCapability;
+
+ASTBuilderCapability::ASTBuilderCapability()
+{
+    name = "ast-builder";
+    isdefault = false;
+}
+
+/** CLS HACK:
+ * This is NOT the right way to do this...but I need to satisfy their interface
+ * and I don't want to change the way I have things set up. So the effect
+ * of this hack is:
+ *
+ * 1) this is not designed to be used any other way than the way I'm using
+ *    it right now (exportFunctionAst from ghidra_process.cc when the
+ *    GHIDRA_AST_CONFIG_FILE env var is set)
+ * 2) if you try and construct an "ast-builder" PrintLanguage generically
+ *    right now (although it will be properly registered) this will likely
+ *    fail. I'm abusing their system to reuse ghidra Architecture's "print"
+ *    member initialization (which gets called in ghidra->setLanguage())
+ *    SO THAT MY STATE MATCHES AND I GET THE SAME AST RESULTS - that's the
+ *    only reason I care.
+*/
+ASTBuilder* _builder_ptr = nullptr;
+PrintLanguage* ASTBuilderCapability::buildLanguage(Architecture* glb)
+{
+    return _builder_ptr;
+}
+
 static int _count_unimpl_stuff = 0;
 void ASTBuilder::unimplementedCode(std::string description)
 {
@@ -115,7 +145,8 @@ struct PendingExpr
 
 ASTBuilder::ASTBuilder(Architecture* ghidra, string logfolder)
     : PrintC(ghidra), _logfolder(logfolder),
-    _head_translation_unit(nullptr), _next_vdecl_id(0)
+    _head_translation_unit(nullptr), _next_vdecl_id(0),
+    _original_ghidra_printlang_name(ghidra->print->getName())
 {
     // TODO: initialize AST callbacks...
     _ast_callbacks.toAstTypeCallback = [this](const Datatype* dt) {
@@ -127,6 +158,24 @@ ASTBuilder::ASTBuilder(Architecture* ghidra, string logfolder)
     };
 
     initASTCallbacks(&_ast_callbacks);
+
+    // this must be set before setPrintLanguage() is called so that ghidra
+    // gets the proper handle to US
+    _builder_ptr = this;
+    /** NOTE: if this doesn't work because ghidra can't properly recover from
+     * switching back and forth then I can do a full copy of ghidra and call
+     * ghidra->init() the same way to create a parallel universe that is separate :)
+     *
+     * there is code that calls setPrintLanguage() already, so one would think this
+     * has been tested and works...but just in case
+    */
+    ghidra->setPrintLanguage("ast-builder");
+}
+
+ASTBuilder::~ASTBuilder()
+{
+    glb->setPrintLanguage(_original_ghidra_printlang_name);
+    _builder_ptr = nullptr;     // reset just so we can tell if something is going wrong
 }
 
 /**

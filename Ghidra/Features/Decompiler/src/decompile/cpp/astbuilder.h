@@ -24,6 +24,21 @@ template<typename T> string to_hex(T data);
  */
 string ensureValidFilename(string filename);
 
+/// \brief Factory and static initializer for the "ast-builder" back-end to the decompiler
+///
+/// The singleton adds itself to the list of possible back-end languages for the decompiler.
+/// I needed this because there was state that wasn't getting initialized properly just
+/// pointing to PrintC's ghidra architecture pointer (they reach inside each other
+/// because tight coupling is great :P)
+class ASTBuilderCapability : public PrintLanguageCapability {
+  static ASTBuilderCapability astBuilderCapability;     ///< The singleton instance
+  ASTBuilderCapability(void);                       ///< Initialize the singleton
+  ASTBuilderCapability(const ASTBuilderCapability &op2);                ///< Not implemented
+  ASTBuilderCapability &operator=(const ASTBuilderCapability &op);      ///< Not implemented
+public:
+  virtual PrintLanguage *buildLanguage(Architecture *glb);
+};
+
 class ASTBuilder : public PrintC
 {
 public:
@@ -35,6 +50,7 @@ public:
      * contains the function body statements
      */
     ASTBuilder(Architecture* ghidra, string logfolder);
+    ~ASTBuilder();
 
     /**
      * --------------------------------------------------------------
@@ -319,6 +335,7 @@ protected:
     string _logfolder;
     ofstream _logfile;  // log unimplemented code for review
     ASTCallbacks _ast_callbacks;
+    string _original_ghidra_printlang_name;     // save so we can restore at the end
 };
 
 /**

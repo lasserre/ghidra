@@ -1493,6 +1493,11 @@ void ASTBuilder::emitBlockIf(const BlockIf *bl)
         popASTNode();   // then block
 
         // ELSE BLOCK
+        // NOTE: clang behaves inconsistently (it appears) - sometimes generating
+        // a CompoundStmt and sometimes not when there is only one child statement
+        // in an else block
+        // -> so we just have to account for it in validation and we'll always generate
+        // a CompoundStmt with 1 or more children
         if (bl->getSize() > 2) {
             CompoundStmt* else_block_ast = new CompoundStmt();
             if_stmt->addChild(else_block_ast);

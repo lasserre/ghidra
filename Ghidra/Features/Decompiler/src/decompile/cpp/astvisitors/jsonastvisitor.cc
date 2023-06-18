@@ -494,3 +494,10 @@ void* JsonASTVisitor::visitVarDecl(VarDecl* vd, void* context)
     var_decl["name"] = vd->name();
     return copy_to_parent(var_decl, context);
 }
+
+void* JsonASTVisitor::visitWhileStmt(WhileStmt* ws, void* context)
+{
+    json ws_j;
+    ws_j["kind"] = "WhileStmt";
+    return copy_to_parent(ws_j, context);
+}

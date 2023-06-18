@@ -74,6 +74,7 @@ public:
     virtual void* visitUnaryOperator(UnaryOperator*, void*);
     virtual void* visitValueDecl(ValueDecl*, void*);
     virtual void* visitVarDecl(VarDecl*, void*);
+    virtual void* visitWhileStmt(WhileStmt*, void*);
 
     inline json& get_json() { return _ast_json; }
 

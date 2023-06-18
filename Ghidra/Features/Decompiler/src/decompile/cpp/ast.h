@@ -103,6 +103,16 @@ public:
      */
     ASTNode* replaceWith(ASTNode* new_node);
 
+    /**
+     * @brief Removes this node and replaces it with new_node in the AST.
+     * The difference from replaceWith() is that this function ONLY replaces
+     * this node with new_node but leaves both nodes' children alone...so
+     * this can be useful to move subtrees around.
+     *
+     * When this function returns, this node's parent will be nullptr
+     */
+    ASTNode* replaceWithNodeShallow(ASTNode* new_node);
+
     void accept(ASTVisitor*, void* context=nullptr);
 
     /**
@@ -674,6 +684,27 @@ public:
     virtual TranslationUnitDecl* clone()
     {
         return (TranslationUnitDecl*)clone_my_members(new TranslationUnitDecl(*this));
+    }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+};
+
+/**
+ * WhileStmt children are:
+ * [- Condition variable (DeclStmt)] << clang has this, I don't think we need it
+ * bc I don't think Ghidra generates this form (wait until proven wrong to implement :))
+ * - Condition
+ * - Body
+ */
+class WhileStmt : public ASTNode
+{
+public:
+    WhileStmt()
+    { }
+    virtual WhileStmt* clone()
+    {
+        return (WhileStmt*)clone_my_members(new WhileStmt(*this));
     }
 
 protected:

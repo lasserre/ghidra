@@ -138,9 +138,14 @@ ASTNode* ASTNode::replaceWith(ASTNode* new_node)
 
     // 3. make parent point to new_node (if this is not the HEAD with null parent)
     if (_parent) {
-        std::replace(_parent->_children.begin(),
-                    _parent->_children.end(),
-                    this, new_node);
+        for (int i = 0; i < _parent->_children.size(); i++) {
+            if (_parent->_children[i] == this) {
+                _parent->_children[i] = new_node;
+            }
+        }
+        // std::replace(_parent->_children.begin(),
+        //             _parent->_children.end(),
+        //             this, new_node);
     }
 
     // reset this node's children vector, otherwise deleting it
@@ -148,6 +153,25 @@ ASTNode* ASTNode::replaceWith(ASTNode* new_node)
     this->_children = {};
     this->_parent = nullptr;
 
+    return this;
+}
+
+ASTNode* ASTNode::replaceWithNodeShallow(ASTNode* new_node)
+{
+    // 1. make new node point to parent
+    new_node->_parent = this->_parent;
+
+    // 2. make parent point to new node
+    for (int i = 0; i < _parent->_children.size(); i++) {
+        if (_parent->_children[i] == this) {
+            _parent->_children[i] = new_node;
+            break;
+        }
+    }
+
+    // 3. leave this/new_node's children alone :)
+    // 4. reset this node's parent to NULL
+    this->_parent = nullptr;
     return this;
 }
 
@@ -516,6 +540,11 @@ TranslationUnitDecl::TranslationUnitDecl()
 void* TranslationUnitDecl::doAccept(ASTVisitor* v, void* context)
 {
     return v->visitTranslationUnitDecl(this, context);
+}
+
+void* WhileStmt::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitWhileStmt(this, context);
 }
 
 Type::Type(const Datatype* dt)

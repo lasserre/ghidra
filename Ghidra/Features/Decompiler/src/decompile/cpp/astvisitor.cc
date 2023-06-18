@@ -202,3 +202,8 @@ void* ASTVisitor::visitVarDecl(VarDecl*, void*)
 {
     return nullptr;
 }
+
+void* ASTVisitor::visitWhileStmt(WhileStmt*, void*)
+{
+    return nullptr;
+}

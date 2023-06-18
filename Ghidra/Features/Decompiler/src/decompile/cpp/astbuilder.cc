@@ -1313,7 +1313,8 @@ static string getRegName(const Varnode* vn)
 
 void ASTBuilder::emitBlockBasic(const BlockBasic *bb)
 {
-    emitLabelStatement(bb);
+    LabelStmt* label = emitLabelStatement(bb);
+
     if (isSet(only_branch)) {
         const PcodeOp* instr = bb->lastOp();
         if (instr->isBranch()) {
@@ -1321,6 +1322,9 @@ void ASTBuilder::emitBlockBasic(const BlockBasic *bb)
         }
     }
     else {
+        BinaryOperator* comma_op = nullptr;
+        bool separator = false;
+
         for (PcodeOp* instr : getPcodeOps(bb)) {
 
             if (instr->notPrinted()) {
@@ -1340,16 +1344,46 @@ void ASTBuilder::emitBlockBasic(const BlockBasic *bb)
             const Varnode* vnode = instr->getOut();
             if (vnode && vnode->isImplied()) {
                 // skip Pcode instruction with implied result
-                string regname = getRegName(vnode);
+                // string regname = getRegName(vnode);
                 continue;
+            }
+            if (separator) {
+                if (isSet(comma_separate)) {
+                    // this code structure mirrors Ghidra code, which is generating
+                    // the comma in PRINT ORDER, not in AST order
+                    // If we get here, the comma operator should have been the parent
+                    // of the node we just generated - which I think at this location
+                    // will be the last child of the currentASTNode() since we
+                    // are pushing instruction by instruction into whatever currentASTNode()
+                    // already existed
+                    ASTNode* current_node = currentASTNode();
+                    ASTNode* lhs = current_node->children()->back();
+
+                    if (comma_op) {
+                        throw LowlevelError("We are hitting a 2nd comma operator! Need to add code to handle this");
+                    }
+                    comma_op = new BinaryOperator(",");
+                    lhs->replaceWithNodeShallow(comma_op);
+                    comma_op->addChild(lhs);   // can't access current's parent now
+                    pushASTNode(comma_op);
+                }
             }
 
             emitExpression(instr);
+            separator = true;
+        }
+
+        if (comma_op) {
+            popASTNode();   // BinaryOperator(",")
         }
 
         // CLS: note we don't need to worry about if flat is set, since that
         // is an option to not print structured code, just using gotos and
         // labels for everything (not applicable for our AST)
+    }
+
+    if (label) {
+        popASTNode();   // LabelStmt
     }
 }
 
@@ -1690,7 +1724,82 @@ void ASTBuilder::emitBlockWhileDo(const BlockWhileDo *bl)
         return;
     }
 
-    unimplementedCode("emitBlockWhileDo");
+    const PcodeOp *op;
+    int4 indent;
+
+    // whiledo block NEVER prints final branch
+
+    pushMod();
+    unsetMod(no_branch|only_branch);
+    LabelStmt* label = emitAnyLabelStatement(bl);
+    FlowBlock *condBlock = bl->getBlock(0);
+    op = condBlock->lastOp();
+    WhileStmt* whilestmt = new WhileStmt();
+    currentASTNode()->addChild(whilestmt);
+    pushASTNode(whilestmt);
+
+    if (bl->hasOverflowSyntax()) {
+        // Print conditional block as
+        //     while( true ) {
+        //       conditionbody ...
+        //       if (conditionalbranch) break;
+
+        /**
+         * CLS: putting this placeholder here simply to make it easy to see
+         * (with an actual test case) what the clang AST does for the "true"
+         * bool literal part (is this a bool literal? something else?)
+        */
+        unimplementedCode("emitBlockWhileDo - hasOverflowSyntax");
+        popASTNode();   // WhileStmt
+        return;
+        // emit->tagLine();
+        // emit->tagOp(KEYWORD_WHILE,EmitMarkup::keyword_color,op);
+        // int4 id1 = emit->openParen(OPEN_PAREN);
+        // emit->spaces(1);
+        // emit->print(KEYWORD_TRUE,EmitMarkup::const_color);
+        // emit->spaces(1);
+        // emit->closeParen(CLOSE_PAREN,id1);
+        // emit->spaces(1);
+        // indent = emit->startIndent();
+        // emit->print(OPEN_CURLY);
+        // pushMod();
+        // setMod(no_branch);
+        // condBlock->emit(this);
+        // popMod();
+        // emitCommentBlockTree(condBlock);
+        // emit->tagLine();
+        // emit->tagOp(KEYWORD_IF,EmitMarkup::keyword_color,op);
+        // emit->spaces(1);
+        // pushMod();
+        // setMod(only_branch);
+        // condBlock->emit(this);
+        // popMod();
+        // emit->spaces(1);
+        // emitGotoStatement(condBlock,(const FlowBlock *)0,FlowBlock::f_break_goto);
+    } else {
+        // Print conditional block "normally" as
+        //     while(condition) {
+        pushMod();
+        setMod(comma_separate);
+        condBlock->emit(this);      // child 1: condition
+        popMod();
+    }
+
+    // unconditionally add a CompoundStmt for the body (like IfStmt)
+    CompoundStmt* body = new CompoundStmt();
+    currentASTNode()->addChild(body);
+    pushASTNode(body);
+
+    setMod(no_branch);  // Dont print goto at bottom of clause
+    bl->getBlock(1)->emit(this);    // child 2: body
+    popMod();
+
+    popASTNode();   // CompoundStmt
+    popASTNode();   // WhileStmt
+
+    if (label) {
+        popASTNode();   // LabelStmt
+    }
 }
 
 void ASTBuilder::emitBlockDoWhile(const BlockDoWhile *bl)
@@ -1799,20 +1908,39 @@ void ASTBuilder::opLoad(const PcodeOp *op)
 {
     bool usearray = checkArrayDeref(op->getIn(1));
     uint4 m = mods;
-    PendingExpr* expr = new PendingExpr();
+
+    // FIXME: if you set expr->ast_op to a BRAND NEW ASTNode
+    // then you can happily use _pending_expressions.push_back(expr) and let
+    // it get resolved later on!
+    //
+    // but if you set expr->ast_op = currentASTNode(), then you
+    // HAVE TO GENERATE ITS CHILD BEFORE RETURNING, otherwise if you wait
+    // and add this expression to _pending_expressions then you can get the
+    // child nodes out of order (since it will be evaluated AFTER the rest
+    // of whatever's pending)...e.g. if BinaryOperator child 1 (LHS) does this,
+    // then child 2 (already pending) will get added first...in child 1's place
+    // as LHS! Then the real LHS expression gets processed later and is pushed
+    // at the end...in the RHS spot
+    //
+    // (only need be 1 level deep...grandchildren can
+    // be later by the first rule)
 
     if (usearray && (!isSet(force_pointer))) {
         m |= print_load_value;
-        expr->ast_op = currentASTNode();
+        // process this now since we're adding to currentASTNode()
+        PendingNode* node = buildNodeImplied(op->getIn(1), op, m);
+        processPendingNode(node);
+        delete node;
     }
     else {
         UnaryOperator* deref = new UnaryOperator("*");
         currentASTNode()->addChild(deref);
-        expr->ast_op = deref;
-    }
 
-    expr->parts.push_back(buildNodeImplied(op->getIn(1), op, m));
-    _pending_expressions.push_back(expr);
+        PendingExpr* expr = new PendingExpr();
+        expr->ast_op = deref;
+        expr->parts.push_back(buildNodeImplied(op->getIn(1), op, m));
+        _pending_expressions.push_back(expr);
+    }
 }
 
 // * or ->
@@ -1876,9 +2004,9 @@ void ASTBuilder::opCbranch(const PcodeOp *op)
     }
 
     if (yesparen) {
-        // ParenExpr* parens = new ParenExpr();
-        // currentASTNode()->addChild(parens);
-        // pushASTNode(parens);
+        // CLS: this appears to correspond to parens "built-in" to the clang AST
+        // IfStmt, not an extra set of parens here, so we don't need to push/add
+        // them here
     }
     if (booleanflip) {
         // do some magic checking for how to handle negation case
@@ -1893,15 +2021,13 @@ void ASTBuilder::opCbranch(const PcodeOp *op)
     }
 
     // this corresponds to pushVn(op->getIn(1)); recurse();
-    PendingExpr* expr = new PendingExpr();
-    expr->ast_op = currentASTNode();    // should be the IfStmt node
-    expr->parts.push_back(buildNodeImplied(op->getIn(1), op, m));
-    // PendingNode* node = buildNodeImplied(op->getIn(1), op, m);
-    /** NOTE: not sure if we should do THIS or processPendingExpressions() */
-    // processPendingNode(node);
-    _pending_expressions.push_back(expr);
-    processExpressionStack();
-    // delete node;
+    PendingNode* node = buildNodeImplied(op->getIn(1), op, m);
+    /** NOTE: not sure if we should do THIS or processExpressionStack() */
+    // I think this will work fine for my system because either it gets added
+    // to currentASTNode() during processPendingNode, or if not then it gets
+    // added in the right spot (with the right parent) later on
+    processPendingNode(node);
+    delete node;
 
     if (yesparen) {
         // popASTNode();   // parens
@@ -1916,6 +2042,7 @@ void ASTBuilder::opBranchind(const PcodeOp *op)
 {
     SwitchStmt* ss = new SwitchStmt();
     currentASTNode()->addChild(ss);
+    // TODO: evaluate this again...not sure we should push here??
     pushASTNode(ss);    // need to push so it's ready for case stmts
 
     // build switch conditional expression
@@ -2180,11 +2307,10 @@ void ASTBuilder::processTypeCastExpression(const PcodeOp* op)
         createAndPushTypeCast(op->getOut()->getHighTypeDefFacing());
     }
 
-    PendingExpr* expr = new PendingExpr();
-    expr->ast_op = currentASTNode();
+    // process this now since we're adding to currentASTNode()
     PendingNode* node = buildNodeImplied(op->getIn(0), op, mods);
-    expr->parts.push_back(node);
-    _pending_expressions.push_back(expr);
+    processPendingNode(node);
+    delete node;
 
     if (!option_nocasts) {
         popASTNode();   // CStyleCastExpr

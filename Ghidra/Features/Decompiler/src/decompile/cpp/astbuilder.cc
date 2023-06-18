@@ -1522,19 +1522,25 @@ void ASTBuilder::emitBlockCondition(const BlockCondition *bl)
         string opcode = bl->getOpcode() == CPUI_BOOL_AND ? "&&" : "||";
         BinaryOperator* binop = new BinaryOperator(opcode);
         currentASTNode()->addChild(binop);
+        ParenExpr* lhs_parens = new ParenExpr();
+        ParenExpr* rhs_parens = new ParenExpr();
+        binop->addChild(lhs_parens);
+        binop->addChild(rhs_parens);
 
         // generate LHS/RHS of conditional
-        pushASTNode(binop);
+        pushASTNode(lhs_parens);
         bl->getBlock(0)->emit(this);    // this should be LHS of binop
+        popASTNode();   // LHS Parens
 
         pushMod();
         unsetMod(only_branch);
         setMod(comma_separate);     // Notice comma_separate placed only on second block
 
+        pushASTNode(rhs_parens);
         bl->getBlock(1)->emit(this);    // this should be RHS of binop
+        popASTNode();   // RHS parens
 
         popMod();
-        popASTNode();   // pop binop
     }
 }
 

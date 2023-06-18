@@ -286,6 +286,11 @@ protected:
     // this is the version to call if we DO know the datatype
     void push_integer(Datatype* dt, uintb val,int4 sz,bool sign, const Varnode *vn,const PcodeOp *op);
 
+    // override PrintC::push_float
+    virtual void push_float(uintb val,int4 sz,const Varnode *vn, const PcodeOp *op);
+    // this is the version to call if we DO know the datatype
+    void push_float(Datatype* dt, uintb val,int4 sz,const Varnode *vn, const PcodeOp *op);
+
     void createCharConstant(Datatype* ct, uintb val, const Varnode* vn, const PcodeOp* op);
     bool createPtrCharConstant(TypePointer* pt, uintb value, const Varnode* vn, const PcodeOp* op);
     bool createPtrCodeConstant(TypePointer* pt, uintb value, const Varnode* vn, const PcodeOp* op);

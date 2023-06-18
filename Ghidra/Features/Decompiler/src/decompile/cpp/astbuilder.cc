@@ -781,6 +781,52 @@ bool ASTBuilder::createPtrCodeConstant(TypePointer* pt, uintb value, const Varno
     return false;
 }
 
+void ASTBuilder::push_float(uintb val,int4 sz,const Varnode *vn, const PcodeOp *op)
+{
+    push_float(nullptr, val, sz, vn, op);
+}
+
+void ASTBuilder::push_float(Datatype* dt, uintb val,int4 sz,const Varnode *vn, const PcodeOp *op)
+{
+    string token;
+
+    const FloatFormat *format = glb->translate->getFloatFormat(sz);
+
+    if (format == (const FloatFormat *)0) {
+        unimplementedCode("FLOAT_UNKNOWN");
+        return;
+    } else {
+        FloatFormat::floatclass type;
+        double floatval = format->getHostFloat(val,&type);
+
+        // CLS: assuming float or double only here if no Datatype* supplied
+        string tname = (sz == 4) ? "float" : "double";
+        Type* float_dt = new BuiltinType(tname, sz, true, true);
+        if (dt) {
+            delete float_dt;
+            float_dt = toAstType(dt);
+        }
+        FloatingLiteral* lit = new FloatingLiteral(float_dt, floatval);
+        currentASTNode()->addChild(lit);
+
+        if (type == FloatFormat::infinity) {
+            if (format->extractSign(val)) {
+                lit->setSpecialValue("-INF");
+            } else {
+                lit->setSpecialValue("INF");
+            }
+        } else if (type == FloatFormat::nan) {
+            if (format->extractSign(val)) {
+                lit->setSpecialValue("-NaN");
+            } else {
+                lit->setSpecialValue("NaN");
+            }
+        }
+        // CLS: everything below here had to do with printing/formatting
+        // so we're done
+    }
+}
+
 // corresponds to pushConstant()
 void ASTBuilder::processPendingConstant(uintb value, Datatype* dt, const Varnode* vn,
                                         const PcodeOp* op)
@@ -840,8 +886,16 @@ void ASTBuilder::processPendingConstant(uintb value, Datatype* dt, const Varnode
             }
             break;  // break out to default print below
         case TYPE_FLOAT:
-            unimplementedCode("float constant");
+            push_float(dt, value, dt->getSize(), vn, op);
             return;
+        case TYPE_SPACEBASE:
+        case TYPE_CODE:
+        case TYPE_ARRAY:
+        case TYPE_STRUCT:
+        case TYPE_UNION:
+        case TYPE_PARTIALSTRUCT:
+        case TYPE_PARTIALUNION:
+            break;
         default:
             unimplementedCode("default 'printing' for constant with metatype" + (int)dt->getMetatype());
             // typecast, integer
@@ -2561,12 +2615,13 @@ void ASTBuilder::opFloatNotEqual(const PcodeOp *op)
 
 void ASTBuilder::opFloatLess(const PcodeOp *op)
 {
+    // binaryOperator("<", op, ">=");   << this should be it, but wait for a test case to verify
     unimplementedOp("opFloatLess");
 }
 
 void ASTBuilder::opFloatLessEqual(const PcodeOp *op)
 {
-    unimplementedOp("opFloatLessEqual");
+    binaryOperator("<=", op, ">");
 }
 
 void ASTBuilder::opFloatNan(const PcodeOp *op)
@@ -2576,7 +2631,7 @@ void ASTBuilder::opFloatNan(const PcodeOp *op)
 
 void ASTBuilder::opFloatAdd(const PcodeOp *op)
 {
-    unimplementedOp("opFloatAdd");
+    binaryOperator("+", op);
 }
 
 void ASTBuilder::opFloatDiv(const PcodeOp *op)
@@ -2591,7 +2646,7 @@ void ASTBuilder::opFloatMult(const PcodeOp *op)
 
 void ASTBuilder::opFloatSub(const PcodeOp *op)
 {
-    unimplementedOp("opFloatSub");
+    binaryOperator("-", op);
 }
 
 void ASTBuilder::opFloatNeg(const PcodeOp *op)

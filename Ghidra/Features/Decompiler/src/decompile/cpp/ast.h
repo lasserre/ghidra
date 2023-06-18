@@ -503,6 +503,40 @@ protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
 };
 
+class FloatingLiteral : public ASTNode
+{
+public:
+    FloatingLiteral(Type* type, double value)
+        : _type(type), _value(value), _special_value("")
+    { }
+    ~FloatingLiteral()
+    {
+        if (_type) {
+            delete _type;
+        }
+    }
+    virtual FloatingLiteral* clone_my_members(ASTNode* node);
+    virtual FloatingLiteral* clone()
+    {
+        return (FloatingLiteral*)clone_my_members(new FloatingLiteral(*this));
+    }
+
+    inline double value() { return _value; }
+    inline string specialValue() { return _special_value; }
+    inline Type* type() { return _type; }
+
+    void setSpecialValue(string special_value) { _special_value = special_value; }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+    double _value;
+    // CLS: not sure if we want this, but to get around potential floating point issues
+    // if it's one of the special cases +INFINITY, -INFINITY, NaN, -NaN I
+    // will store that string in _special_value and set _value to -1
+    string _special_value;
+    Type* _type;    // we own this
+};
+
 class IntegerLiteral : public ASTNode
 {
 public:

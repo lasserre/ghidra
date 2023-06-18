@@ -230,6 +230,9 @@ int BinaryOperator::precedence()
     else if (_opcode == "=") {
         return 16;
     }
+    else if (_opcode == ",") {
+        return 17;
+    }
     else {
         callbacks->unimplementedCodeCallback("No precedence mapped for binary operator '" + _opcode + "'");
         return -1;
@@ -419,6 +422,18 @@ IfStmt::IfStmt()
 void* IfStmt::doAccept(ASTVisitor* v, void* context)
 {
     return v->visitIfStmt(this, context);
+}
+
+FloatingLiteral* FloatingLiteral::clone_my_members(ASTNode* node)
+{
+    auto lit = (FloatingLiteral*)ASTNode::clone_my_members(node);
+    lit->_type = _type->clone();
+    return lit;
+}
+
+void* FloatingLiteral::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitFloatingLiteral(this, context);
 }
 
 IntegerLiteral::IntegerLiteral(Type* type, uintb value)

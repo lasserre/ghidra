@@ -458,6 +458,22 @@ void* LabelStmt::doAccept(ASTVisitor* v, void* context)
     return v->visitLabelStmt(this, context);
 }
 
+void LabelStmt::addChild(ASTNode* child, bool append /*= true*/, bool check_parens /*= true*/)
+{
+    ASTNode::addChild(child, append, check_parens);
+    if (_children.size() == 1) {
+        // done with this statement! pop it from AST
+        if (_builder_handle->currentASTNode() != this) {
+            /** NOTE: if we hit this case, I can probably walk back up the stack,
+             * locate the LabelStmt and pop it (it will never be popped so this should
+             * be safe)
+            */
+            throw LowlevelError("LabelStmt is not the currentASTNode()");
+        }
+        _builder_handle->popASTNode();
+    }
+}
+
 void* MemberExpr::doAccept(ASTVisitor* v, void* context)
 {
     return v->visitMemberExpr(this, context);

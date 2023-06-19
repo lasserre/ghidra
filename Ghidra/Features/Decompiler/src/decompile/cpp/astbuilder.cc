@@ -1367,7 +1367,7 @@ static string getRegName(const Varnode* vn)
 
 void ASTBuilder::emitBlockBasic(const BlockBasic *bb)
 {
-    LabelStmt* label = emitLabelStatement(bb);
+    emitLabelStatement(bb);
 
     if (isSet(only_branch)) {
         const PcodeOp* instr = bb->lastOp();
@@ -1435,10 +1435,6 @@ void ASTBuilder::emitBlockBasic(const BlockBasic *bb)
         // is an option to not print structured code, just using gotos and
         // labels for everything (not applicable for our AST)
     }
-
-    if (label) {
-        popASTNode();   // LabelStmt
-    }
 }
 
 void ASTBuilder::emitBlockGraph(const BlockGraph *bl)
@@ -1453,11 +1449,8 @@ void ASTBuilder::emitBlockGraph(const BlockGraph *bl)
 
 void ASTBuilder::emitBlockCopy(const BlockCopy *bl)
 {
-    auto label = emitAnyLabelStatement(bl);
+    emitAnyLabelStatement(bl);
     bl->subBlock(0)->emit(this);
-    if (label) {
-        popASTNode();   // label
-    }
 }
 
 void ASTBuilder::emitBlockGoto(const BlockGoto *bl)
@@ -1608,41 +1601,41 @@ void ASTBuilder::emitBlockIf(const BlockIf *bl)
 }
 
 /** @brief mostly copied from PrintC */
-LabelStmt* ASTBuilder::emitAnyLabelStatement(const FlowBlock *bl)
+void ASTBuilder::emitAnyLabelStatement(const FlowBlock *bl)
 {
     if (bl->isLabelBumpUp()) {
-        return nullptr; // Label printed by someone else
+        return; // Label printed by someone else
     }
     bl = bl->getFrontLeaf();
     if (bl == (FlowBlock *)0) {
-        return nullptr;
+        return;
     }
-    return emitLabelStatement(bl);
+    emitLabelStatement(bl);
 }
 
 /** CLS: mostly copied from PrintC */
-LabelStmt* ASTBuilder::emitLabelStatement(const FlowBlock *bl)
+void ASTBuilder::emitLabelStatement(const FlowBlock *bl)
 {
     if (isSet(only_branch)) {
-        return nullptr;
+        return;
     }
 
     if (isSet(flat)) { // Printing flat version
         if (!bl->isJumpTarget()) {
-            return nullptr; // Print all jump targets
+            return; // Print all jump targets
         }
     }
     else {			// Printing structured version
         if (!bl->isUnstructuredTarget()) {
-            return nullptr;
+            return;
         }
         if (bl->getType() != FlowBlock::t_copy) {
-            return nullptr;
+            return;
         }
         // Only print labels that have unstructured jump to them
     }
 
-    return emitLabel(bl);
+    emitLabel(bl);
 }
 
 /** CLS: mostly copied from PrintC::emitLabel */
@@ -1681,17 +1674,16 @@ string ASTBuilder::getEmitLabelName(const FlowBlock *bl)
     return lb.str();
 }
 
-LabelStmt* ASTBuilder::emitLabel(const FlowBlock *bl)
+void ASTBuilder::emitLabel(const FlowBlock *bl)
 {
     string label_name = getEmitLabelName(bl);
     if (label_name == "") {
-        return nullptr;
+        return;
     }
 
-    LabelStmt* ls = new LabelStmt(label_name);
+    LabelStmt* ls = new LabelStmt(label_name, this);
     currentASTNode()->addChild(ls);
     pushASTNode(ls);
-    return ls;
 }
 
 void ASTBuilder::emitGotoStatement(const FlowBlock *bl,const FlowBlock *exp_bl,uint4 type)
@@ -1726,7 +1718,7 @@ void ASTBuilder::emitForLoop(const BlockWhileDo* bl)
     pushMod();
     unsetMod(no_branch|only_branch);
     // if != nullptr, this has been pushed as currentASTNode
-    LabelStmt* ls = emitAnyLabelStatement(bl);
+    emitAnyLabelStatement(bl);
     FlowBlock* condBlock = bl->getBlock(0);
     // op = condBlock->lastOp();    // CLS: we don't use this...
     pushMod();
@@ -1771,10 +1763,6 @@ void ASTBuilder::emitForLoop(const BlockWhileDo* bl)
     popASTNode();   // pop CompoundStmt
 
     popMod();
-
-    if (ls) {
-        popASTNode();   // pop LabelStmt
-    }
 }
 
 void ASTBuilder::emitBlockWhileDo(const BlockWhileDo *bl)
@@ -1791,7 +1779,7 @@ void ASTBuilder::emitBlockWhileDo(const BlockWhileDo *bl)
 
     pushMod();
     unsetMod(no_branch|only_branch);
-    LabelStmt* label = emitAnyLabelStatement(bl);
+    emitAnyLabelStatement(bl);
     FlowBlock *condBlock = bl->getBlock(0);
     op = condBlock->lastOp();
     WhileStmt* whilestmt = new WhileStmt();
@@ -1856,10 +1844,6 @@ void ASTBuilder::emitBlockWhileDo(const BlockWhileDo *bl)
 
     popASTNode();   // CompoundStmt
     popASTNode();   // WhileStmt
-
-    if (label) {
-        popASTNode();   // LabelStmt
-    }
 }
 
 void ASTBuilder::emitBlockDoWhile(const BlockDoWhile *bl)

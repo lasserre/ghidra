@@ -78,9 +78,9 @@ public:
 
     // hides PrintC functions:
     void opHiddenFunc(const PcodeOp *op);
-    LabelStmt* emitAnyLabelStatement(const FlowBlock *bl);
-    LabelStmt* emitLabelStatement(const FlowBlock *bl);
-    LabelStmt* emitLabel(const FlowBlock *bl);
+    void emitAnyLabelStatement(const FlowBlock *bl);
+    void emitLabelStatement(const FlowBlock *bl);
+    void emitLabel(const FlowBlock *bl);
     /**
      * @brief Performs the emitLabel logic from PrintC to determine the
      * label name, but returns it as a string instead of a LabelStmt*.
@@ -221,6 +221,19 @@ public:
 protected:
 
     /**
+     * @brief Called at control-flow breaks to check if we've been adding code
+     * to a LabelStmt and if so, pop the LabelStmt from the ASTNode stack so
+     * we don't group more code underneath this label (because control flow is
+     * moving on)
+     */
+    // void endPendingLabel()
+    // {
+    //     if (_pending_label) {
+    //         popASTNode();
+    //     }
+    // }
+
+    /**
      * @brief Build a FunctionDecl for the given function.
      *
      * @param fd The function
@@ -348,6 +361,7 @@ protected:
     ofstream _logfile;  // log unimplemented code for review
     ASTCallbacks _ast_callbacks;
     string _original_ghidra_printlang_name;     // save so we can restore at the end
+    // LabelStmt* _pending_label;
 };
 
 /**

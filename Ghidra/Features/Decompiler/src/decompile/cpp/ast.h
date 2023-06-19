@@ -8,6 +8,7 @@
 #include "types.h"
 #include "funcdata.hh"
 
+class ASTBuilder;
 class ASTVisitor;
 class ValueDecl;
 
@@ -85,13 +86,28 @@ public:
     inline std::vector<ASTNode*>* children() { return &_children; }
 
     /**
+     * @brief Returns the index of the given child pointer or -1 if not found.
+     * This is intended to be used on known pointer values from children(), not
+     * equivalent objects based on their content
+     */
+    int indexOfChild(ASTNode* child)
+    {
+        for (int i = 0; i < _children.size(); i++) {
+            if (child == _children[i]) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
      * @brief Adds child to this node's children, if it is not already
      * in the list (the pointer value itself, not the object value).
      *
      * @param child is the child to add
      * @param append If true, add to end of list. Otherwise add to beginning
      */
-    void addChild(ASTNode* child, bool append=true, bool check_parens=true);
+    virtual void addChild(ASTNode* child, bool append=true, bool check_parens=true);
 
     /**
      * @brief Removes this node and replaces it with new_node in the AST.
@@ -565,19 +581,22 @@ protected:
 class LabelStmt : public ASTNode
 {
 public:
-    LabelStmt(string name)
-        : _name(name)
+    LabelStmt(string name, ASTBuilder* builder)
+        : _name(name), _builder_handle(builder)
     { }
     virtual LabelStmt* clone()
     {
         return (LabelStmt*)clone_my_members(new LabelStmt(*this));
     }
 
+    void addChild(ASTNode* child, bool append /*= true*/, bool check_parens /*= true*/);
+
     string name() { return _name; }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
     string _name;
+    ASTBuilder* _builder_handle;
 };
 
 class MemberExpr : public ASTNode

@@ -320,7 +320,7 @@ FunctionDecl* ASTBuilder::buildOpFuncDecl(const PcodeOp* op, string name)
     FunctionDecl* fdecl = new FunctionDecl(_next_vdecl_id++, name, return_type);
 
     for (int i = 0; i < op->numInput(); i++) {
-        ParmVarDecl* pvdecl = new ParmVarDecl(_next_vdecl_id++, "param" + i+1,
+        ParmVarDecl* pvdecl = new ParmVarDecl(_next_vdecl_id++, "param" + std::to_string(i+1),
                     new BuiltinType("unsigned long", 8, false, false));
         fdecl->addChild(pvdecl);
     }
@@ -2800,7 +2800,7 @@ void ASTBuilder::opFunc(const PcodeOp* op)
     expr->ast_op = callexpr;
 
     // arguments
-    for (int i = 1; i < op->numInput(); i++) {
+    for (int i = 0; i < op->numInput(); i++) {
         expr->parts.push_back(buildNodeImplied(op->getIn(i),op,mods));
     }
 

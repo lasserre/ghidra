@@ -405,7 +405,7 @@ void* GotoStmt::doAccept(ASTVisitor* v, void* context)
 }
 
 FunctionDecl::FunctionDecl(int id, Funcdata* fd)
-    : ValueDecl(id), _fd(fd)
+    : ValueDecl(id), _fd(fd), _is_intrinsic(false), _name(fd->getName())
 {
     _return_type = callbacks->toAstType(fd->getFuncProto().getOutputType());
 }
@@ -761,8 +761,13 @@ void* UnaryOperator::doAccept(ASTVisitor* v, void* context)
     return v->visitUnaryOperator(this, context);
 }
 
+ParmVarDecl::ParmVarDecl(int id, string name, Type* dtype)
+    : VarDecl(id, name, dtype)
+{
+}
+
 ParmVarDecl::ParmVarDecl(int id, ProtoParameter* param)
-    : VarDecl(id, param->getSymbol()), _param(param)
+    : VarDecl(id, param->getSymbol())
 {
     if (!_type) {
         _type = callbacks->toAstType(param->getType());

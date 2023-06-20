@@ -275,6 +275,59 @@ string getTimestamp()
     return string(buffer);
 }
 
+Type* ASTBuilder::getOpFuncOutputType(int out_size, string opFuncName, bool is_bool /*= false*/)
+{
+    switch (out_size) {
+        case 1:
+            return is_bool ? new BuiltinType("bool", 1, false, false)
+                           : new BuiltinType("unsigned char", 1, false, false);
+        case 2:
+            return new BuiltinType("unsigned short", 2, false, false);
+        case 4:
+            return new BuiltinType("unsigned int", 4, false, false);
+        case 8:
+            return new BuiltinType("unsigned long", 8, false, false);
+        default:
+            unimplementedCode(opFuncName + " output size of " + std::to_string(out_size));
+            return new BuiltinType("unsigned long", 8, false, false);
+    }
+}
+
+FunctionDecl* ASTBuilder::buildOpFuncDecl(const PcodeOp* op, string name)
+{
+    Type* return_type = nullptr;
+
+    if (name.find("SUB") == 0) {
+        return_type = getOpFuncOutputType(op->getOut()->getSize(), "SUB");
+    } else if (name.find("CONCAT") == 0) {
+        int out_size = op->getIn(0)->getSize() + op->getIn(1)->getSize();
+        return_type = getOpFuncOutputType(out_size, "CONCAT");
+    } else if (name.find("ZEXT") == 0) {
+        return_type = getOpFuncOutputType(op->getOut()->getSize(), "ZEXT");
+    } else if (name.find("SEXT") == 0) {
+        return_type = getOpFuncOutputType(op->getOut()->getSize(), "SEXT");
+    } else if (name.find("SBORROW") == 0) {
+        return_type = getOpFuncOutputType(1, "SBORROW", true);
+    } else if (name.find("CARRY") == 0) {
+        return_type = getOpFuncOutputType(1, "CARRY", true);
+    } else if (name.find("SCARRY") == 0) {
+        return_type = getOpFuncOutputType(1, "SCARRY", true);
+    } else {
+        unimplementedCode("Unhandled opFunc type " + name);
+        return_type = getOpFuncOutputType(8, "UNHANDLED");
+    }
+
+    FunctionDecl* fdecl = new FunctionDecl(_next_vdecl_id++, name, return_type);
+
+    for (int i = 0; i < op->numInput(); i++) {
+        ParmVarDecl* pvdecl = new ParmVarDecl(_next_vdecl_id++, "param" + i+1,
+                    new BuiltinType("unsigned long", 8, false, false));
+        fdecl->addChild(pvdecl);
+    }
+
+    return fdecl;
+}
+
 FunctionDecl* ASTBuilder::buildFunctionDecl(Funcdata* fd, bool fwd_decl)
 {
     FunctionDecl* fdecl = new FunctionDecl(_next_vdecl_id++, fd);
@@ -403,6 +456,9 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
 
     // add function forward-declarations to top-level translation unit
     for (auto const& entry : _fwd_decl_funcs) {
+        _head_translation_unit->addChild(entry.second);
+    }
+    for (auto const& entry : _fwd_decl_opFunc_funcs) {
         _head_translation_unit->addChild(entry.second);
     }
 
@@ -2696,7 +2752,7 @@ void ASTBuilder::opIndirect(const PcodeOp *op)
 
 void ASTBuilder::opPiece(const PcodeOp *op)
 {
-    unimplementedOp("opPiece");
+    opFunc(op);
 }
 
 // SUB
@@ -2716,6 +2772,39 @@ void ASTBuilder::opSubpiece(const PcodeOp *op)
     } else {
         unimplementedCode("SUBPIECE opFunc");
     }
+}
+
+void ASTBuilder::opFunc(const PcodeOp* op)
+{
+    // this is the fdecl we need to refer to in our
+    // DeclRefExpr (which is the first child of CallExpr)
+    FunctionDecl* fdecl = nullptr;
+
+    string nm = op->getOpcode()->getOperatorName(op);
+
+    if (_fwd_decl_opFunc_funcs.count(nm)) {
+        fdecl = _fwd_decl_opFunc_funcs.at(nm);
+    }
+    else {
+        fdecl = buildOpFuncDecl(op, nm);
+        _fwd_decl_opFunc_funcs[nm] = fdecl;
+    }
+
+    DeclRefExpr* callee_ref = new DeclRefExpr(fdecl);
+
+    CallExpr* callexpr = new CallExpr();
+    callexpr->addChild(callee_ref);         // first child is a reference to callee function
+    currentASTNode()->addChild(callexpr);
+
+    PendingExpr* expr = new PendingExpr();
+    expr->ast_op = callexpr;
+
+    // arguments
+    for (int i = 1; i < op->numInput(); i++) {
+        expr->parts.push_back(buildNodeImplied(op->getIn(i),op,mods));
+    }
+
+    _pending_expressions.push_back(expr);
 }
 
 void ASTBuilder::opCast(const PcodeOp *op)

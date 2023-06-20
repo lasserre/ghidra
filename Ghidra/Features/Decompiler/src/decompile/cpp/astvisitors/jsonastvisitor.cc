@@ -254,6 +254,7 @@ void* JsonASTVisitor::visitFunctionDecl(FunctionDecl* fd, void* context)
     fdecl["inner"] = json::array();
     fdecl["name"] = fd->name();
     fdecl["address"] = to_hex(fd->address());
+    fdecl["is_intrinsic"] = fd->is_intrinsic();
     fdecl["return_dtype"] = typeToJson(fd->return_type());
     // fdecl["return_dtype_name"] = datatypeToJson(fd->return_type()->ghidra_dtype());
     return copy_to_parent(fdecl, context);
@@ -342,9 +343,7 @@ void* JsonASTVisitor::visitParmVarDecl(ParmVarDecl* pv, void* context)
     json pvdecl;
     pvdecl["kind"] = "ParmVarDecl";
     pvdecl["id"] = pv->id();
-    if (pv->ghidra_sym()) {
-        pvdecl["name"] = pv->name();
-    }
+    pvdecl["name"] = pv->name();
     pvdecl["dtype"] = typeToJson(pv->type());
     // pvdecl["dtype_name"] = datatypeToJson(pv->type()->ghidra_dtype());
     return copy_to_parent(pvdecl, context);

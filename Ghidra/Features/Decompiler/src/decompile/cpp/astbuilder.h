@@ -245,6 +245,14 @@ protected:
     void buildLocalDeclsFromScope(const Scope& scope, CompoundStmt* fbody);
     VarDecl* tryCreateLocalVarDecl(const SymbolEntry* sym_entry);
 
+    Type* getOpFuncOutputType(int out_size, string opFuncName, bool is_bool = false);
+
+    /**
+     * @brief Build a FunctionDecl for an opFunc function
+     * (e.g. CONCAT32(x,y) or CARRY4(x,y))
+     */
+    FunctionDecl* buildOpFuncDecl(const PcodeOp* op, string name);
+
     /**
      * @brief Build a PendingNode for this implied varnode
      */
@@ -310,6 +318,9 @@ protected:
     void processTypeCastExpression(const PcodeOp *op);
     CStyleCastExpr* createAndPushTypeCast(Datatype* dt);
 
+    // hide PrintC::opFunc()
+    void opFunc(const PcodeOp* op);
+
     /** temp functions for logging spots I need to implement */
     void unimplementedCode(std::string description);
     void unimplementedOp(std::string opname);
@@ -338,6 +349,7 @@ protected:
     std::map<Symbol*, ParmVarDecl*> _parameters;
     std::map<Symbol*, VarDecl*> _globals;
     std::map<Symbol*, FunctionDecl*> _fwd_decl_funcs;
+    std::map<string, FunctionDecl*> _fwd_decl_opFunc_funcs;
     // references to globals where the size doesn't match the
     // variable size (Ghidra indicates this with _VARNAME)
     // each original Symbol* maps to a list of VarDecls, with

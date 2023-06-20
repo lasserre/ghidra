@@ -1146,15 +1146,23 @@ protected:
 class FunctionDecl : public ValueDecl
 {
 public:
+    /**
+     * @brief Construct an intrinsic function (for opFunc functions)
+     */
+    FunctionDecl(int id, string name, Type* return_type)
+        : ValueDecl(id), _name(name), _fd(nullptr), _return_type(return_type), _is_intrinsic(true)
+    { }
     FunctionDecl(int id, Funcdata* fd);
     ~FunctionDecl()
     {
-        delete _return_type;
+        if (_return_type) {
+            delete _return_type;
+        }
     }
     virtual FunctionDecl* clone_my_members(ASTNode* node)
     {
         auto fd = (FunctionDecl*)ValueDecl::clone_my_members(node);
-        fd->_return_type = _return_type->clone();
+        fd->_return_type =  _return_type ? _return_type->clone() : nullptr;
         return fd;
     }
     virtual FunctionDecl* clone()
@@ -1162,13 +1170,16 @@ public:
         return (FunctionDecl*)clone_my_members(new FunctionDecl(*this));
     }
 
-    inline std::string name() { return _fd->getName(); }
-    inline uintb address() { return _fd->getAddress().getOffset(); }
+    inline std::string name() { return _name; }
+    inline uintb address() { return _fd ? _fd->getAddress().getOffset() : 0; }
     inline Type* return_type() { return _return_type; }
+    inline bool is_intrinsic() { return _is_intrinsic; }
 
     inline void replace_return_type(Type* newtype)
     {
-        delete _return_type;
+        if (_return_type) {
+            delete _return_type;
+        }
         _return_type = newtype;
     }
 
@@ -1177,8 +1188,10 @@ public:
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
+    string _name;
     Funcdata* _fd;
     Type* _return_type;
+    bool _is_intrinsic;
 };
 
 /**
@@ -1241,6 +1254,7 @@ protected:
 class ParmVarDecl : public VarDecl
 {
 public:
+    ParmVarDecl(int id, string name, Type* dtype);
     ParmVarDecl(int id, ProtoParameter* param);
     virtual ParmVarDecl* clone()
     {
@@ -1248,11 +1262,11 @@ public:
     }
 
     /** @brief The backing ProtoParameter for this ParmVarDecl */
-    inline ProtoParameter* param() { return _param; }
+    // inline ProtoParameter* param() { return _param; }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
-    ProtoParameter* _param;
+    // ProtoParameter* _param;
 };
 
 /**

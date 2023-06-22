@@ -321,6 +321,9 @@ protected:
     // hide PrintC::opFunc()
     void opFunc(const PcodeOp* op);
 
+    void pushMemberExpression(const PcodeOp* op, const Varnode* struct_vn,
+                              string fieldname, int member_offset, bool is_arrow, uint4 mods);
+
     /** temp functions for logging spots I need to implement */
     void unimplementedCode(std::string description);
     void unimplementedOp(std::string opname);

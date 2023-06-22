@@ -1048,14 +1048,22 @@ void ASTBuilder::pushMismatchSymbolAST(Symbol *sym,int4 off,int4 sz,
         VarDecl* sym_decl = nullptr;
 
         if (_mismatch_globals.count(sym)) {
+            /** CLS: when I did the size check, I would end up with multiple
+             * definitions of a variable named the same. Either we need to
+             * make the names unique or define a single variable. For now I'm
+             * defining the first variable as the only one...if that becomes an
+             * issue we can change this to use unique names
+            */
+            sym_decl = _mismatch_globals[sym].front();
+
             // check size
-            for (VarDecl* vd : _mismatch_globals[sym]) {
-                auto existing_size = vd->ghidra_dtype()->getSize();
-                if (vn->getSize() == existing_size) {
-                    // use this one
-                    sym_decl = vd;  // trying without clone()
-                }
-            }
+            // for (VarDecl* vd : _mismatch_globals[sym]) {
+            //     auto existing_size = vd->ghidra_dtype()->getSize();
+            //     if (vn->getSize() == existing_size) {
+            //         // use this one
+            //         sym_decl = vd;  // trying without clone()
+            //     }
+            // }
         }
 
         // node->sym not mapped OR we didn't find a size match
@@ -2759,9 +2767,28 @@ void ASTBuilder::opPiece(const PcodeOp *op)
 // extract a subset of bytes
 void ASTBuilder::opSubpiece(const PcodeOp *op)
 {
-    if (op->doesSpecialPrinting()) {
-        unimplementedCode("SUBPIECE special printing case");
-        return;
+    if (op->doesSpecialPrinting()) {    // special printing means it is a field extraction
+        const Varnode *vn = op->getIn(0);
+        Datatype *ct = vn->getHighTypeReadFacing(op);
+        if (ct->isPieceStructured()) {
+            int4 offset;
+            int4 byteOff = TypeOpSubpiece::computeByteOffsetForComposite(op);
+            const TypeField *field = ct->findTruncation(byteOff,op->getOut()->getSize(),op,1,offset);	// Use artificial slot
+            if (field && (offset == 0)) {      // A formal structure field
+                pushMemberExpression(op, vn, field->name, field->offset, false, mods);
+                return;
+            } else if (vn->isExplicit() && vn->getHigh()->getSymbolOffset() == -1) {    // An explicit, entire, structured object
+                Symbol *sym = vn->getHigh()->getSymbol();
+                if (sym != (Symbol *)0) {
+                    int4 sz = op->getOut()->getSize();
+                    int4 off = (int4)op->getIn(1)->getOffset();
+                    off = vn->getSpace()->isBigEndian() ? vn->getSize() - (sz + off) : off;
+                    pushPartialSymbol(sym, off, sz, vn, op, -1);
+                    return;
+                }
+            }
+            // (else) Fall thru to functional printing
+        }
     }
 
     if (castStrategy->isSubpieceCast(op->getOut()->getHighTypeDefFacing(),
@@ -2908,6 +2935,23 @@ static int getSidFromMemberExprChild(MemberExpr* memexpr)
     return sid;
 }
 
+void ASTBuilder::pushMemberExpression(const PcodeOp* op, const Varnode* struct_vn,
+    string fieldname, int member_offset, bool is_arrow, uint4 mods)
+{
+    MemberExpr* memexpr = new MemberExpr(fieldname, member_offset, /* isArrow = */ is_arrow);
+    currentASTNode()->addChild(memexpr);
+
+    PendingNode* structNode = buildNodeImplied(struct_vn, op, mods);
+    pushASTNode(memexpr);
+    processPendingNode(structNode);
+    popASTNode();
+    delete structNode;
+
+    // retrieve sid from memexpr's child node (just created above within
+    // processPendingNode(structNode))
+    memexpr->setSid(getSidFromMemberExprChild(memexpr));
+}
+
 // PTRSUB . or -> - Dereference a subfield from a pointer
 void ASTBuilder::opPtrsub(const PcodeOp *op)
 {
@@ -3003,18 +3047,7 @@ void ASTBuilder::opPtrsub(const PcodeOp *op)
 
                 // in0 is the var (the struct)
                 // fieldname is the field name
-                MemberExpr* memexpr = new MemberExpr(fieldname, suboff, /* isArrow = */ true);
-                currentASTNode()->addChild(memexpr);
-
-                PendingNode* structNode = buildNodeImplied(in0, op, m);
-                pushASTNode(memexpr);
-                processPendingNode(structNode);
-                popASTNode();
-                delete structNode;
-
-                // retrieve sid from memexpr's child node (just created above within
-                // processPendingNode(structNode))
-                memexpr->setSid(getSidFromMemberExprChild(memexpr));
+                pushMemberExpression(op, in0, fieldname, suboff, true, m);
             }
 
             if (arrayvalue) {

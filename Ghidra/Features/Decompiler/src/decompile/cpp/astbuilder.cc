@@ -2720,7 +2720,7 @@ void ASTBuilder::opFloatSqrt(const PcodeOp *op)
 
 void ASTBuilder::opFloatInt2Float(const PcodeOp *op)
 {
-    unimplementedOp("opFloatInt2Float");
+    processTypeCastExpression(op);
 }
 
 void ASTBuilder::opFloatFloat2Float(const PcodeOp *op)
@@ -2730,7 +2730,7 @@ void ASTBuilder::opFloatFloat2Float(const PcodeOp *op)
 
 void ASTBuilder::opFloatTrunc(const PcodeOp *op)
 {
-    unimplementedOp("opFloatTrunc");
+    processTypeCastExpression(op);
 }
 
 void ASTBuilder::opFloatCeil(const PcodeOp *op)

@@ -2634,7 +2634,7 @@ void ASTBuilder::opIntRem(const PcodeOp *op)
 
 void ASTBuilder::opIntSrem(const PcodeOp *op)
 {
-    unimplementedOp("opIntSrem");
+    binaryOperator("%", op);
 }
 
 void ASTBuilder::opBoolNegate(const PcodeOp *op)
@@ -2664,13 +2664,12 @@ void ASTBuilder::opFloatEqual(const PcodeOp *op)
 
 void ASTBuilder::opFloatNotEqual(const PcodeOp *op)
 {
-    unimplementedOp("opFloatNotEqual");
+    binaryOperator("!=", op, "==");
 }
 
 void ASTBuilder::opFloatLess(const PcodeOp *op)
 {
-    // binaryOperator("<", op, ">=");   << this should be it, but wait for a test case to verify
-    unimplementedOp("opFloatLess");
+    binaryOperator("<", op, ">=");   // << this should be it, but wait for a test case to verify
 }
 
 void ASTBuilder::opFloatLessEqual(const PcodeOp *op)
@@ -2690,12 +2689,12 @@ void ASTBuilder::opFloatAdd(const PcodeOp *op)
 
 void ASTBuilder::opFloatDiv(const PcodeOp *op)
 {
-    unimplementedOp("opFloatDiv");
+    binaryOperator("/", op);
 }
 
 void ASTBuilder::opFloatMult(const PcodeOp *op)
 {
-    unimplementedOp("opFloatMult");
+    binaryOperator("*", op);
 }
 
 void ASTBuilder::opFloatSub(const PcodeOp *op)
@@ -2725,7 +2724,7 @@ void ASTBuilder::opFloatInt2Float(const PcodeOp *op)
 
 void ASTBuilder::opFloatFloat2Float(const PcodeOp *op)
 {
-    unimplementedOp("opFloatFloat2Float");
+    processTypeCastExpression(op);
 }
 
 void ASTBuilder::opFloatTrunc(const PcodeOp *op)

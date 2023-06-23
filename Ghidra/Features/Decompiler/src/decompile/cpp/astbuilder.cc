@@ -2216,7 +2216,66 @@ void ASTBuilder::opCall(const PcodeOp *op)
 
 void ASTBuilder::opCallind(const PcodeOp *op)
 {
-    unimplementedOp("opCallind");
+    /**
+     * int (*DAT_CORRECT)(int, int, int);
+     *  OR OPTION B DEFINITION:
+     * int (*DAT_CORRECT)();
+     *  AND THIS CALLSITE:
+     * x = (*DAT_CORRECT)(3, 4, 5);
+     *  GIVES AST:
+     * -----------
+     * CallExpr
+     *  - ParenExpr
+     *      - UnaryOperator *
+     *          - DeclRefExpr DAT_CORRECT
+     *  - IntegerLiteral 3
+     *  - IntegerLiteral 4
+     *  - IntegerLiteral 5
+     */
+
+    CallExpr* callexpr = new CallExpr();
+    ParenExpr* parenexpr = new ParenExpr();
+    UnaryOperator* unop = new UnaryOperator("*");
+
+    currentASTNode()->addChild(callexpr);
+    callexpr->addChild(parenexpr);
+    parenexpr->addChild(unop);
+
+    // func pointer expression
+    PendingExpr* fptr_expr = new PendingExpr();
+    fptr_expr->ast_op = unop;
+    fptr_expr->parts.push_back(buildNodeImplied(op->getIn(0), op, mods));
+    _pending_expressions.push_back(fptr_expr);
+
+    const Funcdata *fd = op->getParent()->getFuncdata();
+    FuncCallSpecs *fc = fd->getCallSpecs(op);
+    if (fc == (FuncCallSpecs *)0) {
+        throw LowlevelError("Missing indirect function callspec");
+    }
+
+    // call arguments expression
+    PendingExpr* args_expr = new PendingExpr();
+    args_expr->ast_op = callexpr;
+
+    int4 skip = getHiddenThisSlot(op, fc);
+    int4 count = op->numInput() - 1;
+    count -= (skip < 0) ? 0 : 1;
+    if (count > 1) {    // Multiple parameters
+        for (int i = 1; i < op->numInput()-1; i++) {
+            if (i == skip) {
+                continue;
+            }
+            args_expr->parts.push_back(buildNodeImplied(op->getIn(i), op, mods));
+        }
+    } else if (count == 1) {  // One parameter
+        if (skip == 1) {
+            args_expr->parts.push_back(buildNodeImplied(op->getIn(2), op, mods));
+        } else {
+            args_expr->parts.push_back(buildNodeImplied(op->getIn(1), op, mods));
+        }
+    }
+
+    _pending_expressions.push_back(args_expr);
 }
 
 void ASTBuilder::opCallother(const PcodeOp *op)
@@ -2453,6 +2512,7 @@ Type* ASTBuilder::toAstType(const Datatype* dt)
             return new Type(dt);
         case TYPE_SPACEBASE:    // fall-through
         default:
+            // (TypeCode*)(dt)->
             unimplementedCode("UNHANDLED metatype " + std::to_string((int)dt->getMetatype()) +
                               " for " + dt->getName());
             return new Type(dt);

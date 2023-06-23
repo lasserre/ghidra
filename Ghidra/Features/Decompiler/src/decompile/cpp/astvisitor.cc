@@ -92,6 +92,11 @@ void* ASTVisitor::visitFunctionDecl(FunctionDecl*, void*)
     return nullptr;
 }
 
+void* ASTVisitor::visitFunctionType(FunctionType*, void*)
+{
+    return nullptr;
+}
+
 void* ASTVisitor::visitGotoStmt(GotoStmt*, void*)
 {
     return nullptr;

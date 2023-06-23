@@ -694,6 +694,11 @@ void* ConstantArrayType::doAccept(ASTVisitor* v, void* context)
     return v->visitConstantArrayType(this, context);
 }
 
+void* FunctionType::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitFunctionType(this, context);
+}
+
 PointerType::PointerType(const Datatype* pointedToType)
     : Type("")
 {

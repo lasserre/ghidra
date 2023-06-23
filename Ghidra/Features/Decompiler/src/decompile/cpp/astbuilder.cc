@@ -196,6 +196,14 @@ void ASTBuilder::buildFunctionParams(FuncProto& fp, FunctionDecl* fdecl)
     }
 }
 
+void ASTBuilder::buildFunctionParamTypes(const FuncProto* fp, FunctionType* ftype)
+{
+    /** NOTE: parameters need to be IN ORDER within the list of children */
+    for (int i = 0; i < fp->numParams(); i++) {
+        ftype->addChild(toAstType(fp->getParam(i)->getType()));
+    }
+}
+
 /**
  * @brief Check if this symbol entry is an appropriate entry for creating
  * a local variable declaration. If so, create the corresponding VarDecl object
@@ -2261,7 +2269,7 @@ void ASTBuilder::opCallind(const PcodeOp *op)
     int4 count = op->numInput() - 1;
     count -= (skip < 0) ? 0 : 1;
     if (count > 1) {    // Multiple parameters
-        for (int i = 1; i < op->numInput()-1; i++) {
+        for (int i = 1; i < op->numInput(); i++) {
             if (i == skip) {
                 continue;
             }
@@ -2484,9 +2492,24 @@ void ASTBuilder::processTypeCastExpression(const PcodeOp* op)
     }
 }
 
+FunctionType* ASTBuilder::createNewFunctionType(TypeCode* code_type)
+{
+    const FuncProto* proto = code_type->getPrototype();
+    FunctionType* ftype = nullptr;
+    if (proto) {
+        ftype = new FunctionType(code_type->getName(), toAstType(proto->getOutputType()));
+        buildFunctionParamTypes(proto, ftype);
+    } else {
+        // we could make default return type void? not sure it matters...
+        ftype = new FunctionType(code_type->getName(), new BuiltinType("int", 4, false, true));
+    }
+    return ftype;
+}
+
 Type* ASTBuilder::toAstType(const Datatype* dt)
 {
     TypeStruct* ghidra_struct = nullptr;
+    TypeCode* code_type = nullptr;
     int sid = -1;
 
     switch (dt->getMetatype()) {
@@ -2510,9 +2533,12 @@ Type* ASTBuilder::toAstType(const Datatype* dt)
             // the proper typedefs for them
             // -> (we can also change this to generate BuiltinType directly if desired)
             return new Type(dt);
+        case TYPE_CODE:
+            return createNewFunctionType((TypeCode*)dt);
         case TYPE_SPACEBASE:    // fall-through
         default:
             // (TypeCode*)(dt)->
+            // PointerType -> FunctionType (TODO: add this for "code"/function pointer)
             unimplementedCode("UNHANDLED metatype " + std::to_string((int)dt->getMetatype()) +
                               " for " + dt->getName());
             return new Type(dt);

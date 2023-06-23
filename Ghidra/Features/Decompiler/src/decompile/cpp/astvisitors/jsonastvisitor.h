@@ -52,6 +52,7 @@ public:
     virtual void* visitFloatingLiteral(FloatingLiteral*, void*);
     virtual void* visitForStmt(ForStmt*, void*);
     virtual void* visitFunctionDecl(FunctionDecl*, void*);
+    virtual void* visitFunctionType(FunctionType*, void*);
     virtual void* visitGotoStmt(GotoStmt*, void*);
     virtual void* visitIfStmt(IfStmt*, void*);
     virtual void* visitIntegerLiteral(IntegerLiteral*, void*);

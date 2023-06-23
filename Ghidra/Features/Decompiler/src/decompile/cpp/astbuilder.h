@@ -242,8 +242,10 @@ protected:
      */
     FunctionDecl* buildFunctionDecl(Funcdata* fd, bool fwd_decl);
     void buildFunctionParams(FuncProto& fp, FunctionDecl* fdecl);
+    void buildFunctionParamTypes(const FuncProto* fp, FunctionType* ftype);
     void buildLocalDeclsFromScope(const Scope& scope, CompoundStmt* fbody);
     VarDecl* tryCreateLocalVarDecl(const SymbolEntry* sym_entry);
+    FunctionType* createNewFunctionType(TypeCode* code_type);
 
     Type* getOpFuncOutputType(int out_size, string opFuncName, bool is_bool = false);
 

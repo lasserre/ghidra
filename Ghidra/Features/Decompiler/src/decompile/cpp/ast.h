@@ -902,6 +902,49 @@ protected:
 };
 
 /**
+ * @brief This represents a function data type, intended specifically
+ * for function pointers. (this also maps to Ghidra's Function Definition)
+ */
+class FunctionType : public Type
+{
+public:
+    FunctionType(string name, Type* return_type)
+        : Type(name), _return_type(return_type)
+    { }
+    ~FunctionType()
+    {
+        if (_return_type) {
+            delete _return_type;
+        }
+    }
+
+    virtual FunctionType* clone_my_members(ASTNode* node)
+    {
+        auto ftype = (FunctionType*)Type::clone_my_members(node);
+        ftype->_return_type =  _return_type ? _return_type->clone() : nullptr;
+        return ftype;
+    }
+    virtual FunctionType* clone()
+    {
+        return (FunctionType*)clone_my_members(new FunctionType(*this));
+    }
+
+    inline Type* return_type() { return _return_type; }
+
+    inline void replace_return_type(Type* newtype)
+    {
+        if (_return_type) {
+            delete _return_type;
+        }
+        _return_type = newtype;
+    }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+    Type* _return_type;
+};
+
+/**
  * @brief Pointer type, child node is the pointed-to type
  */
 class PointerType : public Type

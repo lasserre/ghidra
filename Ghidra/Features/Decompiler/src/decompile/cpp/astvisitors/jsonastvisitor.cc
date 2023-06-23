@@ -260,6 +260,16 @@ void* JsonASTVisitor::visitFunctionDecl(FunctionDecl* fd, void* context)
     return copy_to_parent(fdecl, context);
 }
 
+void* JsonASTVisitor::visitFunctionType(FunctionType* ftype, void* context)
+{
+    json ftype_j;
+    ftype_j["kind"] = "FunctionType";
+    ftype_j["inner"] = json::array();
+    ftype_j["name"] = ftype->name();
+    ftype_j["return_dtype"] = typeToJson(ftype->return_type());
+    return copy_to_parent(ftype_j, context);
+}
+
 void* JsonASTVisitor::visitGotoStmt(GotoStmt* gs, void* context)
 {
     json gs_j;

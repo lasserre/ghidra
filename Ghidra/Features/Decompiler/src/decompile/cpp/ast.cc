@@ -573,6 +573,11 @@ void* TranslationUnitDecl::doAccept(ASTVisitor* v, void* context)
     return v->visitTranslationUnitDecl(this, context);
 }
 
+void* DoStmt::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitDoStmt(this, context);
+}
+
 void* WhileStmt::doAccept(ASTVisitor* v, void* context)
 {
     return v->visitWhileStmt(this, context);

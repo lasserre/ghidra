@@ -1006,6 +1006,23 @@ void ASTBuilder::processPendingTerminal(PendingNode* node)
 // pushes a DeclRefExpr node to the AST
 void ASTBuilder::pushSymbolAST(Symbol* sym)
 {
+    // handle FunctionDecl case
+    FunctionSymbol* func_sym = dynamic_cast<FunctionSymbol*>(sym);
+    if (func_sym) {
+        // this should really be a function decl
+        FunctionDecl* fdecl = nullptr;
+        if (_fwd_decl_funcs.count(sym)) {
+            fdecl = _fwd_decl_funcs.at(sym);
+        } else {
+            fdecl = buildFunctionDecl(func_sym->getFunction(), true);
+            _fwd_decl_funcs[sym] = fdecl;
+        }
+        DeclRefExpr* refexpr = new DeclRefExpr(fdecl);
+        currentASTNode()->addChild(refexpr);
+        return;
+    }
+
+    // normal VarDecl case
     VarDecl* sym_decl = nullptr;
 
     if (_locals.count(sym)) {
@@ -1920,7 +1937,30 @@ void ASTBuilder::emitBlockWhileDo(const BlockWhileDo *bl)
 
 void ASTBuilder::emitBlockDoWhile(const BlockDoWhile *bl)
 {
-    unimplementedCode("emitBlockDoWhile");
+    // dowhile block NEVER prints final branch
+    pushMod();
+    unsetMod(no_branch|only_branch);
+    emitAnyLabelStatement(bl);
+
+    DoStmt* do_stmt = new DoStmt();
+    CompoundStmt* cmpd_stmt = new CompoundStmt();
+    currentASTNode()->addChild(do_stmt);
+    do_stmt->addChild(cmpd_stmt);
+
+    // child 1: body (block w/ no_branch)
+    pushASTNode(cmpd_stmt);
+    pushMod();
+    setMod(no_branch);
+    bl->getBlock(0)->emit(this);
+    popMod();
+    popASTNode();   // CompoundStmt
+
+    // child 2: condition (same block w/ only_branch)
+    pushASTNode(do_stmt);
+    setMod(only_branch);
+    bl->getBlock(0)->emit(this);
+    popMod();
+    popASTNode();   // DoStmt
 }
 
 void ASTBuilder::emitBlockInfLoop(const BlockInfLoop *bl)
@@ -2705,17 +2745,17 @@ void ASTBuilder::opIntMult(const PcodeOp *op)
 
 void ASTBuilder::opIntDiv(const PcodeOp *op)
 {
-    unimplementedOp("opIntDiv");
+    binaryOperator("/", op);
 }
 
 void ASTBuilder::opIntSdiv(const PcodeOp *op)
 {
-    unimplementedOp("opIntSdiv");
+    binaryOperator("/", op);
 }
 
 void ASTBuilder::opIntRem(const PcodeOp *op)
 {
-    unimplementedOp("opIntRem");
+    binaryOperator("%", op);
 }
 
 void ASTBuilder::opIntSrem(const PcodeOp *op)

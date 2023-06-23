@@ -744,6 +744,26 @@ protected:
 };
 
 /**
+ * DoStmt represents a do/while loop.
+ * Children are:
+ * - Body
+ * - Condition
+ */
+class DoStmt : public ASTNode
+{
+public:
+    DoStmt()
+    { }
+    virtual DoStmt* clone()
+    {
+        return (DoStmt*)clone_my_members(new DoStmt(*this));
+    }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+};
+
+/**
  * WhileStmt children are:
  * [- Condition variable (DeclStmt)] << clang has this, I don't think we need it
  * bc I don't think Ghidra generates this form (wait until proven wrong to implement :))

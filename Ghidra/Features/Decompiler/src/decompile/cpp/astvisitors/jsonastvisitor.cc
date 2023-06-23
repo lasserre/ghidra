@@ -227,6 +227,14 @@ void* JsonASTVisitor::visitDeclStmt(DeclStmt* ds, void* context)
     return copy_to_parent(declstmt, context);
 }
 
+void* JsonASTVisitor::visitDoStmt(DoStmt* ds, void* context)
+{
+    json ds_j;
+    ds_j["kind"] = "DoStmt";
+    ds_j["inner"] = json::array();
+    return copy_to_parent(ds_j, context);
+}
+
 void* JsonASTVisitor::visitFloatingLiteral(FloatingLiteral* lit, void* context)
 {
     json lit_j;

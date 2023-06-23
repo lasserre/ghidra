@@ -77,6 +77,11 @@ void* ASTVisitor::visitDeclStmt(DeclStmt*, void*)
     return nullptr;
 }
 
+void* ASTVisitor::visitDoStmt(DoStmt*, void*)
+{
+    return nullptr;
+}
+
 void* ASTVisitor::visitFloatingLiteral(FloatingLiteral*, void*)
 {
     return nullptr;

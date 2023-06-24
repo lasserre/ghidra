@@ -468,6 +468,10 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
         }
     }
 
+    for (auto const& entry : _unnamedLoc_globals) {
+        _head_translation_unit->addChild(entry.second);
+    }
+
     // add function forward-declarations to top-level translation unit
     for (auto const& entry : _fwd_decl_funcs) {
         _head_translation_unit->addChild(entry.second);
@@ -1172,6 +1176,35 @@ void ASTBuilder::pushMismatchSymbolAST(Symbol *sym,int4 off,int4 sz,
         unimplementedCode("pushUnnamedLocation in pushMismatchSymbol");
         return;
     }
+}
+
+void ASTBuilder::pushUnnamedLocation(const Address &addr, const Varnode *vn,const PcodeOp *op)
+{
+    // I'm going to generate these names a bit differently to ensure they are valid var names
+
+    ostringstream s;
+    s << addr.getSpace()->getName();
+    // my version (after done validating):
+    // s << "_";
+    // s << addr.getOffset();
+
+    // Ghidra's version:
+    addr.printRaw(s);
+    // pushAtom(Atom(s.str(),vartoken,EmitMarkup::var_color,op,vn));
+
+    string varname = s.str();
+
+    if (!_unnamedLoc_globals.count(varname)) {
+        Type* addr_dt = new BuiltinType("unsigned long", 8, false, false);
+        _unnamedLoc_globals[varname] = new VarDecl(_next_vdecl_id++, varname, addr_dt);
+    }
+
+    VarDecl* vdecl = _unnamedLoc_globals.at(varname);
+    DeclRefExpr* refexpr = new DeclRefExpr(vdecl);
+    currentASTNode()->addChild(refexpr);
+
+    // IntegerLiteral* lit = new IntegerLiteral(addr_dt, addr.getOffset());
+    // currentASTNode()->addChild(lit);
 }
 
 /**
@@ -2065,7 +2098,15 @@ void ASTBuilder::emitBlockDoWhile(const BlockDoWhile *bl)
 
 void ASTBuilder::emitBlockInfLoop(const BlockInfLoop *bl)
 {
-    unimplementedCode("emitBlockInfLoop");
+    DoStmt* do_stmt = new DoStmt();
+
+    do_stmt->addChild(new CompoundStmt());      // do nothing
+
+    pushASTNode(do_stmt);
+    push_bool(1, 4);    // while (true)
+    popASTNode();
+
+    currentASTNode()->addChild(do_stmt);
 }
 
 void ASTBuilder::emitBlockSwitch(const BlockSwitch *bl)
@@ -3328,7 +3369,9 @@ void ASTBuilder::opPtrsub(const PcodeOp *op)
         }
 
         if (!symbol) {
-            unimplementedCode("PTRSUB null symbol case");
+            TypeSpacebase *sb = (TypeSpacebase *)ct;
+            Address addr = sb->getAddress(in1const,in0->getSize(),op->getAddr());
+            pushUnnamedLocation(addr,(Varnode *)0,op);
         } else {
             int4 off = high->getSymbolOffset();
             if (off == 0) {

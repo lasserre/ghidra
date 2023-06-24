@@ -291,6 +291,8 @@ protected:
     void pushMismatchSymbolAST(Symbol *sym,int4 off,int4 sz,
             const Varnode *vn,const PcodeOp *op);
 
+    virtual void pushUnnamedLocation(const Address &addr, const Varnode *vn,const PcodeOp *op);
+
     virtual void pushPartialSymbol(const Symbol *sym,int4 off,int4 sz,
             const Varnode *vn,const PcodeOp *op,int4 inslot);
 
@@ -361,6 +363,7 @@ protected:
     std::map<Symbol*, VarDecl*> _locals;
     std::map<Symbol*, ParmVarDecl*> _parameters;
     std::map<Symbol*, VarDecl*> _globals;
+    std::map<string, VarDecl*> _unnamedLoc_globals;     // treating unnamedLocations as globals
     std::map<Symbol*, FunctionDecl*> _fwd_decl_funcs;
     std::map<string, FunctionDecl*> _fwd_decl_opFunc_funcs;
     // references to globals where the size doesn't match the

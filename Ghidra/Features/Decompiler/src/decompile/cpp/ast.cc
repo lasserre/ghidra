@@ -221,6 +221,9 @@ int BinaryOperator::precedence()
     else if (_opcode == "&") {
         return 11;
     }
+    else if (_opcode == "^") {
+        return 12;
+    }
     else if (_opcode == "&&") {
         return 14;
     }

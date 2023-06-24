@@ -870,24 +870,68 @@ void ASTBuilder::push_float(Datatype* dt, uintb val,int4 sz,const Varnode *vn, c
             delete float_dt;
             float_dt = toAstType(dt);
         }
-        FloatingLiteral* lit = new FloatingLiteral(float_dt, floatval);
-        currentASTNode()->addChild(lit);
+
+        string special_value = "";
 
         if (type == FloatFormat::infinity) {
             if (format->extractSign(val)) {
-                lit->setSpecialValue("-INF");
+                special_value = "-INF";
             } else {
-                lit->setSpecialValue("INF");
+                special_value = "INF";
             }
         } else if (type == FloatFormat::nan) {
             if (format->extractSign(val)) {
-                lit->setSpecialValue("-NaN");
+                special_value = "-NaN";
             } else {
-                lit->setSpecialValue("NaN");
+                special_value = "NaN";
+            }
+        } else {
+            ostringstream t;
+            if ((mods & force_scinote)!=0) {
+                t.setf( ios::scientific ); // Set to scientific notation
+                t.precision(format->getDecimalPrecision()-1);
+                t << floatval;
+                token = t.str();
+            } else {
+                // Try to print "minimal" accurate representation of the float
+                t.unsetf( ios::floatfield );	// Use "default" notation
+                t.precision(format->getDecimalPrecision());
+                t << floatval;
+                token = t.str();
+                bool looksLikeFloat = false;
+                for(int4 i=0;i<token.size();++i) {
+                    char c = token[i];
+                    if (c == '.' || c == 'e') {
+                        looksLikeFloat = true;
+                        break;
+                    }
+                }
+                if (!looksLikeFloat) {
+                    token += ".0";	// Force token to look like a floating-point value
+                }
             }
         }
-        // CLS: everything below here had to do with printing/formatting
-        // so we're done
+
+        double value_to_use = 0.0;
+        if (special_value == "") {
+            value_to_use = std::stod(token);
+        }
+
+        FloatingLiteral* lit = nullptr;
+
+        if (value_to_use < 0) {
+            UnaryOperator* unop = new UnaryOperator("-");
+            currentASTNode()->addChild(unop);
+            lit = new FloatingLiteral(float_dt, -value_to_use);
+            unop->addChild(lit);
+        } else {
+            lit = new FloatingLiteral(float_dt, value_to_use);
+            currentASTNode()->addChild(lit);
+        }
+
+        if (special_value != "") {
+            lit->setSpecialValue(special_value);    // override 0.0 with real value
+        }
     }
 }
 
@@ -925,7 +969,12 @@ void ASTBuilder::processPendingConstant(uintb value, Datatype* dt, const Varnode
             push_integer(dt, value, dt->getSize(), false, vn, op);
             return;
         case TYPE_BOOL:
-            unimplementedCode("bool constant");
+            // CLS: we can make this a BoolLiteral but C doesn't actually have bool datatype
+            // ...however, Ghidra believes this is a bool somehow and we might benefit from
+            // that extra information
+            currentASTNode()->addChild(new IntegerLiteral(
+                    new BuiltinType("bool", dt->getSize(), false, false),
+                    value));
             return;
         case TYPE_VOID:
             // this is wrong...log or ignore (Ghidra throws here so just ignore)
@@ -2710,7 +2759,7 @@ void ASTBuilder::opIntNegate(const PcodeOp *op)
 
 void ASTBuilder::opIntXor(const PcodeOp *op)
 {
-    unimplementedOp("opIntXor");
+    binaryOperator("^", op);
 }
 
 void ASTBuilder::opIntAnd(const PcodeOp *op)
@@ -2785,7 +2834,7 @@ void ASTBuilder::opBoolOr(const PcodeOp *op)
 
 void ASTBuilder::opFloatEqual(const PcodeOp *op)
 {
-    unimplementedOp("opFloatEqual");
+    binaryOperator("==", op, "!=");
 }
 
 void ASTBuilder::opFloatNotEqual(const PcodeOp *op)

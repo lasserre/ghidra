@@ -2867,7 +2867,7 @@ void ASTBuilder::opIntAnd(const PcodeOp *op)
 
 void ASTBuilder::opIntOr(const PcodeOp *op)
 {
-    unimplementedOp("opIntOr");
+    binaryOperator("|", op);
 }
 
 void ASTBuilder::opIntLeft(const PcodeOp *op)

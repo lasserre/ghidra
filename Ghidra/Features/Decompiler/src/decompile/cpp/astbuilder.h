@@ -304,6 +304,12 @@ protected:
      */
     void processExpressionStack();
 
+    /**
+     * @brief Inserts a comma operator underneath the given parent node and
+     * returns a pointer to it
+     */
+    BinaryOperator* insertCommaOperator(ASTNode* parent);
+
     void push_bool(uintb value, int size);
 
     // override PrintC::push_integer for when we don't know the datatype

@@ -53,6 +53,7 @@ model {
 						include "ast.cc"
 		                include "astbuilder.cc"
 						include "astvisitor.cc"
+                        include "astvisitors/commavisitor.cc"
                         include "astvisitors/typedefdeclvisitor.cc"
                         include "astvisitors/jsonastvisitor.cc"
 		         	 	include "marshal.cc"

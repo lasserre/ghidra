@@ -1,5 +1,6 @@
 #include "astbuilder.h"
 #include "astvisitors/typedefdeclvisitor.h"
+#include "astvisitors/commavisitor.h"
 
 #include <ctime>
 #include <string>
@@ -384,6 +385,11 @@ FunctionDecl* ASTBuilder::buildFunctionDecl(Funcdata* fd, bool fwd_decl)
     pushASTNode(fbody);
     emitBlockGraph(&fd->getStructure());
     popASTNode();
+
+    // prune unnecessary commas and add hierarchical comma ops here
+    CommaVisitor cv;
+    cv.fixCommaOps(fdecl);
+
     return fdecl;
 }
 
@@ -1520,7 +1526,6 @@ void ASTBuilder::emitBlockBasic(const BlockBasic *bb)
     }
     else {
         BinaryOperator* comma_op = nullptr;
-        bool separator = false;
 
         for (PcodeOp* instr : getPcodeOps(bb)) {
 
@@ -1544,30 +1549,8 @@ void ASTBuilder::emitBlockBasic(const BlockBasic *bb)
                 // string regname = getRegName(vnode);
                 continue;
             }
-            if (separator) {
-                if (isSet(comma_separate)) {
-                    // this code structure mirrors Ghidra code, which is generating
-                    // the comma in PRINT ORDER, not in AST order
-                    // If we get here, the comma operator should have been the parent
-                    // of the node we just generated - which I think at this location
-                    // will be the last child of the currentASTNode() since we
-                    // are pushing instruction by instruction into whatever currentASTNode()
-                    // already existed
-                    ASTNode* current_node = currentASTNode();
-                    ASTNode* lhs = current_node->children()->back();
-
-                    if (comma_op) {
-                        throw LowlevelError("We are hitting a 2nd comma operator! Need to add code to handle this");
-                    }
-                    comma_op = new BinaryOperator(",");
-                    lhs->replaceWithNodeShallow(comma_op);
-                    comma_op->addChild(lhs);   // can't access current's parent now
-                    pushASTNode(comma_op);
-                }
-            }
 
             emitExpression(instr);
-            separator = true;
         }
 
         if (comma_op) {
@@ -1646,6 +1629,22 @@ void ASTBuilder::emitBlockLs(const BlockList *bl)
     bl->getBlock(bl->getSize()-1)->emit(this);
 }
 
+/**
+ * CLS: we should insert a comma_op everywhere we see setMod(comma_separate)
+ * so that if it is needed the child nodes will be properly added AS CHILDREN
+ * of the comma op (as opposed to Ghidra code where they are using L-R print order
+ * instead of top-down AST order)
+ * we will prune unnecessary comma ops at the end (ones with only one child) as
+ * well as inserting multi-layer comma ops (if there are > 2 children) taking
+ * L-R associativity of comma operator into account
+ */
+BinaryOperator* ASTBuilder::insertCommaOperator(ASTNode* parent)
+{
+    BinaryOperator* comma_op = new BinaryOperator(",");
+    parent->addChild(comma_op);
+    return comma_op;
+}
+
 void ASTBuilder::emitBlockCondition(const BlockCondition *bl)
 {
     // FIXME: get rid of parens and properly emit && and ||
@@ -1657,24 +1656,62 @@ void ASTBuilder::emitBlockCondition(const BlockCondition *bl)
     if (isSet(only_branch) || isSet(comma_separate)) {
         string opcode = bl->getOpcode() == CPUI_BOOL_AND ? "&&" : "||";
         BinaryOperator* binop = new BinaryOperator(opcode);
-        currentASTNode()->addChild(binop);
         ParenExpr* lhs_parens = new ParenExpr();
         ParenExpr* rhs_parens = new ParenExpr();
-        binop->addChild(lhs_parens);
-        binop->addChild(rhs_parens);
+
+        BinaryOperator* parent_op = dynamic_cast<BinaryOperator*>(currentASTNode());
+        bool parent_is_comma_op = parent_op && parent_op->opcode() == ",";
 
         // generate LHS/RHS of conditional
-        pushASTNode(lhs_parens);
+        if (parent_is_comma_op) {
+            pushASTNode(parent_op);     // push the comma
+        } else {
+            pushASTNode(lhs_parens);
+        }
+
         bl->getBlock(0)->emit(this);    // this should be LHS of binop
-        popASTNode();   // LHS Parens
+        popASTNode();   // LHS Parens OR parent_op
+
+        if (parent_is_comma_op) {
+            // ok, TAKE THE LAST CHILD of parent_op and put it under the &&/||
+            ASTNode* last_child = parent_op->children()->back();
+            parent_op->children()->pop_back();
+
+            if (!last_child) {
+                throw LowlevelError("There was no LHS of conditional!");
+            }
+
+            if (parent_op->children()->size() > 0) {
+                // this is a legit comma operator, there is a LHS of the comma remaining
+                // In this case, Ghidra's comma logic is screwed up and the last_child
+                // is placed under binop directly, while the "LHS" parens are actually
+                // surrounding the entire condition
+                currentASTNode()->replaceWithNodeShallow(lhs_parens);
+                lhs_parens->addChild(currentASTNode());
+                currentASTNode()->addChild(binop);
+                binop->addChild(last_child);
+                binop->addChild(rhs_parens);
+            } else {
+                // false alarm - comma will be pruned
+                lhs_parens->addChild(last_child);
+                binop->addChild(lhs_parens);
+                binop->addChild(rhs_parens);
+                currentASTNode()->addChild(binop);
+            }
+        } else {
+            binop->addChild(lhs_parens);
+            binop->addChild(rhs_parens);
+            currentASTNode()->addChild(binop);
+        }
 
         pushMod();
         unsetMod(only_branch);
         setMod(comma_separate);     // Notice comma_separate placed only on second block
+        BinaryOperator* comma_op = insertCommaOperator(rhs_parens);
 
-        pushASTNode(rhs_parens);
+        pushASTNode(comma_op);
         bl->getBlock(1)->emit(this);    // this should be RHS of binop
-        popASTNode();   // RHS parens
+        popASTNode();   // comma_op
 
         popMod();
     }
@@ -1870,7 +1907,8 @@ void ASTBuilder::emitForLoop(const BlockWhileDo* bl)
 
     ForStmt* forstmt = new ForStmt();
     currentASTNode()->addChild(forstmt);
-    pushASTNode(forstmt);
+    BinaryOperator* comma_op_init = insertCommaOperator(forstmt);
+    pushASTNode(comma_op_init);
 
     // 1) initializer statement
     if (op) {
@@ -1879,22 +1917,30 @@ void ASTBuilder::emitForLoop(const BlockWhileDo* bl)
         currentASTNode()->addChild(new NullNode());
     }
 
+    popASTNode();   // comma_op_init
+    BinaryOperator* comma_op_cond = insertCommaOperator(forstmt);
+    pushASTNode(comma_op_cond);
+
     // 2) conditional statement
     condBlock->emit(this);
-    if (forstmt->children()->size() < 2) {
-        forstmt->addChild(new NullNode());  // add placeholder if no cond statement
+    if (comma_op_cond->children()->size() < 1) {
+        comma_op_cond->addChild(new NullNode());  // add placeholder if no cond statement
     }
+
+    popASTNode();   // comma_op_cond
+    BinaryOperator* comma_op_inc = insertCommaOperator(forstmt);
+    pushASTNode(comma_op_inc);
 
     // 3) increment statement
     op = bl->getIterateOp();
     emitExpression(op);
-    if (forstmt->children()->size() < 3) {
-        forstmt->addChild(new NullNode());  // add placeholder if no increment statement
+    if (comma_op_inc->children()->size() < 1) {
+        comma_op_inc->addChild(new NullNode());  // add placeholder if no increment statement
     }
 
-    popASTNode();   // pop ForStmt
+    popASTNode();   // comma_op_inc
 
-    popMod();
+    popMod();   // pop comma_separate - NO MORE COMMAS below here
     setMod(no_branch); // Dont print goto at bottom of clause
 
     // 4) loop body
@@ -1968,8 +2014,11 @@ void ASTBuilder::emitBlockWhileDo(const BlockWhileDo *bl)
         //     while(condition) {
         pushMod();
         setMod(comma_separate);
+        BinaryOperator* comma_op = insertCommaOperator(whilestmt);
+        pushASTNode(comma_op);
         condBlock->emit(this);      // child 1: condition
-        popMod();
+        popASTNode();   // comma_op
+        popMod();   // comma mod
 
         // unconditionally add a CompoundStmt for the body (like IfStmt)
         // child 2: body
@@ -2034,6 +2083,8 @@ void ASTBuilder::emitBlockSwitch(const BlockSwitch *bl)
 
     pushMod();
     setMod(only_branch|comma_separate);
+    // I add the comma operator inside opBranchind since that is where the switch
+    // statement is created and the comma needs to be inside its conditional
     bl->getSwitchBlock()->emit(this);
     popMod();
 
@@ -2249,12 +2300,18 @@ void ASTBuilder::opBranchind(const PcodeOp *op)
 {
     SwitchStmt* ss = new SwitchStmt();
     currentASTNode()->addChild(ss);
-    // TODO: evaluate this again...not sure we should push here??
     pushASTNode(ss);    // need to push so it's ready for case stmts
 
     // build switch conditional expression
     PendingExpr* expr = new PendingExpr();
-    expr->ast_op = ss;
+
+    if (isSet(comma_separate)) {
+        BinaryOperator* comma_op = insertCommaOperator(ss);
+        expr->ast_op = comma_op;
+    } else {
+        expr->ast_op = ss;
+    }
+
     expr->parts.push_back(buildNodeImplied(op->getIn(0), op, mods));
     _pending_expressions.push_back(expr);
 }

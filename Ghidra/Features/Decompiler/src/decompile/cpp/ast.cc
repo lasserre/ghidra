@@ -56,10 +56,13 @@ ASTNode::~ASTNode()
  */
 bool needsParens(ASTNode* parent, ASTNode* child)
 {
-    if (dynamic_cast<CallExpr*>(parent) || dynamic_cast<ArraySubscriptExpr*>(parent)
-        || dynamic_cast<ParenExpr*>(parent) || dynamic_cast<IfStmt*>(parent)) {
+    if (dynamic_cast<CallExpr*>(parent) || dynamic_cast<ParenExpr*>(parent) ||
+        dynamic_cast<IfStmt*>(parent)) {
         // call expressions, array subscripts, and parenthetical expressions
         //  already have parentheses or brackets so we don't need to add more!
+        return false;
+    } else if (dynamic_cast<ArraySubscriptExpr*>(parent) && parent->children()->size() == 1) {
+        // we DO potentially need parens for the array variable expression (child 1)
         return false;
     }
 

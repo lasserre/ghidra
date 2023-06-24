@@ -361,6 +361,7 @@ protected:
     // Maintain maps to allow looking up ValueDecl's we've already
     // created by their Symbol (for DeclRefExpr's which point to them, etc)
     std::map<Symbol*, VarDecl*> _locals;
+    std::map<Symbol*, VarDecl*> _mismatch_locals;
     std::map<Symbol*, ParmVarDecl*> _parameters;
     std::map<Symbol*, VarDecl*> _globals;
     std::map<string, VarDecl*> _unnamedLoc_globals;     // treating unnamedLocations as globals
@@ -371,7 +372,7 @@ protected:
     // each original Symbol* maps to a list of VarDecls, with
     // entries being added only if they introduce a reference with
     // a size not already present in the list of VarDecls
-    std::map<Symbol*, vector<VarDecl*>> _mismatch_globals;
+    std::map<string, VarDecl*> _mismatch_globals;
 
     /**
      * The structure type library which contains the mapping of structure names

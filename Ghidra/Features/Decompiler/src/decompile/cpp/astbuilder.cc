@@ -292,8 +292,12 @@ Type* ASTBuilder::getOpFuncOutputType(int out_size, string opFuncName, bool is_b
                            : new BuiltinType("unsigned char", 1, false, false);
         case 2:
             return new BuiltinType("unsigned short", 2, false, false);
+        case 3:     // fallthrough
         case 4:
             return new BuiltinType("unsigned int", 4, false, false);
+        case 5:     // fallthrough
+        case 6:     // fallthrough
+        case 7:     // fallthrough
         case 8:
             return new BuiltinType("unsigned long", 8, false, false);
         default:
@@ -463,9 +467,7 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
     }
 
     for (auto const& entry : _mismatch_globals) {
-        for (auto const& vdecl : entry.second) {
-            _head_translation_unit->addChild(vdecl);
-        }
+        _head_translation_unit->addChild(entry.second);
     }
 
     for (auto const& entry : _unnamedLoc_globals) {
@@ -1129,43 +1131,29 @@ void ASTBuilder::pushMismatchSymbolAST(Symbol *sym,int4 off,int4 sz,
         // which points to a list of decl's (one each for different mismatching
         // accesses to that symbol)
 
-        if (!sym->getScope()->isGlobal()) {
-            unimplementedCode("pushMismatchSymbol NON GLOBAL");
-            return;
-        }
-
         VarDecl* sym_decl = nullptr;
 
-        if (_mismatch_globals.count(sym)) {
-            /** CLS: when I did the size check, I would end up with multiple
-             * definitions of a variable named the same. Either we need to
-             * make the names unique or define a single variable. For now I'm
-             * defining the first variable as the only one...if that becomes an
-             * issue we can change this to use unique names
-            */
-            sym_decl = _mismatch_globals[sym].front();
-
-            // check size
-            // for (VarDecl* vd : _mismatch_globals[sym]) {
-            //     auto existing_size = vd->ghidra_dtype()->getSize();
-            //     if (vn->getSize() == existing_size) {
-            //         // use this one
-            //         sym_decl = vd;  // trying without clone()
-            //     }
-            // }
+        if (sym->getScope()->isGlobal()) {
+            if (!_globals.count(sym)) {
+                _globals[sym] = new VarDecl(_next_vdecl_id++, sym);
+            }
+            sym_decl = _globals[sym];
+        } else {
+            // local var
+            if (_locals.count(sym)) {
+                sym_decl = _locals[sym];
+            } else {
+                throw LowlevelError("No local variable mapped for " + sym->getName());
+            }
         }
 
-        // node->sym not mapped OR we didn't find a size match
-        if (!sym_decl) {
-            sym_decl = new VarDecl(_next_vdecl_id++,
-                "_" + sym->getName(),
-                vn->getType());    // use vnode type, not sym type
-
-            if (_mismatch_globals.count(sym)) {
-                _mismatch_globals[sym].push_back(sym_decl);
-            } else {
-                _mismatch_globals[sym] = {sym_decl};
-            }
+        // add globals OR locals here ONLY for validation purposes...
+        string mismatch_name = "_" + sym->getName();
+        if (!_mismatch_globals.count(mismatch_name)) {
+            _mismatch_globals[mismatch_name] = new VarDecl(
+                _next_vdecl_id++,
+                mismatch_name,
+                new BuiltinType("int", 4, false, true));
         }
 
         DeclRefExpr* refexpr = new DeclRefExpr(sym_decl);
@@ -2098,9 +2086,19 @@ void ASTBuilder::emitBlockDoWhile(const BlockDoWhile *bl)
 
 void ASTBuilder::emitBlockInfLoop(const BlockInfLoop *bl)
 {
-    DoStmt* do_stmt = new DoStmt();
+    const PcodeOp *op;
 
-    do_stmt->addChild(new CompoundStmt());      // do nothing
+    pushMod();
+    unsetMod(no_branch|only_branch);
+    emitAnyLabelStatement(bl);
+
+    DoStmt* do_stmt = new DoStmt();
+    CompoundStmt* loop_body = new CompoundStmt();
+    do_stmt->addChild(loop_body);      // do nothing
+    pushASTNode(loop_body);
+    bl->getBlock(0)->emit(this);
+    popASTNode();
+    popMod();
 
     pushASTNode(do_stmt);
     push_bool(1, 4);    // while (true)

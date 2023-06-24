@@ -647,13 +647,17 @@ string BuiltinType::name()
             return isSigned() ? "char" : "unsigned char";
         case 2:
             return isSigned() ? "short" : "unsigned short";
+        case 3:     // fallthrough
         case 4:
             return isSigned() ? "int" : "unsigned int";
+        case 5:     // fallthrough
+        case 6:     // fallthrough
+        case 7:     // fallthrough
         case 8:
             return isSigned() ? "long" : "unsigned long";
         default:
             callbacks->unimplementedCodeCallback("UNHANDLED BuiltinType INT SIZE of " + size());
-            return "UNHANDLED_INT_SIZE_" + size();
+            return "UNHANDLED_INT_SIZE_" + std::to_string(size());
     }
 }
 

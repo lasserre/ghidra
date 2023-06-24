@@ -2164,16 +2164,18 @@ void ASTBuilder::emitBlockSwitch(const BlockSwitch *bl)
         if (bl->getGotoType(i)) {
             /** TODO: emit goto statement */
             unimplementedCode("emit goto statement");
+            popASTNode();   // pop case statement
         }
         else {
             FlowBlock* caseblk = bl->getCaseBlock(i);
             caseblk->emit(this);
-            popASTNode();   // pop case statement
 
             if (bl->isExit(i) && (i != bl->getNumCaseBlocks()-1)) {
                 BreakStmt* brk = new BreakStmt();
-                cmpstmt->addChild(brk);
+                currentASTNode()->addChild(brk);    // add underneath case stmt
             }
+
+            popASTNode();   // pop case statement
         }
     }
 

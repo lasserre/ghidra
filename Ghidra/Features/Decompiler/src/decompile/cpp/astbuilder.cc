@@ -935,6 +935,16 @@ void ASTBuilder::push_float(Datatype* dt, uintb val,int4 sz,const Varnode *vn, c
     }
 }
 
+void ASTBuilder::push_bool(uintb value, int size)
+{
+    // CLS: we can make this a BoolLiteral but C doesn't actually have bool datatype
+    // ...however, Ghidra believes this is a bool somehow and we might benefit from
+    // that extra information
+    currentASTNode()->addChild(new IntegerLiteral(
+            new BuiltinType("bool", size, false, false),
+            value));
+}
+
 // corresponds to pushConstant()
 void ASTBuilder::processPendingConstant(uintb value, Datatype* dt, const Varnode* vn,
                                         const PcodeOp* op)
@@ -969,12 +979,7 @@ void ASTBuilder::processPendingConstant(uintb value, Datatype* dt, const Varnode
             push_integer(dt, value, dt->getSize(), false, vn, op);
             return;
         case TYPE_BOOL:
-            // CLS: we can make this a BoolLiteral but C doesn't actually have bool datatype
-            // ...however, Ghidra believes this is a bool somehow and we might benefit from
-            // that extra information
-            currentASTNode()->addChild(new IntegerLiteral(
-                    new BuiltinType("bool", dt->getSize(), false, false),
-                    value));
+            push_bool(value, dt->getSize());
             return;
         case TYPE_VOID:
             // this is wrong...log or ignore (Ghidra throws here so just ignore)
@@ -1930,38 +1935,34 @@ void ASTBuilder::emitBlockWhileDo(const BlockWhileDo *bl)
         //       conditionbody ...
         //       if (conditionalbranch) break;
 
-        /**
-         * CLS: putting this placeholder here simply to make it easy to see
-         * (with an actual test case) what the clang AST does for the "true"
-         * bool literal part (is this a bool literal? something else?)
-        */
-        unimplementedCode("emitBlockWhileDo - hasOverflowSyntax");
-        popASTNode();   // WhileStmt
-        return;
-        // emit->tagLine();
-        // emit->tagOp(KEYWORD_WHILE,EmitMarkup::keyword_color,op);
-        // int4 id1 = emit->openParen(OPEN_PAREN);
-        // emit->spaces(1);
-        // emit->print(KEYWORD_TRUE,EmitMarkup::const_color);
-        // emit->spaces(1);
-        // emit->closeParen(CLOSE_PAREN,id1);
-        // emit->spaces(1);
-        // indent = emit->startIndent();
-        // emit->print(OPEN_CURLY);
-        // pushMod();
-        // setMod(no_branch);
-        // condBlock->emit(this);
-        // popMod();
-        // emitCommentBlockTree(condBlock);
-        // emit->tagLine();
+        // child 1: condition
+        push_bool(1, 4);
+
+        // unconditionally add a CompoundStmt for the body (like IfStmt)
+        // child 2: body
+        CompoundStmt* body = new CompoundStmt();
+        currentASTNode()->addChild(body);
+        pushASTNode(body);
+
+        pushMod();
+        setMod(no_branch);
+        condBlock->emit(this);
+        popMod();
+
         // emit->tagOp(KEYWORD_IF,EmitMarkup::keyword_color,op);
-        // emit->spaces(1);
-        // pushMod();
-        // setMod(only_branch);
-        // condBlock->emit(this);
-        // popMod();
-        // emit->spaces(1);
-        // emitGotoStatement(condBlock,(const FlowBlock *)0,FlowBlock::f_break_goto);
+        IfStmt* if_stmt = new IfStmt();
+        body->addChild(if_stmt);
+        pushASTNode(if_stmt);
+
+        // IfStmt conditional
+        pushMod();
+        setMod(only_branch);
+        condBlock->emit(this);
+        popMod();
+
+        // then block (break)
+        emitGotoStatement(condBlock,(const FlowBlock *)0,FlowBlock::f_break_goto);
+        popASTNode();   // IfStmt
     } else {
         // Print conditional block "normally" as
         //     while(condition) {
@@ -1969,15 +1970,16 @@ void ASTBuilder::emitBlockWhileDo(const BlockWhileDo *bl)
         setMod(comma_separate);
         condBlock->emit(this);      // child 1: condition
         popMod();
+
+        // unconditionally add a CompoundStmt for the body (like IfStmt)
+        // child 2: body
+        CompoundStmt* body = new CompoundStmt();
+        currentASTNode()->addChild(body);
+        pushASTNode(body);
     }
 
-    // unconditionally add a CompoundStmt for the body (like IfStmt)
-    CompoundStmt* body = new CompoundStmt();
-    currentASTNode()->addChild(body);
-    pushASTNode(body);
-
     setMod(no_branch);  // Dont print goto at bottom of clause
-    bl->getBlock(1)->emit(this);    // child 2: body
+    bl->getBlock(1)->emit(this);
     popMod();
 
     popASTNode();   // CompoundStmt

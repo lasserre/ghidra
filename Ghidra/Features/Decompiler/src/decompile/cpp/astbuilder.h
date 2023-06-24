@@ -304,6 +304,8 @@ protected:
      */
     void processExpressionStack();
 
+    void push_bool(uintb value, int size);
+
     // override PrintC::push_integer for when we don't know the datatype
     virtual void push_integer(uintb val,int4 sz,bool sign, const Varnode *vn,const PcodeOp *op);
     // this is the version to call if we DO know the datatype

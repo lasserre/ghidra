@@ -366,7 +366,7 @@ protected:
     std::map<Symbol*, VarDecl*> _globals;
     std::map<string, VarDecl*> _unnamedLoc_globals;     // treating unnamedLocations as globals
     std::map<Symbol*, FunctionDecl*> _fwd_decl_funcs;
-    std::map<string, FunctionDecl*> _fwd_decl_opFunc_funcs;
+    std::map<string, FunctionDecl*> _fwd_decl_other_funcs;
     // references to globals where the size doesn't match the
     // variable size (Ghidra indicates this with _VARNAME)
     // each original Symbol* maps to a list of VarDecls, with

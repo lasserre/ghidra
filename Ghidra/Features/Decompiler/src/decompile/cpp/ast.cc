@@ -644,23 +644,23 @@ string BuiltinType::name()
     // int - 4B
     // long - 8B
     // long long - 8B
-
-    switch(size()) {
-        case 1:
-            return isSigned() ? "char" : "unsigned char";
-        case 2:
-            return isSigned() ? "short" : "unsigned short";
-        case 3:     // fallthrough
-        case 4:
-            return isSigned() ? "int" : "unsigned int";
-        case 5:     // fallthrough
-        case 6:     // fallthrough
-        case 7:     // fallthrough
-        case 8:
-            return isSigned() ? "long" : "unsigned long";
-        default:
-            callbacks->unimplementedCodeCallback("UNHANDLED BuiltinType INT SIZE of " + size());
-            return "UNHANDLED_INT_SIZE_" + std::to_string(size());
+    if (size() == 1) {
+        return isSigned() ? "char" : "unsigned char";
+    } else if (size() == 2) {
+        return isSigned() ? "short" : "unsigned short";
+    } else if (size() > 2 && size() <= 4) {
+        return isSigned() ? "int" : "unsigned int";
+    } else if (size() > 4 && size() <= 8) {
+        return isSigned() ? "long" : "unsigned long";
+    } else if (size() > 8 && size() <= 16) {
+        return isSigned() ? "int128_t" : "uint128_t";
+    } else if (size() > 16 && size() <= 32) {
+        return isSigned() ? "int256_t" : "uint256_t";
+    } else if (size() > 32 && size() <= 64) {
+        return isSigned() ? "int512_t" : "uint512_t";
+    } else {
+        callbacks->unimplementedCodeCallback("UNHANDLED BuiltinType INT SIZE of " + size());
+        return "UNHANDLED_INT_SIZE_" + std::to_string(size());
     }
 }
 

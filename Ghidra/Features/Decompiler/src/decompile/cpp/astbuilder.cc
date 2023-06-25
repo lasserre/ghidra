@@ -286,23 +286,24 @@ string getTimestamp()
 
 Type* ASTBuilder::getOpFuncOutputType(int out_size, string opFuncName, bool is_bool /*= false*/)
 {
-    switch (out_size) {
-        case 1:
-            return is_bool ? new BuiltinType("bool", 1, false, false)
-                           : new BuiltinType("unsigned char", 1, false, false);
-        case 2:
-            return new BuiltinType("unsigned short", 2, false, false);
-        case 3:     // fallthrough
-        case 4:
-            return new BuiltinType("unsigned int", 4, false, false);
-        case 5:     // fallthrough
-        case 6:     // fallthrough
-        case 7:     // fallthrough
-        case 8:
-            return new BuiltinType("unsigned long", 8, false, false);
-        default:
-            unimplementedCode(opFuncName + " output size of " + std::to_string(out_size));
-            return new BuiltinType("unsigned long", 8, false, false);
+    if (out_size == 1) {
+        return is_bool ? new BuiltinType("bool", 1, false, false)
+                       : new BuiltinType("unsigned char", 1, false, false);
+    } else if (out_size == 2) {
+        return new BuiltinType("unsigned short", 2, false, false);
+    } else if (out_size == 3 || out_size == 4) {
+        return new BuiltinType("unsigned int", 4, false, false);
+    } else if (out_size > 4 && out_size <= 8) {
+        return new BuiltinType("unsigned long", 8, false, false);
+    } else if (out_size > 8 && out_size <= 16) {
+        return new BuiltinType("uint128_t", 16, false, false);
+    } else if (out_size > 16 && out_size <= 32) {
+        return new BuiltinType("uint256_t", 32, false, false);
+    } else if (out_size > 32 && out_size <= 64) {
+        return new BuiltinType("uint512_t", 64, false, false);
+    } else {
+        unimplementedCode(opFuncName + " output size of " + std::to_string(out_size));
+        return new BuiltinType("uint512_t", 64, false, false);
     }
 }
 
@@ -478,7 +479,7 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
     for (auto const& entry : _fwd_decl_funcs) {
         _head_translation_unit->addChild(entry.second);
     }
-    for (auto const& entry : _fwd_decl_opFunc_funcs) {
+    for (auto const& entry : _fwd_decl_other_funcs) {
         _head_translation_unit->addChild(entry.second);
     }
 
@@ -2477,7 +2478,63 @@ void ASTBuilder::opCallind(const PcodeOp *op)
 
 void ASTBuilder::opCallother(const PcodeOp *op)
 {
-    unimplementedOp("opCallother");
+    UserPcodeOp *userop = glb->userops.getOp(op->getIn(0)->getOffset());
+    uint4 display = userop->getDisplay();
+    if (display == UserPcodeOp::annotation_assignment) {
+        BinaryOperator* binop = new BinaryOperator("=");
+        currentASTNode()->addChild(binop);     // links to AST
+
+        PendingExpr* expr = new PendingExpr();
+        expr->ast_op = binop;
+        expr->parts.push_back(buildNodeImplied(op->getIn(1), op, mods));
+        expr->parts.push_back(buildNodeImplied(op->getIn(2), op, mods));
+        _pending_expressions.push_back(expr);
+    } else if (display == UserPcodeOp::no_operator) {
+        PendingNode* node = buildNodeImplied(op->getIn(1),op,mods);
+        processPendingNode(node);   // process now
+        delete node;
+    } else {	// Emit using functional syntax
+        string nm = op->getOpcode()->getOperatorName(op);
+
+        // this is the fdecl we need to refer to in our
+        // DeclRefExpr (which is the first child of CallExpr)
+        FunctionDecl* fdecl = nullptr;
+
+        if (_fwd_decl_other_funcs.count(nm)) {
+            fdecl = _fwd_decl_other_funcs.at(nm);
+        }
+        else {
+            Type* rtype = op->getOut() ? toAstType(op->getOut()->getType()) : new VoidType();
+            fdecl = new FunctionDecl(_next_vdecl_id++, nm, rtype);
+
+            for (int i = 1; i < op->numInput(); i++) {
+                // since we know nothing about these fake functions/intrinsics, we
+                // might as well take the input argument data types as a best guess
+                // for the parameter types
+                ParmVarDecl* pvdecl = new ParmVarDecl(_next_vdecl_id++, "param" + std::to_string(i+1),
+                            toAstType(op->getIn(i)->getType()));
+                            // new BuiltinType("unsigned long", 8, false, false));
+                fdecl->addChild(pvdecl);
+            }
+            _fwd_decl_other_funcs[nm] = fdecl;
+        }
+
+        DeclRefExpr* callee_ref = new DeclRefExpr(fdecl);
+
+        CallExpr* callexpr = new CallExpr();
+        callexpr->addChild(callee_ref);         // first child is a reference to callee function
+        currentASTNode()->addChild(callexpr);
+
+        if (op->numInput() > 1) {
+            PendingExpr* expr = new PendingExpr();
+            expr->ast_op = callexpr;
+            // arguments
+            for (int i = 1; i < op->numInput(); i++) {
+                expr->parts.push_back(buildNodeImplied(op->getIn(i),op,mods));
+            }
+            _pending_expressions.push_back(expr);
+        }
+    }
 }
 
 void ASTBuilder::opConstructor(const PcodeOp *op,bool withNew)
@@ -2541,7 +2598,7 @@ void ASTBuilder::opIntZext(const PcodeOp *op,const PcodeOp *readOp)
             processTypeCastExpression(op);
         }
     } else {
-        unimplementedCode("opIntZext: opFunc case");
+        opFunc(op);
     }
 }
 
@@ -3083,12 +3140,12 @@ void ASTBuilder::opFunc(const PcodeOp* op)
 
     string nm = op->getOpcode()->getOperatorName(op);
 
-    if (_fwd_decl_opFunc_funcs.count(nm)) {
-        fdecl = _fwd_decl_opFunc_funcs.at(nm);
+    if (_fwd_decl_other_funcs.count(nm)) {
+        fdecl = _fwd_decl_other_funcs.at(nm);
     }
     else {
         fdecl = buildOpFuncDecl(op, nm);
-        _fwd_decl_opFunc_funcs[nm] = fdecl;
+        _fwd_decl_other_funcs[nm] = fdecl;
     }
 
     DeclRefExpr* callee_ref = new DeclRefExpr(fdecl);
@@ -3392,7 +3449,56 @@ void ASTBuilder::opPtrsub(const PcodeOp *op)
     } else if (ct->getMetatype() == TYPE_ARRAY) {
 
         // ------------ TYPE_ARRAY ------------
-        unimplementedCode("PTRSUB ct ARRAY");
+        if (in1const != 0) {
+            throw LowlevelError("PTRSUB with non-zero offset into array type");
+        }
+        // We are treating array as a structure
+        // and this PTRSUB(*,0) represents changing
+        // to treating it as a pointer to its element type
+        if (!valueon) {
+            if (flex) {     // EMIT  ( )
+                // (*&struct->arrayfield)[i]
+                // becomes struct->arrayfield[i]
+                if (ptrel != (TypePointerRel *)0) {
+                    unimplementedCode("PTRSUB TYPE_ARRAY EMIT ( ) ptrel case");
+                    // pushTypePointerRel(op);
+                }
+                PendingNode* node = buildNodeImplied(in0,op,m);
+                processPendingNode(node);
+                delete node;
+            } else {            // EMIT  *( )
+                UnaryOperator* deref = new UnaryOperator("*");
+                currentASTNode()->addChild(deref);
+
+                if (ptrel != (TypePointerRel *)0) {
+                    unimplementedCode("PTRSUB TYPE_ARRAY EMIT *( ) ptrel case");
+                    // pushTypePointerRel(op);
+                }
+
+                PendingExpr* expr = new PendingExpr();
+                expr->ast_op = deref;
+                expr->parts.push_back(buildNodeImplied(in0,op,m));
+                _pending_expressions.push_back(expr);
+            }
+        } else {
+            unimplementedCode("PTRSUB TYPE_ARRAY valueon case");
+            // if (flex) {     // EMIT  ( )[0]
+            //     pushOp(&subscript,op);
+            //     if (ptrel != (TypePointerRel *)0) {
+            //         pushTypePointerRel(op);
+            //     }
+            //     pushVn(in0,op,m);
+            //     push_integer(0,4,false,(Varnode *)0,op);
+            // } else {            // EMIT  (* )[0]
+            //     pushOp(&subscript,op);
+            //     pushOp(&dereference,op);
+            //     if (ptrel != (TypePointerRel *)0) {
+            //         pushTypePointerRel(op);
+            //     }
+            //     pushVn(in0,op,m);
+            //     push_integer(0,4,false,(Varnode *)0,op);
+            // }
+        }
     } else {
         // we won't get here - main decompiler fails in this case
         throw LowlevelError("PTRSUB off of non structured pointer type");

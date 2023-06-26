@@ -990,11 +990,15 @@ class StructType : public Type
 {
 public:
     StructType(int sid, TypeStruct* ghidra_struct)
-        : Type(ghidra_struct), _sid(sid)
+        : Type(ghidra_struct), _sid(sid), _is_union(false)
+    { }
+
+    StructType(int sid, TypeUnion* ghidra_union)
+        : Type(ghidra_union), _sid(sid), _is_union(true)
     { }
 
     StructType()
-        : Type(""), _sid(-1)
+        : Type(""), _sid(-1), _is_union(false)
     {}
 
     virtual StructType* clone()
@@ -1005,13 +1009,29 @@ public:
     /** @brief Structure ID */
     int sid() const { return _sid; }
 
-    string name() const { return ghidra_struct()->getName(); }
+    string name() const { return _ghidra_dt->getName(); }
+    bool is_union() const { return _is_union; }
 
-    TypeStruct* ghidra_struct() const { return (TypeStruct*)_ghidra_dt; }
+    TypeStruct* ghidra_struct() const
+    {
+        if (_is_union) {
+            return nullptr;
+        }
+        return (TypeStruct*)_ghidra_dt;
+    }
+
+    TypeUnion* ghidra_union() const
+    {
+        if (_is_union) {
+            return (TypeUnion*)_ghidra_dt;
+        }
+        return nullptr;
+    }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
     int _sid;
+    bool _is_union;
 };
 
 /**
@@ -1196,10 +1216,12 @@ public:
 
     int sid() { return _sid; }
     string name() { return _name; }
+    bool is_union() const { return _is_union; }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
     int _sid;
+    bool _is_union;
     string _name;
 };
 
@@ -1359,6 +1381,11 @@ public:
      * @return int
      */
     int mapStruct(TypeStruct* ghidra_struct);
+
+    /**
+     * @brief Same as mapStruct but for a union
+     */
+    int mapUnion(TypeUnion* ghidra_union);
 
     vector<StructType> getMappedStructs()
     {

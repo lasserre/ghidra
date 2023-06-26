@@ -97,6 +97,7 @@ protected:
 
     json structureFieldToJson(TypeField ghidra_field);
     json buildStructFields(TypeStruct* ghidra_struct);
+    json buildUnionFields(TypeUnion* ghidra_union);
     json buildStructuresById(StructTypeLibrary* type_lib);
 
     json _ast_json;

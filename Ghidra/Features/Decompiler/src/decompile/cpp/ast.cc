@@ -504,12 +504,21 @@ void* FieldDecl::doAccept(ASTVisitor* v, void* context)
 }
 
 RecordDecl::RecordDecl(StructType stype)
-    : _sid(stype.sid()), _name(stype.name())
+    : _sid(stype.sid()), _name(stype.name()), _is_union(stype.is_union())
 {
-    for (TypeField ghidra_field : getStructFields(stype.ghidra_struct())) {
-        auto ast_type = callbacks->toAstType(ghidra_field.type);
-        addChild(new FieldDecl(ghidra_field.name, ast_type));
+    if (stype.is_union()) {
+        for (int i = 0; i < stype.ghidra_union()->numDepend(); i++) {
+            const TypeField* ghidra_field = stype.ghidra_union()->getField(i);
+            auto ast_type = callbacks->toAstType(ghidra_field->type);
+            addChild(new FieldDecl(ghidra_field->name, ast_type));
+        }
+    } else {
+        for (TypeField ghidra_field : getStructFields(stype.ghidra_struct())) {
+            auto ast_type = callbacks->toAstType(ghidra_field.type);
+            addChild(new FieldDecl(ghidra_field.name, ast_type));
+        }
     }
+
 }
 
 void* RecordDecl::doAccept(ASTVisitor* v, void* context)
@@ -567,6 +576,29 @@ int StructTypeLibrary::mapStruct(TypeStruct* ghidra_struct)
     // structure definitions that may not be referenced elsewhere in the code
     for (TypeField ghidra_field : getStructFields(ghidra_struct)) {
         Type* ast_type = callbacks->toAstType(ghidra_field.type);
+        delete ast_type;
+    }
+
+    return sid;
+}
+
+int StructTypeLibrary::mapUnion(TypeUnion* ghidra_union)
+{
+    auto name = ghidra_union->getName();
+
+    if (isStructMapped(name)) {
+        return _mapped_structures[name].sid();
+    }
+
+    // not mapped - map it now
+    int sid = _next_id++;
+    _mapped_structures[name] = StructType(sid, ghidra_union);
+
+    // **AFTER** SID IS MAPPED (don't move this before saving SID to _mapped_structures!!)
+    for (int i = 0; i < ghidra_union->numDepend(); i++) {
+        Type* ast_type = callbacks->toAstType(ghidra_union->getDepend(i));
+        // do nothing, just call toAstType() to ensure we pick up nested
+        // struct definitions
         delete ast_type;
     }
 
@@ -765,7 +797,8 @@ UnaryOperator::UnaryOperator(std::string opcode)//, Type* type)
 
 int UnaryOperator::precedence()
 {
-    if (_opcode == "*" || _opcode == "&" || _opcode == "-" || _opcode == "+") {
+    if (_opcode == "*" || _opcode == "&" || _opcode == "-" || _opcode == "+" ||
+        _opcode == "~") {
         return 3;
     } else {
         callbacks->unimplementedCodeCallback("TODO - map UnaryOperator precedence for '" + _opcode + "'");

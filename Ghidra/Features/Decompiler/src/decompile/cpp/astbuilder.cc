@@ -2755,6 +2755,7 @@ FunctionType* ASTBuilder::createNewFunctionType(TypeCode* code_type)
 Type* ASTBuilder::toAstType(const Datatype* dt)
 {
     TypeStruct* ghidra_struct = nullptr;
+    TypeUnion* ghidra_union = nullptr;
     TypeCode* code_type = nullptr;
     int sid = -1;
 
@@ -2772,6 +2773,10 @@ Type* ASTBuilder::toAstType(const Datatype* dt)
             ghidra_struct = (TypeStruct*)dt;
             sid = _type_lib.mapStruct(ghidra_struct);
             return new StructType(sid, ghidra_struct);
+        case TYPE_UNION:
+            ghidra_union = (TypeUnion*)dt;
+            sid = _type_lib.mapUnion(ghidra_union);
+            return new StructType(sid, ghidra_union);
         case TYPE_ARRAY:
             return new ConstantArrayType((TypeArray*)dt);
         case TYPE_UNKNOWN:

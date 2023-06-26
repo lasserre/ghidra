@@ -353,6 +353,7 @@ void* JsonASTVisitor::visitRecordDecl(RecordDecl* rd, void* context)
     rd_j["kind"] = "RecordDecl";
     rd_j["sid"] = rd->sid();
     rd_j["name"] = rd->name();
+    rd_j["is_union"] = rd->is_union();
     return copy_to_parent(rd_j, context);
 }
 
@@ -380,6 +381,7 @@ void* JsonASTVisitor::visitStructType(StructType* st, void* context)
     json st_j;
     st_j["kind"] = "StructType";
     st_j["sid"] = st->sid();
+    st_j["is_union"] = st->is_union();
     return copy_to_parent(st_j, context);
 }
 
@@ -440,18 +442,41 @@ json JsonASTVisitor::buildStructFields(TypeStruct* ghidra_struct)
     return fields;
 }
 
+json JsonASTVisitor::buildUnionFields(TypeUnion* ghidra_union)
+{
+    json fields = json::array();
+
+    for (int i = 0; i < ghidra_union->numDepend(); i++) {
+        const TypeField* union_field = ghidra_union->getField(i);
+        // can't map offset -> field because all the offsets of a union
+        // are zero and will collide!
+        fields.push_back(structureFieldToJson(*union_field));
+    }
+
+    return fields;
+}
+
 json JsonASTVisitor::buildStructuresById(StructTypeLibrary* type_lib)
 {
     json structs_by_id = json::object();
 
     for (auto stype : type_lib->getMappedStructs()) {
         string sid_str = std::to_string(stype.sid());
-        TypeStruct* ghidra_struct = stype.ghidra_struct();
-
         json stype_j;
-        stype_j["name"] = ghidra_struct->getName();
-        stype_j["size"] = ghidra_struct->getSize();
-        stype_j["fields"] = buildStructFields(ghidra_struct);
+
+        if (stype.is_union()) {
+            TypeUnion* ghidra_union = stype.ghidra_union();
+            stype_j["name"] = ghidra_union->getName();
+            stype_j["size"] = ghidra_union->getSize();
+            stype_j["is_union"] = stype.is_union();
+            stype_j["fields"] = buildUnionFields(ghidra_union);
+        } else {
+            TypeStruct* ghidra_struct = stype.ghidra_struct();
+            stype_j["name"] = ghidra_struct->getName();
+            stype_j["size"] = ghidra_struct->getSize();
+            stype_j["is_union"] = stype.is_union();
+            stype_j["fields"] = buildStructFields(ghidra_struct);
+        }
         structs_by_id[sid_str] = stype_j;
     }
 

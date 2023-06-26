@@ -2908,7 +2908,7 @@ void ASTBuilder::opInt2Comp(const PcodeOp *op)
 
 void ASTBuilder::opIntNegate(const PcodeOp *op)
 {
-    unimplementedOp("opIntNegate");
+    unaryOperator("~", op);
 }
 
 void ASTBuilder::opIntXor(const PcodeOp *op)

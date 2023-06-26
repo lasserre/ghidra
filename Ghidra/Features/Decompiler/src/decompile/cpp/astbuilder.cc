@@ -2972,7 +2972,22 @@ void ASTBuilder::opIntSrem(const PcodeOp *op)
 
 void ASTBuilder::opBoolNegate(const PcodeOp *op)
 {
-    unimplementedOp("opBoolNegate");
+    if (isSet(negatetoken)) {	// Check if we are negated by a previous BOOL_NEGATE
+        unsetMod(negatetoken);	// If so, mark that negatetoken is consumed
+        // Don't print ourselves, but print our input unmodified
+        PendingNode* node = buildNodeImplied(op->getIn(0),op,mods);
+        processPendingNode(node);
+        delete node;
+    }
+    else if (checkPrintNegation(op->getIn(0))) { // If the next operator can be flipped
+        // Don't print ourselves, but print a modified input
+        PendingNode* node = buildNodeImplied(op->getIn(0),op,mods|negatetoken);
+        processPendingNode(node);
+        delete node;
+    }
+    else {
+        unaryOperator("!", op);
+    }
 }
 
 void ASTBuilder::opBoolXor(const PcodeOp *op)

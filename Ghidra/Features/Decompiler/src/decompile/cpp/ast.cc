@@ -317,6 +317,11 @@ void* CaseStmt::doAccept(ASTVisitor* v, void* context)
     return v->visitCaseStmt(this, context);
 }
 
+void* DefaultStmt::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitDefaultStmt(this, context);
+}
+
 CharacterLiteral::CharacterLiteral(BuiltinType* type, uintb value)
     : _type(type), _value(value)
 {

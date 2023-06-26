@@ -2140,7 +2140,9 @@ void ASTBuilder::emitBlockSwitch(const BlockSwitch *bl)
     for (int i = 0; i < bl->getNumCaseBlocks(); i++) {
         // emit case statement
         if (bl->isDefaultCase(i)) {
-            unimplementedCode("emit default case statement");
+            DefaultStmt* default_case = new DefaultStmt();
+            cmpstmt->addChild(default_case);
+            pushASTNode(default_case);  // needs to be parent of node in case
         }
         else {
             int nlabels = bl->getNumLabels(i);
@@ -2163,9 +2165,7 @@ void ASTBuilder::emitBlockSwitch(const BlockSwitch *bl)
         }
 
         if (bl->getGotoType(i)) {
-            /** TODO: emit goto statement */
-            unimplementedCode("emit goto statement");
-            popASTNode();   // pop case statement
+            emitGotoStatement(bl->getBlock(0), bl->getCaseBlock(i), bl->getGotoType(i));
         }
         else {
             FlowBlock* caseblk = bl->getCaseBlock(i);
@@ -2175,9 +2175,8 @@ void ASTBuilder::emitBlockSwitch(const BlockSwitch *bl)
                 BreakStmt* brk = new BreakStmt();
                 currentASTNode()->addChild(brk);    // add underneath case stmt
             }
-
-            popASTNode();   // pop case statement
         }
+        popASTNode();   // pop case statement
     }
 
     popASTNode();   // pop compound statement
@@ -2983,7 +2982,7 @@ void ASTBuilder::opBoolXor(const PcodeOp *op)
 
 void ASTBuilder::opBoolAnd(const PcodeOp *op)
 {
-    unimplementedOp("opBoolAnd");
+    binaryOperator("&&", op);
 }
 
 void ASTBuilder::opBoolOr(const PcodeOp *op)
@@ -3368,16 +3367,17 @@ void ASTBuilder::opPtrsub(const PcodeOp *op)
             }
             if (flex) {
                 // EMIT ( ).name
-                unimplementedCode("PTRSUB TYPE_STRUCT flex case");
-                return;
+                if (ptrel) {
+                    unimplementedCode("PTRSUB TYPE_STRUCT flex ptrel");
+                }
+                // in0 is the var (the struct), fieldname is the field name
+                pushMemberExpression(op, in0, fieldname, suboff, false, m | print_load_value);
             } else {
                 // EMIT ( )->name
-
                 if (ptrel) {
                     unimplementedCode("PTRSUB TYPE_STRUCT !flex ptrel");
                     return;
                 }
-
                 // in0 is the var (the struct)
                 // fieldname is the field name
                 pushMemberExpression(op, in0, fieldname, suboff, true, m);

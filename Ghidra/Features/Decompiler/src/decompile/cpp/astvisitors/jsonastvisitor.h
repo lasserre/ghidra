@@ -49,6 +49,7 @@ public:
     virtual void* visitCStyleCastExpr(CStyleCastExpr*, void*);
     virtual void* visitDeclRefExpr(DeclRefExpr*, void*);
     virtual void* visitDeclStmt(DeclStmt*, void*);
+    virtual void* visitDefaultStmt(DefaultStmt*, void*);
     virtual void* visitDoStmt(DoStmt*, void*);
     virtual void* visitFloatingLiteral(FloatingLiteral*, void*);
     virtual void* visitForStmt(ForStmt*, void*);

@@ -204,7 +204,11 @@ public:
     bool isLRAssociative() { return true; }
     // not sure here...we have children before and after [, and before ]
     // trying this for now
-    bool wouldNextChildBeLeftOfOp() { return false; }
+    bool wouldNextChildBeLeftOfOp()
+    {
+        // first child is left of op
+        return children()->size() == 0;
+    }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
@@ -313,6 +317,22 @@ public:
         return (CaseStmt*)clone_my_members(new CaseStmt(*this));
     }
 
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+};
+
+/**
+ * Single child: code for default switch case
+ */
+class DefaultStmt : public ASTNode
+{
+public:
+    DefaultStmt()
+    { }
+    virtual DefaultStmt* clone()
+    {
+        return (DefaultStmt*)clone_my_members(new DefaultStmt(*this));
+    }
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
 };

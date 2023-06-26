@@ -2783,15 +2783,12 @@ Type* ASTBuilder::toAstType(const Datatype* dt)
             return createNewFunctionType((TypeCode*)dt);
         case TYPE_SPACEBASE:    // fall-through
         default:
-            // (TypeCode*)(dt)->
-            // PointerType -> FunctionType (TODO: add this for "code"/function pointer)
             unimplementedCode("UNHANDLED metatype " + std::to_string((int)dt->getMetatype()) +
                               " for " + dt->getName());
             return new Type(dt);
     }
 
     // TYPE_SPACEBASE = 13,		///< Placeholder for symbol/type look-up calculations
-    // TYPE_CODE = 8,		///< Data is actual executable code
 
     // TYPE_PTRREL = 5,		///< Pointer relative to another data-type (specialization of TYPE_PTR)
     // TYPE_UNION = 2,		///< An overlapping union of multiple datatypes
@@ -3128,7 +3125,7 @@ void ASTBuilder::opSubpiece(const PcodeOp *op)
     {
         processTypeCastExpression(op);
     } else {
-        unimplementedCode("SUBPIECE opFunc");
+        opFunc(op);
     }
 }
 

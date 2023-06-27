@@ -51,6 +51,9 @@ public:
     virtual void* visitDeclStmt(DeclStmt*, void*);
     virtual void* visitDefaultStmt(DefaultStmt*, void*);
     virtual void* visitDoStmt(DoStmt*, void*);
+    virtual void* visitEnumDecl(EnumDecl*, void*);
+    virtual void* visitEnumConstantDecl(EnumConstantDecl*, void*);
+    virtual void* visitEnumType(EnumType*, void*);
     virtual void* visitFloatingLiteral(FloatingLiteral*, void*);
     virtual void* visitForStmt(ForStmt*, void*);
     virtual void* visitFunctionDecl(FunctionDecl*, void*);

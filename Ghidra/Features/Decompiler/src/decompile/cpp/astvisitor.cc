@@ -87,6 +87,22 @@ void* ASTVisitor::visitDoStmt(DoStmt*, void*)
     return nullptr;
 }
 
+void* ASTVisitor::visitEnumDecl(EnumDecl*, void*)
+{
+    return nullptr;
+}
+
+void* ASTVisitor::visitEnumConstantDecl(EnumConstantDecl*, void*)
+{
+    return nullptr;
+}
+
+void* ASTVisitor::visitEnumType(EnumType*, void*)
+{
+    return nullptr;
+}
+
+
 void* ASTVisitor::visitFloatingLiteral(FloatingLiteral*, void*)
 {
     return nullptr;

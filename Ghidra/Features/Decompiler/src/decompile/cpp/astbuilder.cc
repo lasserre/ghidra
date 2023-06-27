@@ -458,6 +458,10 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
     int4 arch_wordsize = glb->getDefaultSize();
     // glb->getDefaultCodeSpace()->getAddrSize()
 
+    for (auto edecl : _enum_decls) {
+        _head_translation_unit->addChild(edecl.second);
+    }
+
     for (auto stype : _type_lib.getMappedStructs()) {
         _head_translation_unit->addChild(new RecordDecl(stype));
     }
@@ -807,6 +811,64 @@ void ASTBuilder::createCharConstant(Datatype* ct, uintb val, const Varnode* vn, 
     // pushAtom(Atom(t.str(),vartoken,EmitMarkup::const_color,op,vn));
 }
 
+DeclRefExpr* createDeclRefForEnumConstant(string enum_valname, EnumDecl* decl)
+{
+    EnumConstantDecl* enumconst = nullptr;
+
+    for (auto child : *decl->children()) {
+        auto enum_child = dynamic_cast<EnumConstantDecl*>(child);
+        if (enum_child) {
+            if (enum_child->name() == enum_valname) {
+                enumconst = enum_child;
+                break;
+            }
+        }
+    }
+
+    return enumconst ? new DeclRefExpr(enumconst, ENUM_DECL) : nullptr;
+}
+
+void ASTBuilder::createEnumConstant(uintb val,const TypeEnum *dt,const Varnode *vn, const PcodeOp *op)
+{
+    vector<string> valnames;
+
+    bool complement = dt->getMatches(val,valnames);
+    if (valnames.size() > 0) {
+        EnumType* etype = dynamic_cast<EnumType*>(toAstType(dt));
+        if (!etype) {
+            throw LowlevelError("Unable to cast to EnumType");
+        }
+
+        if (complement) {
+            // pushOp(&bitwise_not,op);
+            UnaryOperator* unop = new UnaryOperator("~");
+            currentASTNode()->addChild(unop);
+            pushASTNode(unop);
+        }
+
+        ASTNode* expr_head = nullptr;
+        for(int4 i=0; i<valnames.size(); ++i) {
+            if (i > 0) {
+                BinaryOperator* binop = new BinaryOperator("|");
+                binop->addChild(expr_head);
+                binop->addChild(createDeclRefForEnumConstant(valnames[i], etype->getDecl()));
+                expr_head = binop;
+            } else {
+                expr_head = createDeclRefForEnumConstant(valnames[i], etype->getDecl());
+            }
+        }
+
+        currentASTNode()->addChild(expr_head);  // push the whole expression to AST
+
+        if (complement) {
+            popASTNode();   // UnaryOperator
+        }
+    }
+    else {
+        push_integer(val,dt->getSize(),false,vn,op);
+    }
+}
+
 bool ASTBuilder::createPtrCharConstant(TypePointer* pt, uintb value, const Varnode* vn, const PcodeOp* op)
 {
     if (value == 0) {
@@ -982,7 +1044,7 @@ void ASTBuilder::processPendingConstant(uintb value, Datatype* dt, const Varnode
                 createCharConstant((TypeChar*)dt, value, vn, op);
             }
             else if (dt->isEnumType()) {
-                unimplementedCode("enum constant");
+                createEnumConstant(value, (TypeEnum*)dt, vn, op);
             }
             else {
                 push_integer(dt, value, dt->getSize(), !is_uint, vn, op);
@@ -1084,7 +1146,7 @@ void ASTBuilder::pushSymbolAST(Symbol* sym)
             fdecl = buildFunctionDecl(func_sym->getFunction(), true);
             _fwd_decl_funcs[sym] = fdecl;
         }
-        DeclRefExpr* refexpr = new DeclRefExpr(fdecl);
+        DeclRefExpr* refexpr = new DeclRefExpr(fdecl, FUNC_DECL);
         currentASTNode()->addChild(refexpr);
         return;
     }
@@ -1114,7 +1176,7 @@ void ASTBuilder::pushSymbolAST(Symbol* sym)
         }
     }
 
-    DeclRefExpr* refexpr = new DeclRefExpr(sym_decl);
+    DeclRefExpr* refexpr = new DeclRefExpr(sym_decl, VAR_DECL);
     currentASTNode()->addChild(refexpr);
 }
 
@@ -1157,7 +1219,7 @@ void ASTBuilder::pushMismatchSymbolAST(Symbol *sym,int4 off,int4 sz,
                 new BuiltinType("int", 4, false, true));
         }
 
-        DeclRefExpr* refexpr = new DeclRefExpr(sym_decl);
+        DeclRefExpr* refexpr = new DeclRefExpr(sym_decl, VAR_DECL);
         currentASTNode()->addChild(refexpr);
         return;
     }
@@ -1189,7 +1251,7 @@ void ASTBuilder::pushUnnamedLocation(const Address &addr, const Varnode *vn,cons
     }
 
     VarDecl* vdecl = _unnamedLoc_globals.at(varname);
-    DeclRefExpr* refexpr = new DeclRefExpr(vdecl);
+    DeclRefExpr* refexpr = new DeclRefExpr(vdecl, VAR_DECL);
     currentASTNode()->addChild(refexpr);
 
     // IntegerLiteral* lit = new IntegerLiteral(addr_dt, addr.getOffset());
@@ -1279,24 +1341,24 @@ void ASTBuilder::pushPartialSymbol(const Symbol *sym,int4 off,int4 sz,
                 succeeded = true;
             }
         } else if (ct->getMetatype() == TYPE_UNION) {
-            unimplementedCode("TYPE_UNION in pushPartialSymbol");
-            succeeded = false;
+            const TypeField *field;
+            field = ct->findTruncation(off,sz,op,inslot,off);
+            if (field) {
+                ast_stack.emplace_back();
+                ASTPartialSymEntry &ast_entry(ast_stack.back());
+                StructType* stype = dynamic_cast<StructType*>(toAstType(ct));
+                if (!stype) {
+                    throw LowlevelError("unable to convert ct to StructType* when metatype == TYPE_UNION");
+                }
+                // this is '.' - i.e. X.Y
+                ast_entry.node = new MemberExpr(field->name, field->offset, false, stype->sid());
+                delete stype;
 
-            // const TypeField *field;
-            // field = ct->findTruncation(off,sz,op,inslot,off);
-            // if (field) {
-            //     stack.emplace_back();
-            //     PartialSymbolEntry &entry(stack.back());
-            //     entry.token = &object_member;       // this is '.' - i.e. X.Y
-            //     entry.field = field;
-            //     entry.parent = ct;
-            //     entry.fieldname = entry.field->name;
-            //     entry.hilite = EmitMarkup::no_color;
-            //     ct = field->type;
-            //     succeeded = true;
-            // } else if (ct->getSize() == sz) {
-            //     break;		// Turns out we don't need to resolve the field
-            // }
+                ct = field->type;
+                succeeded = true;
+            } else if (ct->getSize() == sz) {
+                break;		// Turns out we don't need to resolve the field
+            }
         } else if (inslot >= 0) {
             Datatype *outtype = vn->getHigh()->getType();
             if (castStrategy->isSubpieceCastEndian(outtype,ct,off,
@@ -2390,7 +2452,7 @@ void ASTBuilder::opCall(const PcodeOp *op)
                 }
 
                 // first child is a reference to callee function
-                DeclRefExpr* callee_ref = new DeclRefExpr(fdecl);
+                DeclRefExpr* callee_ref = new DeclRefExpr(fdecl, FUNC_DECL);
                 callexpr->addChild(callee_ref);
             }
             else {
@@ -2518,7 +2580,7 @@ void ASTBuilder::opCallother(const PcodeOp *op)
             _fwd_decl_other_funcs[nm] = fdecl;
         }
 
-        DeclRefExpr* callee_ref = new DeclRefExpr(fdecl);
+        DeclRefExpr* callee_ref = new DeclRefExpr(fdecl, FUNC_DECL);
 
         CallExpr* callexpr = new CallExpr();
         callexpr->addChild(callee_ref);         // first child is a reference to callee function
@@ -2751,6 +2813,15 @@ FunctionType* ASTBuilder::createNewFunctionType(TypeCode* code_type)
     return ftype;
 }
 
+EnumDecl* ASTBuilder::createNewEnumDecl(TypeEnum* enum_type)
+{
+    EnumDecl* enum_decl = new EnumDecl(enum_type->getName());
+    for (auto& enum_val : getEnumFields(enum_type)) {
+        enum_decl->addChild(new EnumConstantDecl(_next_vdecl_id++, enum_val.second, enum_val.first));
+    }
+    return enum_decl;
+}
+
 Type* ASTBuilder::toAstType(const Datatype* dt)
 {
     TypeStruct* ghidra_struct = nullptr;
@@ -2765,6 +2836,12 @@ Type* ASTBuilder::toAstType(const Datatype* dt)
         case TYPE_INT:
         case TYPE_FLOAT:
         case TYPE_BOOL:
+            if (dt->isEnumType()) {
+                if (!_enum_decls.count(dt->getName())) {
+                    _enum_decls[dt->getName()] = createNewEnumDecl((TypeEnum*)dt);
+                }
+                return new EnumType(_enum_decls[dt->getName()]);
+            }
             return new BuiltinType(dt);
         case TYPE_PTR:
             return new PointerType(((TypePointer*)dt)->getPtrTo());
@@ -3164,7 +3241,7 @@ void ASTBuilder::opFunc(const PcodeOp* op)
         _fwd_decl_other_funcs[nm] = fdecl;
     }
 
-    DeclRefExpr* callee_ref = new DeclRefExpr(fdecl);
+    DeclRefExpr* callee_ref = new DeclRefExpr(fdecl, FUNC_DECL);
 
     CallExpr* callexpr = new CallExpr();
     callexpr->addChild(callee_ref);         // first child is a reference to callee function

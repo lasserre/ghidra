@@ -246,6 +246,7 @@ protected:
     void buildLocalDeclsFromScope(const Scope& scope, CompoundStmt* fbody);
     VarDecl* tryCreateLocalVarDecl(const SymbolEntry* sym_entry);
     FunctionType* createNewFunctionType(TypeCode* code_type);
+    EnumDecl* createNewEnumDecl(TypeEnum* enum_type);
 
     Type* getOpFuncOutputType(int out_size, string opFuncName, bool is_bool = false);
 
@@ -325,6 +326,7 @@ protected:
     void push_float(Datatype* dt, uintb val,int4 sz,const Varnode *vn, const PcodeOp *op);
 
     void createCharConstant(Datatype* ct, uintb val, const Varnode* vn, const PcodeOp* op);
+    void createEnumConstant(uintb val,const TypeEnum *dt,const Varnode *vn, const PcodeOp *op);
     bool createPtrCharConstant(TypePointer* pt, uintb value, const Varnode* vn, const PcodeOp* op);
     bool createPtrCodeConstant(TypePointer* pt, uintb value, const Varnode* vn, const PcodeOp* op);
     void processTypeCastExpression(const PcodeOp *op);
@@ -380,6 +382,8 @@ protected:
      */
     StructTypeLibrary _type_lib;
 
+    std::map<string, EnumDecl*> _enum_decls;
+
     // counter to generate unique ValueDecl ids within a given context
     // ** This includes globals, locals, and function decls **
     // (TranslationUnitDecl for now). This can be reset for various contexts if
@@ -425,4 +429,17 @@ public:
     vector<TypeField>::const_iterator end() const { return _ts->endField(); }
 
     const TypeStruct* _ts;
+};
+
+class getEnumFields
+{
+public:
+    getEnumFields(const TypeEnum* t)
+        : _t(t)
+    { }
+
+    map<uintb,string>::const_iterator begin() const { return _t->beginEnum(); }
+    map<uintb,string>::const_iterator end() const { return _t->endEnum(); }
+
+    const TypeEnum* _t;
 };

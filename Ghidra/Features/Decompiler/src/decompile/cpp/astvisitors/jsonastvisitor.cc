@@ -216,6 +216,7 @@ void* JsonASTVisitor::visitDeclRefExpr(DeclRefExpr* dr, void* context)
     json decl_ref;
     decl_ref["kind"] = "DeclRefExpr";
     decl_ref["referencedDecl_id"] = dr->ref()->id();
+    decl_ref["type"] = dr->decl_type();
     return copy_to_parent(decl_ref, context);
 }
 
@@ -241,6 +242,33 @@ void* JsonASTVisitor::visitDoStmt(DoStmt* ds, void* context)
     ds_j["kind"] = "DoStmt";
     ds_j["inner"] = json::array();
     return copy_to_parent(ds_j, context);
+}
+
+void* JsonASTVisitor::visitEnumDecl(EnumDecl* ed, void* context)
+{
+    json ed_j;
+    ed_j["kind"] = "EnumDecl";
+    ed_j["name"] = ed->name();
+    ed_j["inner"] = json::array();
+    return copy_to_parent(ed_j, context);
+}
+
+void* JsonASTVisitor::visitEnumConstantDecl(EnumConstantDecl* ecd, void* context)
+{
+    json ecd_j;
+    ecd_j["kind"] = "EnumConstantDecl";
+    ecd_j["id"] = ecd->id();
+    ecd_j["name"] = ecd->name();
+    ecd_j["value"] = ecd->value();
+    return copy_to_parent(ecd_j, context);
+}
+
+void* JsonASTVisitor::visitEnumType(EnumType* et, void* context)
+{
+    json et_j;
+    et_j["kind"] = "EnumType";
+    et_j["name"] = et->name();
+    return copy_to_parent(et_j, context);
 }
 
 void* JsonASTVisitor::visitFloatingLiteral(FloatingLiteral* lit, void* context)

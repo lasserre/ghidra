@@ -381,7 +381,7 @@ void* CStyleCastExpr::doAccept(ASTVisitor* v, void* context)
     return v->visitCStyleCastExpr(this, context);
 }
 
-DeclRefExpr::DeclRefExpr(ValueDecl* referencedDecl)
+DeclRefExpr::DeclRefExpr(ValueDecl* referencedDecl, eDeclRefExprType decl_type)
     : _ref(referencedDecl)
 {
 }
@@ -749,6 +749,26 @@ void* ConstantArrayType::doAccept(ASTVisitor* v, void* context)
     return v->visitConstantArrayType(this, context);
 }
 
+void* EnumDecl::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitEnumDecl(this, context);
+}
+
+EnumConstantDecl::EnumConstantDecl(int id, string name, int value)
+    : ValueDecl(id), _name(name), _value(value)
+{
+}
+
+void* EnumConstantDecl::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitEnumConstantDecl(this, context);
+}
+
+void* EnumType::doAccept(ASTVisitor* v, void* context)
+{
+    return v->visitEnumType(this, context);
+}
+
 void* FunctionType::doAccept(ASTVisitor* v, void* context)
 {
     return v->visitFunctionType(this, context);
@@ -803,7 +823,7 @@ UnaryOperator::UnaryOperator(std::string opcode)//, Type* type)
 int UnaryOperator::precedence()
 {
     if (_opcode == "*" || _opcode == "&" || _opcode == "-" || _opcode == "+" ||
-        _opcode == "~") {
+        _opcode == "~" || _opcode == "!") {
         return 3;
     } else {
         callbacks->unimplementedCodeCallback("TODO - map UnaryOperator precedence for '" + _opcode + "'");

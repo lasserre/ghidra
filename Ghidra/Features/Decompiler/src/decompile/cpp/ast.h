@@ -432,6 +432,13 @@ protected:
     Type* _type;
 };
 
+enum eDeclRefExprType
+{
+    FUNC_DECL = 1,
+    VAR_DECL = 2,
+    ENUM_DECL = 3
+};
+
 /**
  * @brief A reference to a declared variable, function, enum, etc.
  */
@@ -446,7 +453,7 @@ public:
      * may be located using the map<>'s in ASTBuilder. Thus DeclRefExpr
      * DOES NOT OWN this memory and must not delete it.
      */
-    DeclRefExpr(ValueDecl* referencedDecl);
+    DeclRefExpr(ValueDecl* referencedDecl, eDeclRefExprType decl_type);
     virtual DeclRefExpr* clone_my_members(ASTNode* node);
     virtual DeclRefExpr* clone()
     {
@@ -454,10 +461,12 @@ public:
     }
 
     inline ValueDecl* ref() { return _ref; }
+    eDeclRefExprType decl_type() { return _decl_type; }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
     ValueDecl* _ref;    // this points to the original - WE DO NOT OWN
+    eDeclRefExprType _decl_type;
 };
 
 /**
@@ -941,6 +950,42 @@ protected:
     int _num_elements;
 };
 
+class EnumDecl : public ASTNode
+{
+public:
+    EnumDecl(string name)
+        : _name(name)
+    { }
+    virtual EnumDecl* clone()
+    {
+        return (EnumDecl*)clone_my_members(new EnumDecl(*this));
+    }
+
+    string name() const { return _name; }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+    string _name;
+};
+
+class EnumType : public Type
+{
+public:
+    EnumType(EnumDecl* decl)
+        : Type(decl->name()), _decl(decl)
+    { }
+    virtual EnumType* clone()
+    {
+        return (EnumType*)clone_my_members(new EnumType(*this));
+    }
+
+    EnumDecl* getDecl() { return _decl; }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+    EnumDecl* _decl;    // we do NOT own this, do not delete it
+};
+
 /**
  * @brief This represents a function data type, intended specifically
  * for function pointers. (this also maps to Ghidra's Function Definition)
@@ -1177,6 +1222,24 @@ public:
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
     int _id;
+};
+
+class EnumConstantDecl : public ValueDecl
+{
+public:
+    EnumConstantDecl(int id, string name, int value);
+    virtual EnumConstantDecl* clone()
+    {
+        return (EnumConstantDecl*)clone_my_members(new EnumConstantDecl(*this));
+    }
+
+    string name() { return _name; }
+    int value() { return _value; }
+
+protected:
+    virtual void* doAccept(ASTVisitor* v, void* context);
+    string _name;
+    int _value;
 };
 
 /**

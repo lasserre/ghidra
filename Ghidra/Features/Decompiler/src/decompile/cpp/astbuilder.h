@@ -344,6 +344,8 @@ protected:
 
     std::deque<PendingExpr*> _pending_expressions;
 
+    vector<string> constructStructDepOrder();
+
     /**
      * The AST node stack provides our current context within the AST as we
      * build it. The top of the stack holds the current node into which we are

@@ -398,6 +398,105 @@ FunctionDecl* ASTBuilder::buildFunctionDecl(Funcdata* fd, bool fwd_decl)
     return fdecl;
 }
 
+vector<string> ASTBuilder::constructStructDepOrder()
+{
+    vector<string> struct_dep_order;
+    vector<string> remaining_structs;
+
+    for (auto entry : _type_lib.mapped_structures()) {
+        remaining_structs.push_back(entry.first);
+    }
+
+    // TODO: create a list of struct names and sort it by dependencies
+    // -> for each entry, find the earliest index of a struct it depends on
+    //    and insert it AFTER that dependency
+    // -> if the dependency DNE in the list yet, continue on to the next
+    //    one and we'll get it next time around
+    // -> maybe have a "safety loop count" == total num structs to prevent
+    //    infinite loop if there's a bug...
+    if (remaining_structs.size()) {
+        // add the first one
+        struct_dep_order.push_back(remaining_structs.back());
+        remaining_structs.pop_back();
+    }
+
+    // this is just for validation, only go through list up to 100x
+    // I'm afraid we may hit infinite loop conditions because of impossible
+    // circular C code dependencies Ghidra could come up with
+    int loop_max = remaining_structs.size() * 100;
+
+    while (remaining_structs.size()) {
+        if (loop_max-- <= 0) {
+            // just add the rest in order
+            for (string name : remaining_structs) {
+                struct_dep_order.push_back(name);
+            }
+            break;
+        }
+
+        string name = remaining_structs.back();
+        vector<string> struct_deps;
+        StructType stype = _type_lib.mapped_structures()[name];
+
+        if (stype.is_union()) {
+            TypeUnion* ghidra_union = stype.ghidra_union();
+            for (int i = 0; i < ghidra_union->numDepend(); i++) {
+                const TypeField* ghidra_field = ghidra_union->getField(i);
+                auto ast_type = toAstType(ghidra_field->type);
+                while (dynamic_cast<PointerType*>(ast_type) || dynamic_cast<ConstantArrayType*>(ast_type)) {
+                    ast_type = (Type*)ast_type->children()->front();
+                }
+                auto member_struct = dynamic_cast<StructType*>(ast_type);
+                if (member_struct) {
+                    struct_deps.push_back(member_struct->name());
+                }
+            }
+        } else {
+            TypeStruct* ghidra_struct = stype.ghidra_struct();
+            for (TypeField ghidra_field : getStructFields(ghidra_struct)) {
+                Type* ast_type = toAstType(ghidra_field.type);
+                while (dynamic_cast<PointerType*>(ast_type) || dynamic_cast<ConstantArrayType*>(ast_type)) {
+                    ast_type = (Type*)ast_type->children()->front();
+                }
+                auto member_struct = dynamic_cast<StructType*>(ast_type);
+                if (member_struct) {
+                    struct_deps.push_back(member_struct->name());
+                }
+            }
+        }
+
+        bool resolved = true;
+        // int idx = struct_dep_order.size();  // default to end of list
+        int idx = 0;
+        for (string sdep : struct_deps) {
+            auto it = std::find(struct_dep_order.begin(), struct_dep_order.end(), sdep);
+            if (it != struct_dep_order.end()) {
+                // Element found
+                size_t index = std::distance(struct_dep_order.begin(), it) + 1;
+                if (index > idx) {
+                    idx = index;
+                }
+            } else {
+                // wait until it gets added
+                resolved = false;
+                break;
+            }
+        }
+
+        if (!resolved) {
+            // rotate to front so we visit the other types first, then retry this one later
+            remaining_structs.insert(remaining_structs.begin(), name);
+            remaining_structs.pop_back();
+            continue;
+        }
+
+        struct_dep_order.insert(struct_dep_order.begin() + idx, name);
+        remaining_structs.pop_back();
+    }
+
+    return struct_dep_order;
+}
+
 ASTNode* ASTBuilder::buildAST(Funcdata* fd)
 {
     // if I decide to use timestamps, convert to something like this:
@@ -462,7 +561,9 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
         _head_translation_unit->addChild(edecl.second);
     }
 
-    for (auto stype : _type_lib.getMappedStructs()) {
+    vector<string> struct_dep_order = constructStructDepOrder();
+    for (string sname : struct_dep_order) {
+        auto stype = _type_lib.mapped_structures()[sname];
         _head_translation_unit->addChild(new RecordDecl(stype));
     }
 

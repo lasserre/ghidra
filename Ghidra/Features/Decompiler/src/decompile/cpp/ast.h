@@ -1480,6 +1480,8 @@ public:
         return structs;
     }
 
+    map<string, StructType> mapped_structures() { return _mapped_structures; }
+
     // STRUCT ID OPTIONS
     // 1. Use the Ghidra ID (this won't work if this type is not defined in ghidra already)
     // 2. Autogen a new ID on the fly arbitrarily - increment a counter

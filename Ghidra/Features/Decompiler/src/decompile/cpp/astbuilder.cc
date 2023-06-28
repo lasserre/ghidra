@@ -3429,6 +3429,18 @@ static int getSidFromMemberExprChild(MemberExpr* memexpr)
     //          VarDecl.type() (StructType*)
     int sid = -1;
     ASTNode* child = memexpr->children()->front();
+
+    // not sure if this is valid yet, but looks like we can ALSO potentially
+    // have nested MemberExpr's without going through DeclRefExpr layers:
+    // MemberExpr.inner[0] (MemberExpr)
+    //      MemberExpr.inner[0] (DeclRefExpr*)
+    //          DeclRefExpr.ref (VarDecl*)
+    //              VarDecl.type() (StructType*)
+    MemberExpr* nested_member = dynamic_cast<MemberExpr*>(child);
+    if (nested_member) {
+        return getSidFromMemberExprChild(nested_member);
+    }
+
     DeclRefExpr* declref = dynamic_cast<DeclRefExpr*>(child);
     if (declref) {
         ValueDecl* val = declref->ref();
@@ -3544,19 +3556,37 @@ void ASTBuilder::opPtrsub(const PcodeOp *op)
         arrayvalue = false;
         // The '&' is dropped if the output type is an array
         if (fieldtype && (fieldtype->getMetatype()==TYPE_ARRAY)) {
-            arrayvalue = valueon;	// If printing value, use [0]
-            valueon = true;		// Don't print &
+            arrayvalue = valueon;   // If printing value, use [0]
+            valueon = true;     // Don't print &
         }
 
         if (!valueon) {
             // print an ampersand
-            unimplementedCode("PTRSUB TYPE_STRUCT !valueon case");
-            return;
+            if (flex) {     // EMIT  &( ).name {
+                UnaryOperator* unop = new UnaryOperator("&");
+                currentASTNode()->addChild(unop);
+                pushASTNode(unop);
+                if (ptrel != (TypePointerRel *)0) {
+                    unimplementedCode("PTRSUB TYPE_STRUCT !valueon flex ptrel");
+                }
+                pushMemberExpression(op, in0, fieldname, suboff, false, m | print_load_value);
+                popASTNode();   // UnaryOperator
+            } else {            // EMIT  &( )->name
+                UnaryOperator* unop = new UnaryOperator("&");
+                currentASTNode()->addChild(unop);
+                pushASTNode(unop);
+                if (ptrel != (TypePointerRel *)0) {
+                    unimplementedCode("PTRSUB TYPE_STRUCT !valueon flex ptrel");
+                }
+                pushMemberExpression(op, in0, fieldname, suboff, true, m);
+                popASTNode();   // UnaryOperator
+            }
         } else {
             // no ampersand
             if (arrayvalue) {
-                unimplementedCode("PTRSUB TYPE_STRUCT arrayvalue case");
-                return;
+                ArraySubscriptExpr* arrexpr = new ArraySubscriptExpr();
+                currentASTNode()->addChild(arrexpr);
+                pushASTNode(arrexpr);
             }
             if (flex) {
                 // EMIT ( ).name
@@ -3569,7 +3599,6 @@ void ASTBuilder::opPtrsub(const PcodeOp *op)
                 // EMIT ( )->name
                 if (ptrel) {
                     unimplementedCode("PTRSUB TYPE_STRUCT !flex ptrel");
-                    return;
                 }
                 // in0 is the var (the struct)
                 // fieldname is the field name
@@ -3577,8 +3606,8 @@ void ASTBuilder::opPtrsub(const PcodeOp *op)
             }
 
             if (arrayvalue) {
-                unimplementedCode("PTRSUB TYPE_STRUCT 2nd arrayvalue case?");
-                return;
+                push_integer(0, 4, false, nullptr, op);
+                popASTNode();   // ArraySubscriptExpr
             }
         }
 

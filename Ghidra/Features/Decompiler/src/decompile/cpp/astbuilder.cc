@@ -398,6 +398,35 @@ FunctionDecl* ASTBuilder::buildFunctionDecl(Funcdata* fd, bool fwd_decl)
     return fdecl;
 }
 
+/**
+ * @brief Returns "" if there is no dependency, otherwise returns the name of the
+ * structure type that is a dependency from this field
+ */
+string ASTBuilder::get_struct_dep_from_field(const TypeField* ghidra_field, StructType& stype,
+    int loop_max,
+    int pointer_resolve_threshold)
+{
+    //union
+    auto ast_type = toAstType(ghidra_field->type);
+    // need to compute this on top-level member before we drill down into the struct type
+    bool member_is_pointer = dynamic_cast<PointerType*>(ast_type);
+    while (dynamic_cast<PointerType*>(ast_type) || dynamic_cast<ConstantArrayType*>(ast_type)) {
+        ast_type = (Type*)ast_type->children()->front();
+    }
+    auto member_struct = dynamic_cast<StructType*>(ast_type);
+    if (member_struct) {
+        if (member_is_pointer && loop_max <= pointer_resolve_threshold) {
+            return "";  // don't treat this pointer as dependency anymore
+        }
+        if (member_struct->name() != stype.name()) {
+            // if we contain a pointer to ourselves, that's fine - not a dependency!
+            return member_struct->name();
+        }
+    }
+
+    return "";
+}
+
 vector<string> ASTBuilder::constructStructDepOrder()
 {
     vector<string> struct_dep_order;
@@ -423,7 +452,10 @@ vector<string> ASTBuilder::constructStructDepOrder()
     // this is just for validation, only go through list up to 100x
     // I'm afraid we may hit infinite loop conditions because of impossible
     // circular C code dependencies Ghidra could come up with
-    int loop_max = remaining_structs.size() * 100;
+    int loop_max = remaining_structs.size() * 200;
+    // at this point, don't treat pointers to structs as dependencies (we can fix
+    // this with forward decls)
+    int pointer_resolve_threshold = remaining_structs.size() * 100;
 
     while (remaining_structs.size()) {
         if (loop_max-- <= 0) {
@@ -435,6 +467,7 @@ vector<string> ASTBuilder::constructStructDepOrder()
         }
 
         string name = remaining_structs.back();
+
         vector<string> struct_deps;
         StructType stype = _type_lib.mapped_structures()[name];
 
@@ -442,25 +475,17 @@ vector<string> ASTBuilder::constructStructDepOrder()
             TypeUnion* ghidra_union = stype.ghidra_union();
             for (int i = 0; i < ghidra_union->numDepend(); i++) {
                 const TypeField* ghidra_field = ghidra_union->getField(i);
-                auto ast_type = toAstType(ghidra_field->type);
-                while (dynamic_cast<PointerType*>(ast_type) || dynamic_cast<ConstantArrayType*>(ast_type)) {
-                    ast_type = (Type*)ast_type->children()->front();
-                }
-                auto member_struct = dynamic_cast<StructType*>(ast_type);
-                if (member_struct) {
-                    struct_deps.push_back(member_struct->name());
+                string sdep = get_struct_dep_from_field(ghidra_field, stype, loop_max, pointer_resolve_threshold);
+                if (sdep != "") {
+                    struct_deps.push_back(sdep);
                 }
             }
         } else {
             TypeStruct* ghidra_struct = stype.ghidra_struct();
             for (TypeField ghidra_field : getStructFields(ghidra_struct)) {
-                Type* ast_type = toAstType(ghidra_field.type);
-                while (dynamic_cast<PointerType*>(ast_type) || dynamic_cast<ConstantArrayType*>(ast_type)) {
-                    ast_type = (Type*)ast_type->children()->front();
-                }
-                auto member_struct = dynamic_cast<StructType*>(ast_type);
-                if (member_struct) {
-                    struct_deps.push_back(member_struct->name());
+                string sdep = get_struct_dep_from_field(&ghidra_field, stype, loop_max, pointer_resolve_threshold);
+                if (sdep != "") {
+                    struct_deps.push_back(sdep);
                 }
             }
         }

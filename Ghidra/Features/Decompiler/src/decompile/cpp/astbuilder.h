@@ -345,6 +345,8 @@ protected:
     std::deque<PendingExpr*> _pending_expressions;
 
     vector<string> constructStructDepOrder();
+    string get_struct_dep_from_field(const TypeField* ghidra_field, StructType& stype,
+                                    int loop_max, int pointer_resolve_threshold);
 
     /**
      * The AST node stack provides our current context within the AST as we

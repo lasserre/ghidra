@@ -51,7 +51,7 @@ public:
     void insertTypedefs(ASTNode* parent);
 
     // -------------- PROCESS NODE TYPES
-    // virtual void* visitBuiltinType(BuiltinType*, void*);
+    virtual void* visitBuiltinType(BuiltinType*, void*);
     virtual void* visitConstantArrayType(ConstantArrayType*, void*);
     virtual void* visitType(Type*, void*);
     // CLS: don't think we need this? if there is a TypedefType
@@ -62,6 +62,7 @@ public:
     virtual void* visitDeclRefExpr(DeclRefExpr*, void*);
     virtual void* visitFieldDecl(FieldDecl*, void*);
     virtual void* visitFunctionDecl(FunctionDecl*, void*);
+    virtual void* visitFunctionType(FunctionType*, void*);
     virtual void* visitParmVarDecl(ParmVarDecl*, void*);
     virtual void* visitVarDecl(VarDecl*, void*);
 

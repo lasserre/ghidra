@@ -908,7 +908,7 @@ public:
     /** @brief True if the ghidra metatype was TYPE_BOOL */
     bool isBool();
 
-    virtual string name();
+    // virtual string name();
 
     /** @brief The name Ghidra uses for this data type (could be a typedef) */
     string ghidra_name() { return _ghidra_name; }

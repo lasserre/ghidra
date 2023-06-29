@@ -57,6 +57,15 @@ void TypedefDeclVisitor::insertTypedefs(ASTNode* parent)
 {
     parent->accept(this);   // generate list of child nodes to add
 
+    // insert this HERE at the end of our auto-generated typedef decls
+    // so we can remove ALL of this before validating (due to inconsistencies
+    // between clang's parse of the typedefdecl in Ghidra C code and our need
+    // to emit BuiltinTypes that use the Ghidra name (like uint instead of unsigned int)
+    // so that validation works well enough)
+    auto REMOVE_HERE_DECL = new TypedefDecl("REMOVE_EVERYTHING_ABOVE_THIS_IN_JSON");
+    REMOVE_HERE_DECL->addChild(new BuiltinType("int", 4, false, true));
+    parent->addChild(REMOVE_HERE_DECL, /*append =*/ false, /*check_parens =*/ false);
+
     for (const auto& entry : _typedefs_to_add) {
         // add typedef declarations for each at the top
         parent->addChild(entry.second.decl, /* append =*/ false, /*check_parens = */ false);
@@ -180,19 +189,27 @@ void TypedefDeclVisitor::insertNewTypedef(Type* alias_type, Type* real_type, Att
 // CLS: taking this away in favor of bit->ghidra_name and not caring about their
 // names/typedefs (because our model won't care)
 // ------------
-// void* TypedefDeclVisitor::visitBuiltinType(BuiltinType* bit, void* atu)
-// {
-//     const Datatype* dt = bit->ghidra_dtype();
+void* TypedefDeclVisitor::visitBuiltinType(BuiltinType* bit, void* atu)
+{
+    const Datatype* dt = bit->ghidra_dtype();
 
-//     while (dt->getTypedef()) {
-//         // this is a typedef...need to capture it
-//         auto real_type = _builder->toAstType(dt->getTypedef());
-//         insertNewTypedef(bit, real_type, (AttachedTypeUpdate*)atu);
-//         dt = dt->getTypedef();      // follow this down until we're at a "real" type
-//     }
+    if (dt) {
+        while (dt->getTypedef()) {
+            // this is a typedef...need to capture it
+            Type* real_type = nullptr;
+            if (dt->getName() == "size_t") {
+                // Ghidra defines this in a way that breaks validation on 64-bit machines
+                real_type = new BuiltinType("unsigned long long", 8, false, false);
+            } else {
+                real_type = _builder->toAstType(dt->getTypedef());
+            }
+            insertNewTypedef(bit, real_type, (AttachedTypeUpdate*)atu);
+            dt = dt->getTypedef();      // follow this down until we're at a "real" type
+        }
+    }
 
-//     return nullptr;
-// }
+    return nullptr;
+}
 
 void* TypedefDeclVisitor::visitType(Type* type, void* atu)
 {
@@ -296,6 +313,22 @@ void* TypedefDeclVisitor::visitFunctionDecl(FunctionDecl* fdecl, void* context)
     );
 
     fdecl->return_type()->accept(this, type_update);
+
+    delete type_update;
+    return nullptr;
+}
+
+void* TypedefDeclVisitor::visitFunctionType(FunctionType* ftype, void* context)
+{
+    auto type_update = new AttachedTypeUpdate(
+        [](ASTNode* ft, Type* newtype) {
+            ((FunctionType*)ft)->replace_return_type(newtype);
+            return ft;
+        },
+        ftype
+    );
+
+    ftype->return_type()->accept(this, type_update);
 
     delete type_update;
     return nullptr;

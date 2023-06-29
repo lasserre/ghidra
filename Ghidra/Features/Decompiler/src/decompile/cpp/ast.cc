@@ -657,49 +657,49 @@ BuiltinType::BuiltinType(string name, int size, bool isFloatingPoint, bool sign)
 {
 }
 
-string BuiltinType::name()
-{
-    if (isBool()) {
-        return "bool";
-    }
+// string BuiltinType::name()
+// {
+//     if (isBool()) {
+//         return "bool";
+//     }
 
-    if (isFloatingPoint()) {
-        switch (size()) {
-            case 4:
-                return "float";
-            case 8:
-                return "double";
-            default:
-                callbacks->unimplementedCodeCallback("UNHANDLED BuiltinType FLOAT SIZE of " + size());
-                return "UNHANDLED_FLOAT_SIZE_" + size();
-        }
-    }
+//     if (isFloatingPoint()) {
+//         switch (size()) {
+//             case 4:
+//                 return "float";
+//             case 8:
+//                 return "double";
+//             default:
+//                 callbacks->unimplementedCodeCallback("UNHANDLED BuiltinType FLOAT SIZE of " + size());
+//                 return "UNHANDLED_FLOAT_SIZE_" + size();
+//         }
+//     }
 
-    // on my x86_64 laptop:
-    // char - 1B
-    // short - 2B
-    // int - 4B
-    // long - 8B
-    // long long - 8B
-    if (size() == 1) {
-        return isSigned() ? "char" : "unsigned char";
-    } else if (size() == 2) {
-        return isSigned() ? "short" : "unsigned short";
-    } else if (size() > 2 && size() <= 4) {
-        return isSigned() ? "int" : "unsigned int";
-    } else if (size() > 4 && size() <= 8) {
-        return isSigned() ? "long" : "unsigned long";
-    } else if (size() > 8 && size() <= 16) {
-        return isSigned() ? "int128_t" : "uint128_t";
-    } else if (size() > 16 && size() <= 32) {
-        return isSigned() ? "int256_t" : "uint256_t";
-    } else if (size() > 32 && size() <= 64) {
-        return isSigned() ? "int512_t" : "uint512_t";
-    } else {
-        callbacks->unimplementedCodeCallback("UNHANDLED BuiltinType INT SIZE of " + size());
-        return "UNHANDLED_INT_SIZE_" + std::to_string(size());
-    }
-}
+//     // on my x86_64 laptop:
+//     // char - 1B
+//     // short - 2B
+//     // int - 4B
+//     // long - 8B
+//     // long long - 8B
+//     if (size() == 1) {
+//         return isSigned() ? "char" : "unsigned char";
+//     } else if (size() == 2) {
+//         return isSigned() ? "short" : "unsigned short";
+//     } else if (size() > 2 && size() <= 4) {
+//         return isSigned() ? "int" : "unsigned int";
+//     } else if (size() > 4 && size() <= 8) {
+//         return isSigned() ? "long" : "unsigned long";
+//     } else if (size() > 8 && size() <= 16) {
+//         return isSigned() ? "int128_t" : "uint128_t";
+//     } else if (size() > 16 && size() <= 32) {
+//         return isSigned() ? "int256_t" : "uint256_t";
+//     } else if (size() > 32 && size() <= 64) {
+//         return isSigned() ? "int512_t" : "uint512_t";
+//     } else {
+//         callbacks->unimplementedCodeCallback("UNHANDLED BuiltinType INT SIZE of " + size());
+//         return "UNHANDLED_INT_SIZE_" + std::to_string(size());
+//     }
+// }
 
 int BuiltinType::size()
 {

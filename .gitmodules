@@ -1,3 +1,0 @@
-[submodule ".\\Ghidra\\Features\\Decompiler\\third-party\\json"]
-	path = .\\Ghidra\\Features\\Decompiler\\third-party\\json
-	url = git@github.com:nlohmann/json.git

@@ -93,7 +93,7 @@ public:
      * @param bl
      * @return string
      */
-    string ASTBuilder::getEmitLabelName(const FlowBlock *bl);
+    string getEmitLabelName(const FlowBlock *bl);
 
     /**
      * @brief This can return a BreakStmt, ContinueStmt, or GotoStmt depending

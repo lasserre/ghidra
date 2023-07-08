@@ -394,8 +394,16 @@ protected:
     // appropriate.
     int _next_vdecl_id;
 
+    /**
+     * @brief wrap access to _logfile so I can monitor whether we ever write to
+     * the logfile or not - if not, I won't ever create it
+     */
+    ofstream& get_logfile();
+
     string _logfolder;
     ofstream _logfile;  // log unimplemented code for review
+    string _logfile_name;
+    bool _logfile_created;
     ASTCallbacks _ast_callbacks;
     string _original_ghidra_printlang_name;     // save so we can restore at the end
     // LabelStmt* _pending_label;

@@ -327,6 +327,8 @@ FunctionDecl* ASTBuilder::buildOpFuncDecl(const PcodeOp* op, string name)
         return_type = getOpFuncOutputType(1, "CARRY", true);
     } else if (name.find("SCARRY") == 0) {
         return_type = getOpFuncOutputType(1, "SCARRY", true);
+    } else if (name.find("POPCOUNT") == 0) {
+        return_type = getOpFuncOutputType(op->getOut()->getSize(), "POPCOUNT");
     } else {
         unimplementedCode("Unhandled opFunc type " + name);
         return_type = getOpFuncOutputType(8, "UNHANDLED");
@@ -2566,7 +2568,7 @@ void ASTBuilder::opCall(const PcodeOp *op)
     if (callpoint->getSpace()->getType() == IPTR_FSPEC) {
         FuncCallSpecs* fspec = FuncCallSpecs::getFspecFromConst(callpoint->getAddr());
         if (fspec->getName().size() == 0) {
-            unimplementedCode("handle empty func name @ 0x" + to_hex(op->getAddr().getOffset()));
+            unimplementedCode("handle empty func name");
         }
         else {
             Funcdata* fd = fspec->getFuncdata();
@@ -3102,17 +3104,17 @@ void ASTBuilder::opIntSub(const PcodeOp *op)
 
 void ASTBuilder::opIntCarry(const PcodeOp *op)
 {
-    unimplementedOp("opIntCarry");
+    opFunc(op);
 }
 
 void ASTBuilder::opIntScarry(const PcodeOp *op)
 {
-    unimplementedOp("opIntScarry");
+    opFunc(op);
 }
 
 void ASTBuilder::opIntSborrow(const PcodeOp *op)
 {
-    unimplementedOp("opIntSborrow");
+    opFunc(op);
 }
 
 // integer two's complement (-X)
@@ -3213,7 +3215,7 @@ void ASTBuilder::opBoolAnd(const PcodeOp *op)
 
 void ASTBuilder::opBoolOr(const PcodeOp *op)
 {
-    unimplementedOp("opBoolOr");
+    binaryOperator("||", op);
 }
 
 void ASTBuilder::opFloatEqual(const PcodeOp *op)
@@ -3789,5 +3791,11 @@ void ASTBuilder::opExtractOp(const PcodeOp *op)
 
 void ASTBuilder::opPopcountOp(const PcodeOp *op)
 {
-    unimplementedOp("opPopcountOp");
+    opFunc(op);
+}
+
+void ASTBuilder::opLzcountOp(const PcodeOp *op)
+{
+    unimplementedCode("opLzcountOp");
+    // opFunc(op);
 }

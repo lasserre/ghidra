@@ -181,6 +181,7 @@ public:
     virtual void opInsertOp(const PcodeOp *op);
     virtual void opExtractOp(const PcodeOp *op);
     virtual void opPopcountOp(const PcodeOp *op);
+    virtual void opLzcountOp(const PcodeOp *op);
     /** -------------------------------------------------------------- */
 
     /**

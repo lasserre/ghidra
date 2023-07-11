@@ -842,8 +842,8 @@ void* UnaryOperator::doAccept(ASTVisitor* v, void* context)
     return v->visitUnaryOperator(this, context);
 }
 
-ParmVarDecl::ParmVarDecl(int id, string name, Type* dtype)
-    : VarDecl(id, name, dtype)
+ParmVarDecl::ParmVarDecl(int id, string name, Type* dtype, Location loc)
+    : VarDecl(id, name, dtype, loc)
 {
 }
 
@@ -870,22 +870,43 @@ void* ValueDecl::doAccept(ASTVisitor* v, void* context)
     return v->visitValueDecl(this, context);
 }
 
+Location getLocFromAddr(Address addr)
+{
+    AddrSpace* space = addr.getSpace();
+    Location loc(space->getName(), addr.getOffset());
+
+    if (loc.addr_space_name == "register") {
+        loc.register_name = space->getTrans()->getRegisterName(space, loc.offset, addr.getAddrSize());
+    }
+
+    return loc;
+}
+
+Location getLocFromSymbol(Symbol* sym)
+{
+    SymbolEntry* sym_entry = sym->getFirstWholeMap();
+    return getLocFromAddr(sym_entry->getAddr());
+}
+
 VarDecl::VarDecl(int id, Symbol* sym)
-    : ValueDecl(id), _sym(sym), _name(""), _type(nullptr), _ghidra_type(sym->getType())
+    : ValueDecl(id), _sym(sym), _name(""), _type(nullptr), _ghidra_type(sym->getType()), _loc()
 {
     if (sym) {
         _name = getValidCLanguageName(sym->getName());
         _type = callbacks->toAstType(sym->getType());
+        _loc = getLocFromSymbol(sym);
     }
 }
 
-VarDecl::VarDecl(int id, string name, Type* type)
-    : ValueDecl(id), _sym(nullptr), _name(getValidCLanguageName(name)), _type(type), _ghidra_type(nullptr)
+VarDecl::VarDecl(int id, string name, Type* type, Location loc)
+    : ValueDecl(id), _sym(nullptr), _name(getValidCLanguageName(name)), _type(type), _ghidra_type(nullptr),
+        _loc(loc)
 {
 }
 
-VarDecl::VarDecl(int id, string name, const Datatype* dt)
-    : ValueDecl(id), _sym(nullptr), _name(getValidCLanguageName(name)), _type(nullptr), _ghidra_type(dt)
+VarDecl::VarDecl(int id, string name, const Datatype* dt, Location loc)
+    : ValueDecl(id), _sym(nullptr), _name(getValidCLanguageName(name)), _type(nullptr), _ghidra_type(dt),
+        _loc(loc)
 {
     _type = callbacks->toAstType(dt);
 }

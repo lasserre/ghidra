@@ -297,7 +297,7 @@ void* JsonASTVisitor::visitFunctionDecl(FunctionDecl* fd, void* context)
     fdecl["id"] = fd->id();
     fdecl["inner"] = json::array();
     fdecl["name"] = fd->name();
-    fdecl["address"] = to_hex(fd->address());
+    fdecl["address"] = fd->address();   // to_hex(fd->address());
     fdecl["is_intrinsic"] = fd->is_intrinsic();
     fdecl["return_dtype"] = typeToJson(fd->return_type());
     // fdecl["return_dtype_name"] = datatypeToJson(fd->return_type()->ghidra_dtype());
@@ -401,6 +401,9 @@ void* JsonASTVisitor::visitParmVarDecl(ParmVarDecl* pv, void* context)
     pvdecl["name"] = pv->name();
     pvdecl["dtype"] = typeToJson(pv->type());
     // pvdecl["dtype_name"] = datatypeToJson(pv->type()->ghidra_dtype());
+    pvdecl["loc_space"] = pv->location().addr_space_name;
+    pvdecl["loc_off"] = pv->location().offset;
+    pvdecl["loc_reg"] = pv->location().register_name;
     return copy_to_parent(pvdecl, context);
 }
 
@@ -580,6 +583,9 @@ void* JsonASTVisitor::visitVarDecl(VarDecl* vd, void* context)
     var_decl["dtype"] = typeToJson(vd->type());
     // var_decl["dtype_name"] = datatypeToJson(vd->type()->ghidra_dtype());
     var_decl["name"] = vd->name();
+    var_decl["loc_space"] = vd->location().addr_space_name;
+    var_decl["loc_off"] = vd->location().offset;
+    var_decl["loc_reg"] = vd->location().register_name;
     return copy_to_parent(var_decl, context);
 }
 

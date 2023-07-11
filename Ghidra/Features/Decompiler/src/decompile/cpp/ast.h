@@ -1363,6 +1363,33 @@ protected:
 };
 
 /**
+ * @brief Encapsulate the address/location information in general
+ * for variables where we need to handle all of Ghidra's address
+ * space types (RAM, register, unique, stack, etc)
+ */
+struct Location
+{
+    Location(string space_name = "", uintb off = 0, string reg_name = "")
+        : addr_space_name(space_name), offset(off), register_name(reg_name)
+    { }
+
+    string addr_space_name;
+    string register_name;      // only filled in if it's a register
+    uintb offset;
+};
+
+/**
+ * @brief Convert a Symbol to its Location representation based on
+ * the first SymbolEntry mapped
+ */
+Location getLocFromSymbol(Symbol* sym);
+
+/**
+ * @brief Convert an Address to its Location representation
+ */
+Location getLocFromAddr(Address addr);
+
+/**
  * @brief Variable declaration or definition
  */
 class VarDecl : public ValueDecl
@@ -1372,8 +1399,8 @@ public:
      * @param sym The symbol for this variable
      */
     VarDecl(int id, Symbol* sym);
-    VarDecl(int id, string name, Type* type);
-    VarDecl(int id, string name, const Datatype* dt);
+    VarDecl(int id, string name, Type* type, Location loc);
+    VarDecl(int id, string name, const Datatype* dt, Location loc);
     virtual ~VarDecl()
     {
         delete _type;
@@ -1401,6 +1428,7 @@ public:
 
     inline string name() { return _name; }
     inline Type* type() { return _type; }
+    inline Location location() { return _loc; }
 
     inline void replace_type(Type* newtype)
     {
@@ -1414,6 +1442,7 @@ protected:
     string _name;
     Type* _type;
     const Datatype* _ghidra_type;
+    Location _loc;
 };
 
 /**
@@ -1422,7 +1451,7 @@ protected:
 class ParmVarDecl : public VarDecl
 {
 public:
-    ParmVarDecl(int id, string name, Type* dtype);
+    ParmVarDecl(int id, string name, Type* dtype, Location loc);
     ParmVarDecl(int id, ProtoParameter* param);
     virtual ParmVarDecl* clone()
     {

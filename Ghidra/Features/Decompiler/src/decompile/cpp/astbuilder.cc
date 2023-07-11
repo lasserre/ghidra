@@ -338,7 +338,7 @@ FunctionDecl* ASTBuilder::buildOpFuncDecl(const PcodeOp* op, string name)
 
     for (int i = 0; i < op->numInput(); i++) {
         ParmVarDecl* pvdecl = new ParmVarDecl(_next_vdecl_id++, "param" + std::to_string(i+1),
-                    new BuiltinType("unsigned long", 8, false, false));
+                    new BuiltinType("unsigned long", 8, false, false), Location());
         fdecl->addChild(pvdecl);
     }
 
@@ -1352,7 +1352,8 @@ void ASTBuilder::pushMismatchSymbolAST(Symbol *sym,int4 off,int4 sz,
             _mismatch_globals[mismatch_name] = new VarDecl(
                 _next_vdecl_id++,
                 mismatch_name,
-                new BuiltinType("int", 4, false, true));
+                new BuiltinType("int", 4, false, true),
+                getLocFromSymbol(sym));
         }
 
         DeclRefExpr* refexpr = new DeclRefExpr(sym_decl, VAR_DECL);
@@ -1383,7 +1384,7 @@ void ASTBuilder::pushUnnamedLocation(const Address &addr, const Varnode *vn,cons
 
     if (!_unnamedLoc_globals.count(varname)) {
         Type* addr_dt = new BuiltinType("unsigned long", 8, false, false);
-        _unnamedLoc_globals[varname] = new VarDecl(_next_vdecl_id++, varname, addr_dt);
+        _unnamedLoc_globals[varname] = new VarDecl(_next_vdecl_id++, varname, addr_dt, getLocFromAddr(addr));
     }
 
     VarDecl* vdecl = _unnamedLoc_globals.at(varname);
@@ -2709,7 +2710,8 @@ void ASTBuilder::opCallother(const PcodeOp *op)
                 // might as well take the input argument data types as a best guess
                 // for the parameter types
                 ParmVarDecl* pvdecl = new ParmVarDecl(_next_vdecl_id++, "param" + std::to_string(i+1),
-                            toAstType(op->getIn(i)->getType()));
+                            toAstType(op->getIn(i)->getType()),
+                            Location());
                             // new BuiltinType("unsigned long", 8, false, false));
                 fdecl->addChild(pvdecl);
             }

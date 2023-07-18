@@ -54,7 +54,7 @@ void initASTCallbacks(ASTCallbacks* cb);
 class ASTNode
 {
 public:
-    ASTNode();
+    ASTNode(uintb instr_addr = 0);
     virtual ~ASTNode();
     virtual ASTNode* clone() = 0;
 
@@ -169,6 +169,17 @@ public:
     */
     bool hasPrecedence() { return precedence() > 0; }
 
+    /**
+     * @brief The address of the instruction corresponding to this AST node, if
+     * any such address exists. Default value is 0
+     */
+    uintb instr_addr() { return _instr_addr; }
+
+    void set_instr_addr(uintb instr_addr)
+    {
+        _instr_addr = instr_addr;
+    }
+
 protected:
     /**
      * @brief This is the node-specific function to perform the accept
@@ -180,6 +191,7 @@ protected:
     ASTNode* _parent;       // pointer to existing parent, not our memory
     // dynamically-allocated child pointers we must free when destructed
     std::vector<ASTNode*> _children;
+    uintb _instr_addr;  // the address of the instruction corresponding to this node, if any
 };
 
 /**
@@ -193,7 +205,8 @@ protected:
 class ArraySubscriptExpr : public ASTNode
 {
 public:
-    ArraySubscriptExpr()
+    ArraySubscriptExpr(const PcodeOp* op)
+        : ASTNode(op->getAddr().getOffset())
     { }
     virtual ArraySubscriptExpr* clone()
     {
@@ -217,7 +230,8 @@ protected:
 class BinaryOperator : public ASTNode
 {
 public:
-    BinaryOperator(std::string opcode);
+    BinaryOperator(std::string opcode, const PcodeOp* op);
+    BinaryOperator(std::string opcode, uintb instr_addr);
     virtual BinaryOperator* clone()
     {
         return (BinaryOperator*)clone_my_members(new BinaryOperator(*this));
@@ -290,7 +304,7 @@ protected:
 class CallExpr : public ASTNode
 {
 public:
-    CallExpr();
+    CallExpr(const PcodeOp* op);
     virtual CallExpr* clone()
     {
         return (CallExpr*)clone_my_members(new CallExpr(*this));
@@ -340,7 +354,7 @@ protected:
 class CharacterLiteral : public ASTNode
 {
 public:
-    CharacterLiteral(BuiltinType* type, uintb value);
+    CharacterLiteral(BuiltinType* type, uintb value, const PcodeOp* op);
     virtual ~CharacterLiteral() { delete _type; }
     virtual CharacterLiteral* clone_my_members(ASTNode* node);
 
@@ -404,7 +418,7 @@ protected:
 class CStyleCastExpr : public ASTNode
 {
 public:
-    CStyleCastExpr(Type* type);
+    CStyleCastExpr(Type* type, const PcodeOp* op);
 
     virtual CStyleCastExpr* clone_my_members(ASTNode* node);
 
@@ -453,7 +467,8 @@ public:
      * may be located using the map<>'s in ASTBuilder. Thus DeclRefExpr
      * DOES NOT OWN this memory and must not delete it.
      */
-    DeclRefExpr(ValueDecl* referencedDecl, eDeclRefExprType decl_type);
+    DeclRefExpr(ValueDecl* referencedDecl, eDeclRefExprType decl_type, uintb instr_addr);
+    DeclRefExpr(ValueDecl* referencedDecl, eDeclRefExprType decl_type, const PcodeOp* op);
     virtual DeclRefExpr* clone_my_members(ASTNode* node);
     virtual DeclRefExpr* clone()
     {
@@ -495,7 +510,8 @@ protected:
 class ForStmt : public ASTNode
 {
 public:
-    ForStmt()
+    ForStmt(uintb instr_addr)
+        : ASTNode(instr_addr)
     { }
     virtual ForStmt* clone()
     {
@@ -514,8 +530,8 @@ public:
      * CLS: not sure what I want here...just starting with name for simplicity,
      * but if it becomes important than we can add a LabelStmt or an ID or something
      */
-    GotoStmt(string label_name)
-        : _label_name(label_name)
+    GotoStmt(string label_name, uintb instr_addr)
+        : ASTNode(instr_addr), _label_name(label_name)
     { }
     virtual GotoStmt* clone()
     {
@@ -538,7 +554,7 @@ protected:
 class IfStmt : public ASTNode
 {
 public:
-    IfStmt();
+    IfStmt(uintb instr_addr);
     virtual IfStmt* clone()
     {
         return (IfStmt*)clone_my_members(new IfStmt(*this));
@@ -551,8 +567,8 @@ protected:
 class FloatingLiteral : public ASTNode
 {
 public:
-    FloatingLiteral(Type* type, double value)
-        : _type(type), _value(value), _special_value("")
+    FloatingLiteral(Type* type, double value, const PcodeOp* op)
+        : ASTNode(op->getAddr().getOffset()), _type(type), _value(value), _special_value("")
     { }
     ~FloatingLiteral()
     {
@@ -585,7 +601,7 @@ protected:
 class IntegerLiteral : public ASTNode
 {
 public:
-    IntegerLiteral(Type* type, uintb value);
+    IntegerLiteral(Type* type, uintb value, uintb instr_addr);
     ~IntegerLiteral()
     {
         if (_type) {
@@ -610,8 +626,8 @@ protected:
 class LabelStmt : public ASTNode
 {
 public:
-    LabelStmt(string name, ASTBuilder* builder)
-        : _name(name), _builder_handle(builder)
+    LabelStmt(string name, ASTBuilder* builder, uintb instr_addr)
+        : ASTNode(instr_addr), _name(name), _builder_handle(builder)
     { }
     virtual LabelStmt* clone()
     {
@@ -631,8 +647,9 @@ protected:
 class MemberExpr : public ASTNode
 {
 public:
-    MemberExpr(string name="", int offset=-1, bool isArrow=false, int sid=-1)
-        : _sid(sid), _offset(offset), _isArrow(isArrow), _name(name)
+    MemberExpr(const PcodeOp* op, string name="", int offset=-1, bool isArrow=false, int sid=-1)
+        : ASTNode(op->getAddr().getOffset()), _sid(sid), _offset(offset),
+        _isArrow(isArrow), _name(name)
     { }
     virtual MemberExpr* clone()
     {
@@ -682,8 +699,8 @@ protected:
 class ParenExpr : public ASTNode
 {
 public:
-    ParenExpr(bool hidden=false)
-        : _hidden(hidden)
+    ParenExpr(bool hidden=false, uintb instr_addr = 0)
+        : ASTNode(instr_addr), _hidden(hidden)
     { }
     virtual ParenExpr* clone()
     {
@@ -709,7 +726,7 @@ protected:
 class ReturnStmt : public ASTNode
 {
 public:
-    ReturnStmt();
+    ReturnStmt(const PcodeOp* op);
     virtual ReturnStmt* clone()
     {
         return (ReturnStmt*)clone_my_members(new ReturnStmt(*this));
@@ -722,7 +739,7 @@ protected:
 class StringLiteral : public ASTNode
 {
 public:
-    StringLiteral(string value);
+    StringLiteral(string value, const PcodeOp* op);
     virtual StringLiteral* clone()
     {
         return (StringLiteral*)clone_my_members(new StringLiteral(*this));
@@ -746,7 +763,7 @@ protected:
 class SwitchStmt : public ASTNode
 {
 public:
-    SwitchStmt();
+    SwitchStmt(const PcodeOp* op);
     virtual SwitchStmt* clone()
     {
         return (SwitchStmt*)clone_my_members(new SwitchStmt(*this));
@@ -781,7 +798,8 @@ protected:
 class DoStmt : public ASTNode
 {
 public:
-    DoStmt()
+    DoStmt(uintb instr_addr)
+        : ASTNode(instr_addr)
     { }
     virtual DoStmt* clone()
     {
@@ -802,7 +820,8 @@ protected:
 class WhileStmt : public ASTNode
 {
 public:
-    WhileStmt()
+    WhileStmt(uintb instr_addr)
+        : ASTNode(instr_addr)
     { }
     virtual WhileStmt* clone()
     {
@@ -1182,7 +1201,8 @@ protected:
 class UnaryOperator : public ASTNode
 {
 public:
-    UnaryOperator(std::string opcode);//, Type* type);
+    UnaryOperator(std::string opcode, const PcodeOp* op);
+    //, Type* type);
 
     virtual UnaryOperator* clone()
     {

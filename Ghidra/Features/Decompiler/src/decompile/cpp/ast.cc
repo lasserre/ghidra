@@ -27,8 +27,8 @@ void initASTCallbacks(ASTCallbacks* cb)
     callbacks = cb;
 }
 
-ASTNode::ASTNode()
-    : _parent(nullptr), _children()
+ASTNode::ASTNode(uintb instr_addr /* = 0*/)
+    : _parent(nullptr), _children(), _instr_addr(instr_addr)
 {
 }
 
@@ -194,8 +194,13 @@ void* ArraySubscriptExpr::doAccept(ASTVisitor* v, void* context)
     return v->visitArraySubscriptExpr(this, context);
 }
 
-BinaryOperator::BinaryOperator(std::string opcode)
-    : _opcode(opcode)
+BinaryOperator::BinaryOperator(std::string opcode, const PcodeOp* op)
+    : BinaryOperator(opcode, op->getAddr().getOffset())
+{
+}
+
+BinaryOperator::BinaryOperator(std::string opcode, uintb instr_addr)
+    : ASTNode(instr_addr), _opcode(opcode)
 {
 }
 
@@ -299,7 +304,8 @@ void* CopyPlaceholder::doAccept(ASTVisitor* v, void* context)
     return v->visitCopyPlaceholder(this, context);
 }
 
-CallExpr::CallExpr()
+CallExpr::CallExpr(const PcodeOp* op)
+    : ASTNode(op->getAddr().getOffset())
 {
 }
 
@@ -322,8 +328,8 @@ void* DefaultStmt::doAccept(ASTVisitor* v, void* context)
     return v->visitDefaultStmt(this, context);
 }
 
-CharacterLiteral::CharacterLiteral(BuiltinType* type, uintb value)
-    : _type(type), _value(value)
+CharacterLiteral::CharacterLiteral(BuiltinType* type, uintb value, const PcodeOp* op)
+    : ASTNode(op->getAddr().getOffset()), _type(type), _value(value)
 {
 }
 
@@ -363,8 +369,8 @@ void* ContinueStmt::doAccept(ASTVisitor* v, void* context)
     return v->visitContinueStmt(this, context);
 }
 
-CStyleCastExpr::CStyleCastExpr(Type* type)
-    : _type(type)
+CStyleCastExpr::CStyleCastExpr(Type* type, const PcodeOp* op)
+    : ASTNode(op->getAddr().getOffset()), _type(type)
 {
 }
 
@@ -381,8 +387,13 @@ void* CStyleCastExpr::doAccept(ASTVisitor* v, void* context)
     return v->visitCStyleCastExpr(this, context);
 }
 
-DeclRefExpr::DeclRefExpr(ValueDecl* referencedDecl, eDeclRefExprType decl_type)
-    : _ref(referencedDecl)
+DeclRefExpr::DeclRefExpr(ValueDecl* referencedDecl, eDeclRefExprType decl_type, const PcodeOp* op)
+    : DeclRefExpr(referencedDecl, decl_type, op->getAddr().getOffset())
+{
+}
+
+DeclRefExpr::DeclRefExpr(ValueDecl* referencedDecl, eDeclRefExprType decl_type, uintb instr_addr)
+    : ASTNode(instr_addr), _ref(referencedDecl)
 {
 }
 
@@ -429,7 +440,8 @@ void* FunctionDecl::doAccept(ASTVisitor* v, void* context)
     return v->visitFunctionDecl(this, context);
 }
 
-IfStmt::IfStmt()
+IfStmt::IfStmt(uintb instr_addr)
+    : ASTNode(instr_addr)
 {
 }
 
@@ -450,8 +462,8 @@ void* FloatingLiteral::doAccept(ASTVisitor* v, void* context)
     return v->visitFloatingLiteral(this, context);
 }
 
-IntegerLiteral::IntegerLiteral(Type* type, uintb value)
-    : _value(value), _type(type)
+IntegerLiteral::IntegerLiteral(Type* type, uintb value, uintb instr_addr)
+    : ASTNode(instr_addr), _value(value), _type(type)
 {
 }
 
@@ -531,7 +543,8 @@ void* RecordDecl::doAccept(ASTVisitor* v, void* context)
     return v->visitRecordDecl(this, context);
 }
 
-ReturnStmt::ReturnStmt()
+ReturnStmt::ReturnStmt(const PcodeOp* op)
+    : ASTNode(op->getAddr().getOffset())
 {
 }
 
@@ -540,8 +553,8 @@ void* ReturnStmt::doAccept(ASTVisitor* v, void* context)
     return v->visitReturnStmt(this, context);
 }
 
-StringLiteral::StringLiteral(string value)
-    : _value(value)
+StringLiteral::StringLiteral(string value, const PcodeOp* op)
+    : ASTNode(op->getAddr().getOffset()), _value(value)
 {
 }
 
@@ -550,7 +563,8 @@ void* StringLiteral::doAccept(ASTVisitor* v, void* context)
     return v->visitStringLiteral(this, context);
 }
 
-SwitchStmt::SwitchStmt()
+SwitchStmt::SwitchStmt(const PcodeOp* op)
+    : ASTNode(op->getAddr().getOffset())
 {
 }
 
@@ -815,8 +829,8 @@ void* TypedefType::doAccept(ASTVisitor* v, void* context)
     return v->visitTypedefType(this, context);
 }
 
-UnaryOperator::UnaryOperator(std::string opcode)//, Type* type)
-    : _opcode(opcode) //, _type(type)
+UnaryOperator::UnaryOperator(std::string opcode, const PcodeOp* op)
+    : ASTNode(op->getAddr().getOffset()), _opcode(opcode) //, _type(type)
 {
 }
 

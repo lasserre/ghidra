@@ -43,7 +43,7 @@ void* CommaVisitor::visitBinaryOperator(BinaryOperator* binop, void* context)
         binop->children()->clear();
 
         // add CommaOp
-        BinaryOperator* comma_op = new BinaryOperator(",");
+        BinaryOperator* comma_op = new BinaryOperator(",", binop->instr_addr());
         binop->addChild(comma_op);
         binop->addChild(last_child);
 

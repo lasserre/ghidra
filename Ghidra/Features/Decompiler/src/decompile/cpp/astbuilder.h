@@ -287,7 +287,7 @@ protected:
      */
     void processSymbolDetail(PendingNode* node);
 
-    void pushSymbolAST(Symbol* sym);
+    void pushSymbolAST(Symbol* sym, uintb instr_addr);
 
     // similar to PrintC version but no const
     void pushMismatchSymbolAST(Symbol *sym,int4 off,int4 sz,
@@ -312,9 +312,9 @@ protected:
      * @brief Inserts a comma operator underneath the given parent node and
      * returns a pointer to it
      */
-    BinaryOperator* insertCommaOperator(ASTNode* parent);
+    BinaryOperator* insertCommaOperator(ASTNode* parent, uintb instr_addr);
 
-    void push_bool(uintb value, int size);
+    void push_bool(uintb value, int size, const PcodeOp* op);
 
     // override PrintC::push_integer for when we don't know the datatype
     virtual void push_integer(uintb val,int4 sz,bool sign, const Varnode *vn,const PcodeOp *op);
@@ -331,7 +331,7 @@ protected:
     bool createPtrCharConstant(TypePointer* pt, uintb value, const Varnode* vn, const PcodeOp* op);
     bool createPtrCodeConstant(TypePointer* pt, uintb value, const Varnode* vn, const PcodeOp* op);
     void processTypeCastExpression(const PcodeOp *op);
-    CStyleCastExpr* createAndPushTypeCast(Datatype* dt);
+    CStyleCastExpr* createAndPushTypeCast(Datatype* dt, const PcodeOp* op);
 
     // hide PrintC::opFunc()
     void opFunc(const PcodeOp* op);

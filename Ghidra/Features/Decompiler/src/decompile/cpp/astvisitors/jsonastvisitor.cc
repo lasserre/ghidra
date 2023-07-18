@@ -88,6 +88,7 @@ void* JsonASTVisitor::visitArraySubscriptExpr(ArraySubscriptExpr* ase, void* con
 {
     json ase_j;
     ase_j["kind"] = "ArraySubscriptExpr";
+    ase_j["instr_addr"] = ase->instr_addr();
     return copy_to_parent(ase_j, context);
 }
 
@@ -97,6 +98,7 @@ void* JsonASTVisitor::visitBinaryOperator(BinaryOperator* b, void* context)
     binop["kind"] = "BinaryOperator";
     binop["inner"] = json::array();
     binop["opcode"] = b->opcode();
+    binop["instr_addr"] = b->instr_addr();
     return copy_to_parent(binop, context);
 }
 
@@ -123,6 +125,7 @@ void* JsonASTVisitor::visitCallExpr(CallExpr* ce, void* context)
 {
     json ce_j;
     ce_j["kind"] = "CallExpr";
+    ce_j["instr_addr"] = ce->instr_addr();
     return copy_to_parent(ce_j, context);
 }
 
@@ -160,6 +163,7 @@ void* JsonASTVisitor::visitCharacterLiteral(CharacterLiteral* cl, void* context)
     cl_json["dtype"] = typeToJson(cl->type());
     // cl_json["dtype_name"] = datatypeToJson(cl->type()->ghidra_dtype());
     cl_json["value"] = cl->value();
+    cl_json["instr_addr"] = cl->instr_addr();
     return copy_to_parent(cl_json, context);
 }
 
@@ -208,6 +212,7 @@ void* JsonASTVisitor::visitCStyleCastExpr(CStyleCastExpr* cast_expr, void* conte
     cast["kind"] = "CStyleCastExpr";
     cast["dtype"] = typeToJson(cast_expr->type());
     // cast["dtype_name"] = datatypeToJson(cast_expr->type()->ghidra_dtype());
+    cast["instr_addr"] = cast_expr->instr_addr();
     return copy_to_parent(cast, context);
 }
 
@@ -217,6 +222,7 @@ void* JsonASTVisitor::visitDeclRefExpr(DeclRefExpr* dr, void* context)
     decl_ref["kind"] = "DeclRefExpr";
     decl_ref["referencedDecl_id"] = dr->ref()->id();
     decl_ref["type"] = dr->decl_type();
+    decl_ref["instr_addr"] = dr->instr_addr();
     return copy_to_parent(decl_ref, context);
 }
 
@@ -241,6 +247,7 @@ void* JsonASTVisitor::visitDoStmt(DoStmt* ds, void* context)
     json ds_j;
     ds_j["kind"] = "DoStmt";
     ds_j["inner"] = json::array();
+    ds_j["instr_addr"] = ds->instr_addr();
     return copy_to_parent(ds_j, context);
 }
 
@@ -278,6 +285,7 @@ void* JsonASTVisitor::visitFloatingLiteral(FloatingLiteral* lit, void* context)
     lit_j["value"] = lit->value();
     lit_j["special_value"] = lit->specialValue();
     lit_j["dtype"] = typeToJson(lit->type());
+    lit_j["instr_addr"] = lit->instr_addr();
     return copy_to_parent(lit_j, context);
 }
 
@@ -286,6 +294,7 @@ void* JsonASTVisitor::visitForStmt(ForStmt* fs, void* context)
     json fs_j;
     fs_j["kind"] = "ForStmt";
     fs_j["inner"] = json::array();
+    fs_j["instr_addr"] = fs->instr_addr();
     return copy_to_parent(fs_j, context);
 }
 
@@ -319,6 +328,7 @@ void* JsonASTVisitor::visitGotoStmt(GotoStmt* gs, void* context)
     json gs_j;
     gs_j["kind"] = "GotoStmt";
     gs_j["label_name"] = gs->label_name();
+    gs_j["instr_addr"] = gs->instr_addr();
     return copy_to_parent(gs_j, context);
 }
 
@@ -328,6 +338,7 @@ void* JsonASTVisitor::visitIntegerLiteral(IntegerLiteral* lit, void* context)
     int_lit["kind"] = "IntegerLiteral";
     int_lit["value"] = lit->value();
     int_lit["dtype"] = typeToJson(lit->type());
+    int_lit["instr_addr"] = lit->instr_addr();
     // int_lit["dtype_name"] = datatypeToJson(lit->type()->ghidra_dtype());
     return copy_to_parent(int_lit, context);
 }
@@ -337,6 +348,7 @@ void* JsonASTVisitor::visitLabelStmt(LabelStmt* ls, void* context)
     json ls_j;
     ls_j["kind"] = "LabelStmt";
     ls_j["name"] = ls->name();
+    ls_j["instr_addr"] = ls->instr_addr();
     return copy_to_parent(ls_j, context);
 }
 
@@ -345,6 +357,7 @@ void* JsonASTVisitor::visitIfStmt(IfStmt* stmt, void* context)
     json ifstmt;
     ifstmt["kind"] = "IfStmt";
     ifstmt["inner"] = json::array();
+    ifstmt["instr_addr"] = stmt->instr_addr();
     return copy_to_parent(ifstmt, context);
 }
 
@@ -356,6 +369,7 @@ void* JsonASTVisitor::visitMemberExpr(MemberExpr* m, void* context)
     m_j["sid"] = m->sid();
     m_j["offset"] = m->offset();
     m_j["isArrow"] = m->isArrow();
+    m_j["instr_addr"] = m->instr_addr();
     return copy_to_parent(m_j, context);
 }
 
@@ -371,6 +385,7 @@ void* JsonASTVisitor::visitParenExpr(ParenExpr* pe, void* context)
     json paren;
     paren["kind"] = "ParenExpr";
     paren["inner"] = json::array();
+    paren["instr_addr"] = pe->instr_addr();
     return copy_to_parent(paren, context);
 }
 
@@ -436,6 +451,7 @@ void* JsonASTVisitor::visitReturnStmt(ReturnStmt* rs, void* context)
     json rs_j;
     rs_j["kind"] = "ReturnStmt";
     rs_j["inner"] = json::array();
+    rs_j["instr_addr"] = rs->instr_addr();
     return copy_to_parent(rs_j, context);
 }
 
@@ -444,6 +460,7 @@ void* JsonASTVisitor::visitStringLiteral(StringLiteral* lit, void* context)
     json lit_j;
     lit_j["kind"] = "StringLiteral";
     lit_j["value"] = lit->value();
+    lit_j["instr_addr"] = lit->instr_addr();
     return copy_to_parent(lit_j, context);
 }
 
@@ -452,6 +469,7 @@ void* JsonASTVisitor::visitSwitchStmt(SwitchStmt* ss, void* context)
     json ss_j;
     ss_j["kind"] = "SwitchStmt";
     ss_j["inner"] = json::array();
+    ss_j["instr_addr"] = ss->instr_addr();
     return copy_to_parent(ss_j, context);
 }
 
@@ -563,6 +581,7 @@ void* JsonASTVisitor::visitUnaryOperator(UnaryOperator* uo, void* context)
     uo_json["kind"] = "UnaryOperator";
     uo_json["inner"] = json::array();
     uo_json["opcode"] = uo->opcode();
+    uo_json["instr_addr"] = uo->instr_addr();
     // uo_json["dtype"] = typeToJson(uo->type());
     // uo_json["dtype_name"] = datatypeToJson(uo->type()->ghidra_dtype());
     return copy_to_parent(uo_json, context);
@@ -593,5 +612,6 @@ void* JsonASTVisitor::visitWhileStmt(WhileStmt* ws, void* context)
 {
     json ws_j;
     ws_j["kind"] = "WhileStmt";
+    ws_j["instr_addr"] = ws->instr_addr();
     return copy_to_parent(ws_j, context);
 }

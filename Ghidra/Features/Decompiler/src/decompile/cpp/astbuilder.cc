@@ -2133,7 +2133,7 @@ void ASTBuilder::emitForLoop(const BlockWhileDo* bl)
 
     ForStmt* forstmt = new ForStmt(bl->getStart().getOffset());
     currentASTNode()->addChild(forstmt);
-    BinaryOperator* comma_op_init = insertCommaOperator(forstmt, op->getAddr().getOffset());
+    BinaryOperator* comma_op_init = insertCommaOperator(forstmt, op ? op->getAddr().getOffset() : 0);
     pushASTNode(comma_op_init);
 
     // 1) initializer statement

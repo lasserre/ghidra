@@ -887,6 +887,10 @@ void* ValueDecl::doAccept(ASTVisitor* v, void* context)
 Location getLocFromAddr(Address addr)
 {
     AddrSpace* space = addr.getSpace();
+    if (!space) {
+        return Location();
+    }
+
     Location loc(space->getName(), addr.getOffset());
 
     if (loc.addr_space_name == "register") {

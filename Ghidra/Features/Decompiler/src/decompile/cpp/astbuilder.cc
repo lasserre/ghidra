@@ -715,7 +715,7 @@ bool ASTBuilder::pushEquate(uintb val,int4 sz,const EquateSymbol *sym, const Var
         }
     }
     if (modval == val) {
-        pushSymbolAST(const_cast<EquateSymbol*>(sym), op->getAddr().getOffset());
+        pushSymbolAST(const_cast<EquateSymbol*>(sym), op ? op->getAddr().getOffset() : 0);
         return true;
     }
     modval = (~baseval) & mask;
@@ -723,7 +723,7 @@ bool ASTBuilder::pushEquate(uintb val,int4 sz,const EquateSymbol *sym, const Var
         UnaryOperator* unop = new UnaryOperator("~", op);
         currentASTNode()->addChild(unop);
         pushASTNode(unop);
-        pushSymbolAST(const_cast<EquateSymbol*>(sym), op->getAddr().getOffset());
+        pushSymbolAST(const_cast<EquateSymbol*>(sym), op ? op->getAddr().getOffset() : 0);
         popASTNode();
         return true;
     }
@@ -732,7 +732,7 @@ bool ASTBuilder::pushEquate(uintb val,int4 sz,const EquateSymbol *sym, const Var
         UnaryOperator* unop = new UnaryOperator("-", op);
         currentASTNode()->addChild(unop);
         pushASTNode(unop);
-        pushSymbolAST(const_cast<EquateSymbol*>(sym), op->getAddr().getOffset());
+        pushSymbolAST(const_cast<EquateSymbol*>(sym), op ? op->getAddr().getOffset() : 0);
         popASTNode();
         return true;
     }
@@ -741,7 +741,7 @@ bool ASTBuilder::pushEquate(uintb val,int4 sz,const EquateSymbol *sym, const Var
         BinaryOperator* binop = new BinaryOperator("+", op);
         currentASTNode()->addChild(binop);
         pushASTNode(binop);
-        pushSymbolAST(const_cast<EquateSymbol*>(sym), op->getAddr().getOffset());
+        pushSymbolAST(const_cast<EquateSymbol*>(sym), op ? op->getAddr().getOffset() : 0);
         push_integer(1, sz, false, (const Varnode *)0, (const PcodeOp *)0);
         popASTNode();
         return true;
@@ -751,7 +751,7 @@ bool ASTBuilder::pushEquate(uintb val,int4 sz,const EquateSymbol *sym, const Var
         BinaryOperator* binop = new BinaryOperator("-", op);
         currentASTNode()->addChild(binop);
         pushASTNode(binop);
-        pushSymbolAST(const_cast<EquateSymbol*>(sym), op->getAddr().getOffset());
+        pushSymbolAST(const_cast<EquateSymbol*>(sym), op ? op->getAddr().getOffset() : 0);
         push_integer(1, sz, false, (const Varnode *)0, (const PcodeOp *)0);
         popASTNode();
         return true;
@@ -835,7 +835,7 @@ void ASTBuilder::push_integer(Datatype* dt, uintb val,int4 sz,bool sign, const V
         // int magnitude = (~val) + 1;
 
         Type* int_dt = dt ? toAstType(dt) : new BuiltinType("int", 4, false, true);
-        IntegerLiteral* lit = new IntegerLiteral(int_dt, val, op->getAddr().getOffset());
+        IntegerLiteral* lit = new IntegerLiteral(int_dt, val, op ? op->getAddr().getOffset() : 0);
         unop->addChild(lit);
         return;
     }
@@ -875,7 +875,7 @@ void ASTBuilder::push_integer(Datatype* dt, uintb val,int4 sz,bool sign, const V
 
     // push int literal
     Type* int_dt = dt ? toAstType(dt) : new BuiltinType("int", 4, false, true);
-    IntegerLiteral* lit = new IntegerLiteral(int_dt, val, op->getAddr().getOffset());
+    IntegerLiteral* lit = new IntegerLiteral(int_dt, val, op ? op->getAddr().getOffset() : 0);
     currentASTNode()->addChild(lit);
 }
 
@@ -961,7 +961,7 @@ DeclRefExpr* createDeclRefForEnumConstant(string enum_valname, EnumDecl* decl, c
         }
     }
 
-    return enumconst ? new DeclRefExpr(enumconst, ENUM_DECL, op->getAddr().getOffset()) : nullptr;
+    return enumconst ? new DeclRefExpr(enumconst, ENUM_DECL, op ? op->getAddr().getOffset() : 0) : nullptr;
 }
 
 void ASTBuilder::createEnumConstant(uintb val,const TypeEnum *dt,const Varnode *vn, const PcodeOp *op)
@@ -1153,7 +1153,7 @@ void ASTBuilder::push_bool(uintb value, int size, const PcodeOp* op)
     // that extra information
     currentASTNode()->addChild(new IntegerLiteral(
             new BuiltinType("bool", size, false, false),
-            value, op->getAddr().getOffset()));
+            value, op ? op->getAddr().getOffset() : 0));
 }
 
 // corresponds to pushConstant()
@@ -1356,7 +1356,7 @@ void ASTBuilder::pushMismatchSymbolAST(Symbol *sym,int4 off,int4 sz,
                 getLocFromSymbol(sym));
         }
 
-        DeclRefExpr* refexpr = new DeclRefExpr(sym_decl, VAR_DECL, op->getAddr().getOffset());
+        DeclRefExpr* refexpr = new DeclRefExpr(sym_decl, VAR_DECL, op ? op->getAddr().getOffset() : 0);
         currentASTNode()->addChild(refexpr);
         return;
     }
@@ -1388,7 +1388,7 @@ void ASTBuilder::pushUnnamedLocation(const Address &addr, const Varnode *vn,cons
     }
 
     VarDecl* vdecl = _unnamedLoc_globals.at(varname);
-    DeclRefExpr* refexpr = new DeclRefExpr(vdecl, VAR_DECL, op->getAddr().getOffset());
+    DeclRefExpr* refexpr = new DeclRefExpr(vdecl, VAR_DECL, op ? op->getAddr().getOffset() : 0);
     currentASTNode()->addChild(refexpr);
 
     // IntegerLiteral* lit = new IntegerLiteral(addr_dt, addr.getOffset());
@@ -1536,7 +1536,7 @@ void ASTBuilder::pushPartialSymbol(const Symbol *sym,int4 off,int4 sz,
         // handle a pending arr_idx first because we could have 2 of these in a row X[0][1]
         if (pending_arr_idx) {
             IntegerLiteral* lit = new IntegerLiteral(new BuiltinType("int", 4, false, true), arr_idx,
-                op->getAddr().getOffset());
+                op ? op->getAddr().getOffset() : 0);
             currentASTNode()->addChild(lit);
             pending_arr_idx = false;
         }
@@ -1554,12 +1554,12 @@ void ASTBuilder::pushPartialSymbol(const Symbol *sym,int4 off,int4 sz,
     // base symbol name
     // -> needs to be before the final pending_arr_idx check because if its
     //    parent is ArraySubscriptExpr the LHS/first child should be sym
-    pushSymbolAST((Symbol*)sym, op->getAddr().getOffset());
+    pushSymbolAST((Symbol*)sym, op ? op->getAddr().getOffset() : 0);
 
     // check one more time in case the final item had a pending idx
     if (pending_arr_idx) {
         IntegerLiteral* lit = new IntegerLiteral(new BuiltinType("int", 4, false, true), arr_idx,
-            op->getAddr().getOffset());
+            op ? op->getAddr().getOffset() : 0);
         currentASTNode()->addChild(lit);
         pending_arr_idx = false;
     }
@@ -1589,7 +1589,7 @@ void ASTBuilder::processSymbolDetail(PendingNode* node)
             // I've just kept this to preserve structure similar to
             // Ghidra code
             if (!sym->getType()->needsResolution()) {
-                pushSymbolAST(sym, node->op->getAddr().getOffset());
+                pushSymbolAST(sym, node->op ? node->op->getAddr().getOffset() : 0);
                 return;
             }
             symboloff = 0;
@@ -2552,7 +2552,7 @@ void ASTBuilder::opBranchind(const PcodeOp *op)
     PendingExpr* expr = new PendingExpr();
 
     if (isSet(comma_separate)) {
-        BinaryOperator* comma_op = insertCommaOperator(ss, op->getAddr().getOffset());
+        BinaryOperator* comma_op = insertCommaOperator(ss, op ? op->getAddr().getOffset() : 0);
         expr->ast_op = comma_op;
     } else {
         expr->ast_op = ss;

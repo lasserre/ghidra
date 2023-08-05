@@ -3339,11 +3339,16 @@ void ASTBuilder::opSubpiece(const PcodeOp *op)
         const Varnode *vn = op->getIn(0);
         Datatype *ct = vn->getHighTypeReadFacing(op);
         if (ct->isPieceStructured()) {
+            StructType* stype = dynamic_cast<StructType*>(toAstType(ct));   // grab for SID later
+            if (!stype) {
+                throw LowlevelError("opSubpiece: unable to get StructType for type " + ct->getName());
+            }
             int4 offset;
             int4 byteOff = TypeOpSubpiece::computeByteOffsetForComposite(op);
             const TypeField *field = ct->findTruncation(byteOff,op->getOut()->getSize(),op,1,offset);	// Use artificial slot
             if (field && (offset == 0)) {      // A formal structure field
-                pushMemberExpression(op, vn, field->name, field->offset, false, mods);
+                pushMemberExpression(op, vn, field->name, field->offset, false, mods, stype->sid());
+                delete stype;
                 return;
             } else if (vn->isExplicit() && vn->getHigh()->getSymbolOffset() == -1) {    // An explicit, entire, structured object
                 Symbol *sym = vn->getHigh()->getSymbol();
@@ -3352,6 +3357,7 @@ void ASTBuilder::opSubpiece(const PcodeOp *op)
                     int4 off = (int4)op->getIn(1)->getOffset();
                     off = vn->getSpace()->isBigEndian() ? vn->getSize() - (sz + off) : off;
                     pushPartialSymbol(sym, off, sz, vn, op, -1);
+                    delete stype;
                     return;
                 }
             }
@@ -3455,81 +3461,17 @@ static bool isValueFlexible(const Varnode *vn)
   return false;
 }
 
-/**
- * @brief Walk inside the newly-created MemberExpr (carefully, using
- * dynamic_cast to verify the structure is what we expect) and retreive
- * the SID from underlying VarDecl's StructType
- *
- * @param memexpr
- * @return int
- */
-static int getSidFromMemberExprChild(MemberExpr* memexpr)
-{
-    // this looks really hacky but if we are in this case we should always
-    // end up with this structure (after processPendingNode(structNode)):
-    // MemberExpr.inner[0] (DeclRefExpr*)
-    //      DeclRefExpr.ref (VarDecl*)
-    //          VarDecl.type() (StructType*)
-    int sid = -1;
-    ASTNode* child = memexpr->children()->front();
-
-    // not sure if this is valid yet, but looks like we can ALSO potentially
-    // have nested MemberExpr's without going through DeclRefExpr layers:
-    // MemberExpr.inner[0] (MemberExpr)
-    //      MemberExpr.inner[0] (DeclRefExpr*)
-    //          DeclRefExpr.ref (VarDecl*)
-    //              VarDecl.type() (StructType*)
-    MemberExpr* nested_member = dynamic_cast<MemberExpr*>(child);
-    if (nested_member) {
-        return getSidFromMemberExprChild(nested_member);
-    }
-
-    DeclRefExpr* declref = dynamic_cast<DeclRefExpr*>(child);
-    if (declref) {
-        ValueDecl* val = declref->ref();
-        VarDecl* vardecl = dynamic_cast<VarDecl*>(val);
-        if (vardecl) {
-            Type* vtype = vardecl->type();
-            StructType* stype = nullptr;
-
-            // isArrow means this is a pointer to StructType, otherwise it's just StructType
-            if (memexpr->isArrow()) {
-                PointerType* ptype = dynamic_cast<PointerType*>(vtype);
-                if (ptype) {
-                    stype = dynamic_cast<StructType*>(ptype->children()->front());
-                }
-            } else {
-                stype = dynamic_cast<StructType*>(vtype);
-            }
-
-            if (stype) {
-                sid = stype->sid();
-            }
-        }
-    }
-
-    if (sid == -1) {
-        throw LowlevelError("We failed to access the SID from a MemberExpr");
-    }
-
-    return sid;
-}
-
 void ASTBuilder::pushMemberExpression(const PcodeOp* op, const Varnode* struct_vn,
-    string fieldname, int member_offset, bool is_arrow, uint4 mods)
+    string fieldname, int member_offset, bool is_arrow, uint4 mods, int sid)
 {
-    MemberExpr* memexpr = new MemberExpr(op, fieldname, member_offset, /* isArrow = */ is_arrow);
+    MemberExpr* memexpr = new MemberExpr(op, fieldname, member_offset, /* isArrow = */ is_arrow, sid);
     currentASTNode()->addChild(memexpr);
 
+    PendingExpr* expr = new PendingExpr();
+    expr->ast_op = memexpr;
     PendingNode* structNode = buildNodeImplied(struct_vn, op, mods);
-    pushASTNode(memexpr);
-    processPendingNode(structNode);
-    popASTNode();
-    delete structNode;
-
-    // retrieve sid from memexpr's child node (just created above within
-    // processPendingNode(structNode))
-    memexpr->setSid(getSidFromMemberExprChild(memexpr));
+    expr->parts.push_back(structNode);
+    _pending_expressions.push_back(expr);
 }
 
 // PTRSUB . or -> - Dereference a subfield from a pointer
@@ -3570,6 +3512,11 @@ void ASTBuilder::opPtrsub(const PcodeOp *op)
     if (ct->getMetatype() == TYPE_STRUCT || ct->getMetatype() == TYPE_UNION) {
 
         // ------------ TYPE_STRUCT | TYPE_UNION ------------
+        StructType* stype = dynamic_cast<StructType*>(toAstType(ct));   // grab for SID later
+        if (!stype) {
+            throw LowlevelError("Unable to get StructType for type " + ct->getName());
+        }
+
         uintb suboff = in1const;    // how far into container
         if (ptrel) {
             unimplementedCode("PTRSUB TYPE_STRUCT ptrel non-NULL");
@@ -3612,7 +3559,8 @@ void ASTBuilder::opPtrsub(const PcodeOp *op)
                 if (ptrel != (TypePointerRel *)0) {
                     unimplementedCode("PTRSUB TYPE_STRUCT !valueon flex ptrel");
                 }
-                pushMemberExpression(op, in0, fieldname, suboff, false, m | print_load_value);
+                pushMemberExpression(op, in0, fieldname, suboff, false, m | print_load_value,
+                    stype->sid());
                 popASTNode();   // UnaryOperator
             } else {            // EMIT  &( )->name
                 UnaryOperator* unop = new UnaryOperator("&", op);
@@ -3621,7 +3569,7 @@ void ASTBuilder::opPtrsub(const PcodeOp *op)
                 if (ptrel != (TypePointerRel *)0) {
                     unimplementedCode("PTRSUB TYPE_STRUCT !valueon flex ptrel");
                 }
-                pushMemberExpression(op, in0, fieldname, suboff, true, m);
+                pushMemberExpression(op, in0, fieldname, suboff, true, m, stype->sid());
                 popASTNode();   // UnaryOperator
             }
         } else {
@@ -3637,7 +3585,8 @@ void ASTBuilder::opPtrsub(const PcodeOp *op)
                     unimplementedCode("PTRSUB TYPE_STRUCT flex ptrel");
                 }
                 // in0 is the var (the struct), fieldname is the field name
-                pushMemberExpression(op, in0, fieldname, suboff, false, m | print_load_value);
+                pushMemberExpression(op, in0, fieldname, suboff, false, m | print_load_value,
+                    stype->sid());
             } else {
                 // EMIT ( )->name
                 if (ptrel) {
@@ -3645,7 +3594,7 @@ void ASTBuilder::opPtrsub(const PcodeOp *op)
                 }
                 // in0 is the var (the struct)
                 // fieldname is the field name
-                pushMemberExpression(op, in0, fieldname, suboff, true, m);
+                pushMemberExpression(op, in0, fieldname, suboff, true, m, stype->sid());
             }
 
             if (arrayvalue) {
@@ -3653,6 +3602,8 @@ void ASTBuilder::opPtrsub(const PcodeOp *op)
                 popASTNode();   // ArraySubscriptExpr
             }
         }
+        delete stype;
+
     } else if (ct->getMetatype() == TYPE_SPACEBASE) {
 
         // ------------ TYPE_SPACEBASE ------------

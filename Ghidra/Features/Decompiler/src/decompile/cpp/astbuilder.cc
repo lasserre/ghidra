@@ -3340,15 +3340,17 @@ void ASTBuilder::opSubpiece(const PcodeOp *op)
         Datatype *ct = vn->getHighTypeReadFacing(op);
         if (ct->isPieceStructured()) {
             StructType* stype = dynamic_cast<StructType*>(toAstType(ct));   // grab for SID later
-            if (!stype) {
-                throw LowlevelError("opSubpiece: unable to get StructType for type " + ct->getName());
+            int sid = -1;
+            if (stype) {
+                sid = stype->sid();
+                delete stype;
             }
+            // throw LowlevelError("opSubpiece: unable to get StructType for type " + ct->getName());
             int4 offset;
             int4 byteOff = TypeOpSubpiece::computeByteOffsetForComposite(op);
             const TypeField *field = ct->findTruncation(byteOff,op->getOut()->getSize(),op,1,offset);	// Use artificial slot
             if (field && (offset == 0)) {      // A formal structure field
-                pushMemberExpression(op, vn, field->name, field->offset, false, mods, stype->sid());
-                delete stype;
+                pushMemberExpression(op, vn, field->name, field->offset, false, mods, -1);
                 return;
             } else if (vn->isExplicit() && vn->getHigh()->getSymbolOffset() == -1) {    // An explicit, entire, structured object
                 Symbol *sym = vn->getHigh()->getSymbol();
@@ -3357,7 +3359,6 @@ void ASTBuilder::opSubpiece(const PcodeOp *op)
                     int4 off = (int4)op->getIn(1)->getOffset();
                     off = vn->getSpace()->isBigEndian() ? vn->getSize() - (sz + off) : off;
                     pushPartialSymbol(sym, off, sz, vn, op, -1);
-                    delete stype;
                     return;
                 }
             }

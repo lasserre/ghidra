@@ -1358,11 +1358,9 @@ void ASTBuilder::pushMismatchSymbolAST(Symbol *sym,int4 off,int4 sz,
 
         DeclRefExpr* refexpr = new DeclRefExpr(sym_decl, VAR_DECL, op ? op->getAddr().getOffset() : 0);
         currentASTNode()->addChild(refexpr);
-        return;
     }
     else {
-        unimplementedCode("pushUnnamedLocation in pushMismatchSymbol");
-        return;
+        pushUnnamedLocation(vn->getAddr(), vn, op);
     }
 }
 
@@ -2575,7 +2573,16 @@ void ASTBuilder::opCall(const PcodeOp *op)
     if (callpoint->getSpace()->getType() == IPTR_FSPEC) {
         FuncCallSpecs* fspec = FuncCallSpecs::getFspecFromConst(callpoint->getAddr());
         if (fspec->getName().size() == 0) {
-            unimplementedCode("handle empty func name");
+            string nm = genericFunctionName(fspec->getEntryAddress());
+            FunctionDecl* fdecl = nullptr;
+            if (_fwd_decl_other_funcs.count(nm)) {
+                fdecl = _fwd_decl_other_funcs.at(nm);
+            } else {
+                fdecl = new FunctionDecl(_next_vdecl_id++, nm, new VoidType());
+                _fwd_decl_other_funcs[nm] = fdecl;
+            }
+            DeclRefExpr* callee_ref = new DeclRefExpr(fdecl, FUNC_DECL, op);
+            callexpr->addChild(callee_ref);
         }
         else {
             Funcdata* fd = fspec->getFuncdata();
@@ -2599,7 +2606,17 @@ void ASTBuilder::opCall(const PcodeOp *op)
                 callexpr->addChild(callee_ref);
             }
             else {
-                unimplementedCode("No symbol for function @ 0x" + to_hex(fd->getAddress().getOffset()));
+                // FunctionDecl using fspec name
+                string nm = fspec->getName();
+                FunctionDecl* fdecl = nullptr;
+                if (_fwd_decl_other_funcs.count(nm)) {
+                    fdecl = _fwd_decl_other_funcs.at(nm);
+                } else {
+                    fdecl = new FunctionDecl(_next_vdecl_id++, nm, new VoidType());
+                    _fwd_decl_other_funcs[nm] = fdecl;
+                }
+                DeclRefExpr* callee_ref = new DeclRefExpr(fdecl, FUNC_DECL, op);
+                callexpr->addChild(callee_ref);
             }
         }
     }
@@ -3529,14 +3546,34 @@ void ASTBuilder::opPtrsub(const PcodeOp *op)
         int4 fieldid;
         int4 newoff;
         if (ct->getMetatype() == TYPE_UNION) {
-            unimplementedCode("PTRSUB TYPE_UNION case");
-            return;
+            if (suboff != 0) {
+                // Ghidra decompiler throws this - shouldn't get here
+                throw LowlevelError("PTRSUB accesses union with non-zero offset");
+            }
+            const Funcdata *fd = op->getParent()->getFuncdata();
+            const ResolvedUnion *resUnion = fd->getUnionField(ptype, op, -1);
+            if (resUnion == (const ResolvedUnion *)0 || resUnion->getFieldNum() < 0) {
+                // Ghidra decompiler throws this - shouldn't get here
+                throw LowlevelError("PTRSUB for union that does not resolve to a field");
+            }
+            const TypeField *fld = ((TypeUnion *)ct)->getField(resUnion->getFieldNum());
+            fieldid = fld->ident;
+            fieldname = fld->name;
+            fieldtype = fld->type;
         } else {
             // TYPE_STRUCT
             const TypeField *fld = ct->findTruncation((int4)suboff,0,op,0,newoff);
             if (fld == nullptr) {
-                unimplementedCode("PTRSUB TYPE_STRUCT fld == nullptr");
-                return;
+                if (ct->getSize() <= suboff) {
+                    clear();
+                    throw LowlevelError("PTRSUB out of bounds into struct");
+                }
+                // Try to match the Ghidra's default field name from DataTypeComponent.getDefaultFieldName
+                ostringstream s;
+                s << "field_0x" << hex << suboff;
+                fieldname = s.str();
+                fieldtype = (Datatype*)0;
+                fieldid = suboff;
             } else {
                 fieldname = fld->name;
                 fieldtype = fld->type;
@@ -3698,14 +3735,23 @@ void ASTBuilder::opPtrsub(const PcodeOp *op)
                 _pending_expressions.push_back(expr);
             }
         } else {
-            unimplementedCode("PTRSUB TYPE_ARRAY valueon case");
-            // if (flex) {     // EMIT  ( )[0]
-            //     pushOp(&subscript,op);
-            //     if (ptrel != (TypePointerRel *)0) {
-            //         pushTypePointerRel(op);
-            //     }
-            //     pushVn(in0,op,m);
-            //     push_integer(0,4,false,(Varnode *)0,op);
+            if (flex) {     // EMIT  ( )[0]
+                ArraySubscriptExpr* arrexpr = new ArraySubscriptExpr(op);
+                currentASTNode()->addChild(arrexpr);
+
+                if (ptrel) {
+                    unimplementedCode("PTRSUB TYPE_ARRAY valueon EMIT ( )[0] ptrel case");
+                }
+
+                pushASTNode(arrexpr);
+                PendingNode* node = buildNodeImplied(in0, op, m);
+                processPendingNode(node);
+                delete node;
+                push_integer(0,4,false,(Varnode *)0,op);
+                popASTNode();   // arrexpr
+            } else {
+                unimplementedCode("PTRSUB TYPE_ARRAY valueon !flex case");
+            }
             // } else {            // EMIT  (* )[0]
             //     pushOp(&subscript,op);
             //     pushOp(&dereference,op);

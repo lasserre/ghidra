@@ -3749,18 +3749,26 @@ void ASTBuilder::opPtrsub(const PcodeOp *op)
                 delete node;
                 push_integer(0,4,false,(Varnode *)0,op);
                 popASTNode();   // arrexpr
-            } else {
-                unimplementedCode("PTRSUB TYPE_ARRAY valueon !flex case");
+            } else {            // EMIT  (* )[0]
+                ArraySubscriptExpr* arrexpr = new ArraySubscriptExpr(op);
+                currentASTNode()->addChild(arrexpr);
+
+                if (ptrel) {
+                    unimplementedCode("PTRSUB TYPE_ARRAY valueon EMIT ( )[0] ptrel case");
+                }
+
+                UnaryOperator* unop = new UnaryOperator("*", op);
+                arrexpr->addChild(unop);
+                pushASTNode(unop);
+                PendingNode* node = buildNodeImplied(in0, op, m);
+                processPendingNode(node);
+                delete node;
+                popASTNode();   // unop
+
+                pushASTNode(arrexpr);
+                push_integer(0,4,false,(Varnode *)0,op);
+                popASTNode();   // arrexpr
             }
-            // } else {            // EMIT  (* )[0]
-            //     pushOp(&subscript,op);
-            //     pushOp(&dereference,op);
-            //     if (ptrel != (TypePointerRel *)0) {
-            //         pushTypePointerRel(op);
-            //     }
-            //     pushVn(in0,op,m);
-            //     push_integer(0,4,false,(Varnode *)0,op);
-            // }
         }
     } else {
         // we won't get here - main decompiler fails in this case

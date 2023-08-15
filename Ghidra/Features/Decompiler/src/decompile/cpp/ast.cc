@@ -788,9 +788,10 @@ void* FunctionType::doAccept(ASTVisitor* v, void* context)
     return v->visitFunctionType(this, context);
 }
 
-PointerType::PointerType(const Datatype* pointedToType)
-    : Type("")
+PointerType::PointerType(const TypePointer* pointerType)
+    : Type(""), _size(pointerType->getSize())
 {
+    const Datatype* pointedToType = pointerType->getPtrTo();
     addChild(callbacks->toAstType(pointedToType));
 }
 

@@ -1054,14 +1054,17 @@ protected:
 class PointerType : public Type
 {
 public:
-    PointerType(const Datatype* pointedToType);
+    PointerType(const TypePointer* pointerType);
     virtual PointerType* clone()
     {
         return (PointerType*)clone_my_members(new PointerType(*this));
     }
 
+    int size() { return _size; }
+
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
+    int _size;
 };
 
 /**

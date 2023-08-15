@@ -427,6 +427,7 @@ void* JsonASTVisitor::visitPointerType(PointerType* pt, void* context)
     json pt_j;
     pt_j["kind"] = "PointerType";
     pt_j["inner"] = json::array();
+    pt_j["size"] = pt->size();
     return copy_to_parent(pt_j, context);
 }
 

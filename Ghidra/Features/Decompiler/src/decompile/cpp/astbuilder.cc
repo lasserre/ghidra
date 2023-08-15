@@ -3005,7 +3005,7 @@ Type* ASTBuilder::toAstType(const Datatype* dt)
             }
             return new BuiltinType(dt);
         case TYPE_PTR:
-            return new PointerType(((TypePointer*)dt)->getPtrTo());
+            return new PointerType((TypePointer*)dt);
         case TYPE_STRUCT:
             ghidra_struct = (TypeStruct*)dt;
             sid = _type_lib.mapStruct(ghidra_struct);

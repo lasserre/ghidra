@@ -1392,13 +1392,14 @@ protected:
  */
 struct Location
 {
-    Location(string space_name = "", uintb off = 0, string reg_name = "")
-        : addr_space_name(space_name), offset(off), register_name(reg_name)
+    Location(string space_name = "", uintb off = 0, string reg_name = "", int address_size = -1)
+        : addr_space_name(space_name), offset(off), register_name(reg_name), addr_size(address_size)
     { }
 
     string addr_space_name;
     string register_name;      // only filled in if it's a register
     uintb offset;
+    int addr_size;  // width of address space
 };
 
 /**

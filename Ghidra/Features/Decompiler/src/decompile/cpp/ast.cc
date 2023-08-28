@@ -892,7 +892,7 @@ Location getLocFromAddr(Address addr)
         return Location();
     }
 
-    Location loc(space->getName(), addr.getOffset());
+    Location loc(space->getName(), addr.getOffset(), "", addr.getAddrSize());
 
     if (loc.addr_space_name == "register") {
         loc.register_name = space->getTrans()->getRegisterName(space, loc.offset, addr.getAddrSize());

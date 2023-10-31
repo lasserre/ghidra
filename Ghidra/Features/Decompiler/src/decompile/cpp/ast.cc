@@ -885,17 +885,17 @@ void* ValueDecl::doAccept(ASTVisitor* v, void* context)
     return v->visitValueDecl(this, context);
 }
 
-Location getLocFromAddr(Address addr)
+Location getLocFromAddr(Address addr, int4 loc_size)
 {
     AddrSpace* space = addr.getSpace();
     if (!space) {
         return Location();
     }
 
-    Location loc(space->getName(), addr.getOffset(), "", addr.getAddrSize());
+    Location loc(space->getName(), addr.getOffset(), "", addr.getAddrSize(), loc_size);
 
     if (loc.addr_space_name == "register") {
-        loc.register_name = space->getTrans()->getRegisterName(space, loc.offset, addr.getAddrSize());
+        loc.register_name = space->getTrans()->getRegisterName(space, loc.offset, loc_size);
     }
 
     return loc;
@@ -904,7 +904,7 @@ Location getLocFromAddr(Address addr)
 Location getLocFromSymbol(Symbol* sym)
 {
     SymbolEntry* sym_entry = sym->getFirstWholeMap();
-    return getLocFromAddr(sym_entry->getAddr());
+    return getLocFromAddr(sym_entry->getAddr(), sym_entry->getSize());
 }
 
 VarDecl::VarDecl(int id, Symbol* sym)

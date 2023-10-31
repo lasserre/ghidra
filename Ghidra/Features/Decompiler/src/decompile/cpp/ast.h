@@ -1392,14 +1392,17 @@ protected:
  */
 struct Location
 {
-    Location(string space_name = "", uintb off = 0, string reg_name = "", int address_size = -1)
-        : addr_space_name(space_name), offset(off), register_name(reg_name), addr_size(address_size)
+    Location(string space_name = "", uintb off = 0, string reg_name = "",
+            int address_size = -1, int4 loc_size = 0)
+        : addr_space_name(space_name), offset(off), register_name(reg_name),
+          addr_size(address_size), loc_size(loc_size)
     { }
 
     string addr_space_name;
     string register_name;      // only filled in if it's a register
     uintb offset;
     int addr_size;  // width of address space
+    int4 loc_size;  // need this for regs, just curious if it has useful info in general...
 };
 
 /**
@@ -1411,7 +1414,7 @@ Location getLocFromSymbol(Symbol* sym);
 /**
  * @brief Convert an Address to its Location representation
  */
-Location getLocFromAddr(Address addr);
+Location getLocFromAddr(Address addr, int4 loc_size);
 
 /**
  * @brief Variable declaration or definition

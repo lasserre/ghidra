@@ -1382,7 +1382,8 @@ void ASTBuilder::pushUnnamedLocation(const Address &addr, const Varnode *vn,cons
 
     if (!_unnamedLoc_globals.count(varname)) {
         Type* addr_dt = new BuiltinType("unsigned long", 8, false, false);
-        _unnamedLoc_globals[varname] = new VarDecl(_next_vdecl_id++, varname, addr_dt, getLocFromAddr(addr));
+        _unnamedLoc_globals[varname] = new VarDecl(_next_vdecl_id++, varname, addr_dt,
+            getLocFromAddr(addr, vn->getSize()));
     }
 
     VarDecl* vdecl = _unnamedLoc_globals.at(varname);

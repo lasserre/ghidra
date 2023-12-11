@@ -57,7 +57,9 @@ void exportFunctionAst(Architecture* ghidra, Funcdata* fd, char* config_file_pat
     static ExportAstConfig config = readConfig(config_file_path);
     json ast_json = buildAstForFunction(ghidra, fd, &config);
 
-    string filename = config.output_folder + "/" + ensureValidFilename(fd->getName()) + ".json";
+    std::stringstream stream;
+    stream << "Func" << std::hex << fd->getAddress().getOffset() << "-" << fd->getName();
+    string filename = config.output_folder + "/" + ensureValidFilename(stream.str()) + ".json";
     ofstream outfile(filename, ios::out);
     outfile << setw(2) << ast_json << endl;
     outfile.close();

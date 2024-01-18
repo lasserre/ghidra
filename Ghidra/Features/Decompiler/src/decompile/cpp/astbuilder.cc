@@ -285,8 +285,21 @@ string getTimestamp()
     return string(buffer);
 }
 
-Type* ASTBuilder::getOpFuncOutputType(int out_size, string opFuncName, bool is_bool /*= false*/)
+Type* ASTBuilder::getOpFuncOutputType(int out_size, string opFuncName, bool is_bool /*= false*/,
+                                        bool is_float /*= false*/)
 {
+    if (is_float) {
+        if (out_size == 4) {
+            return new BuiltinType("float", 4, true, true);
+        } else if (out_size == 8) {
+            return new BuiltinType("double", 8,  true, true);
+        } else if (out_size == 10) {
+            return new BuiltinType("long double", 10, true, true);
+        }
+        unimplementedCode(opFuncName + " float output size of " + std::to_string(out_size));
+        return new BuiltinType("unknown_float", out_size, true, true);
+    }
+
     if (out_size == 1) {
         return is_bool ? new BuiltinType("bool", 1, false, false)
                        : new BuiltinType("unsigned char", 1, false, false);
@@ -329,6 +342,9 @@ FunctionDecl* ASTBuilder::buildOpFuncDecl(const PcodeOp* op, string name)
         return_type = getOpFuncOutputType(1, "SCARRY", true);
     } else if (name.find("POPCOUNT") == 0) {
         return_type = getOpFuncOutputType(op->getOut()->getSize(), "POPCOUNT");
+    } else if (name.find("ROUND") == 0) {
+        bool is_float = (op->getOut()->getType()->getMetatype() == TYPE_FLOAT);
+        return_type = getOpFuncOutputType(op->getOut()->getSize(), "ROUND", false, is_float);
     } else {
         unimplementedCode("Unhandled opFunc type " + name);
         return_type = getOpFuncOutputType(8, "UNHANDLED");
@@ -1576,11 +1592,11 @@ void ASTBuilder::pushPartialSymbol(const Symbol *sym,int4 off,int4 sz,
 void ASTBuilder::processSymbolDetail(PendingNode* node)
 {
     /** CLS: this logic corresponds to pushSymbolDetail */
+    HighVariable* high = node->vnode->getHigh();
     Symbol* sym = node->sym;
 
     if (!sym) {
-        // pushUnnamedLocation
-        unimplementedCode("processPendingTerminal: unnamed location");
+        pushUnnamedLocation(high->getNameRepresentative()->getAddr(), node->vnode, node->op);
     } else {
         int4 symboloff = node->high->getSymbolOffset();
         if (symboloff == -1) {
@@ -3076,8 +3092,7 @@ void ASTBuilder::opIntSext(const PcodeOp *op,const PcodeOp *readOp)
         }
     }
     else {
-        // opFunc()
-        unimplementedCode("opFunc case in opIntSext");
+        opFunc(op);
     }
 }
 
@@ -3331,7 +3346,7 @@ void ASTBuilder::opFloatFloor(const PcodeOp *op)
 
 void ASTBuilder::opFloatRound(const PcodeOp *op)
 {
-    unimplementedOp("opFloatRound");
+    opFunc(op);
 }
 
 void ASTBuilder::opMultiequal(const PcodeOp *op)
@@ -3675,8 +3690,9 @@ void ASTBuilder::opPtrsub(const PcodeOp *op)
         } else {
             // EMIT name
             if (arrayvalue) {
-                // pushOp(subscript)
-                unimplementedCode("PTRSUB valeuon case (arrayvalue = TRUE)");
+                ArraySubscriptExpr* arrexpr = new ArraySubscriptExpr(op);
+                currentASTNode()->addChild(arrexpr);
+                pushASTNode(arrexpr);
             }
         }
 
@@ -3694,7 +3710,8 @@ void ASTBuilder::opPtrsub(const PcodeOp *op)
         }
 
         if (arrayvalue) {
-            unimplementedCode("PTRSUB arrayvalue case");
+            push_integer(0, 4, false, nullptr, op);
+            popASTNode();   // ArraySubscriptExpr
         }
 
         if (need_to_pop_astnode) {

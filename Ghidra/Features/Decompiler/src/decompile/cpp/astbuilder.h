@@ -249,7 +249,7 @@ protected:
     FunctionType* createNewFunctionType(TypeCode* code_type);
     EnumDecl* createNewEnumDecl(TypeEnum* enum_type);
 
-    Type* getOpFuncOutputType(int out_size, string opFuncName, bool is_bool = false);
+    Type* getOpFuncOutputType(int out_size, string opFuncName, bool is_bool = false, bool is_float = false);
 
     /**
      * @brief Build a FunctionDecl for an opFunc function

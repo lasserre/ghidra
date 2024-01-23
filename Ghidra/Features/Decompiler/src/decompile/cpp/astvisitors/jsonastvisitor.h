@@ -99,6 +99,7 @@ protected:
      */
     json* copy_to_parent(json& data, void* parent_context);
 
+    json cppTemplatePlaceholderField(int size);
     json structureFieldToJson(TypeField ghidra_field);
     json buildStructFields(TypeStruct* ghidra_struct);
     json buildUnionFields(TypeUnion* ghidra_union);

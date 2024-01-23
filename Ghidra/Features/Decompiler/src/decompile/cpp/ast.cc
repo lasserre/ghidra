@@ -523,6 +523,15 @@ void* FieldDecl::doAccept(ASTVisitor* v, void* context)
 RecordDecl::RecordDecl(StructType stype)
     : _sid(stype.sid()), _name(stype.name()), _is_union(stype.is_union())
 {
+    if (is_cpp_template_type(_name)) {
+        // { char[<size>] __template_placeholder__; }
+        auto size = stype.is_union() ? stype.ghidra_union()->getSize() : stype.ghidra_struct()->getSize();
+        auto dtype = new ConstantArrayType(new BuiltinType("char", 1, false, true), size);
+        addChild(new FieldDecl("__template_placeholder__", dtype));
+        return;
+    }
+
+    // normal case
     if (stype.is_union()) {
         for (int i = 0; i < stype.ghidra_union()->numDepend(); i++) {
             const TypeField* ghidra_field = stype.ghidra_union()->getField(i);
@@ -578,6 +587,13 @@ StructTypeLibrary::StructTypeLibrary(int base_id /* = 0 */)
 {
 }
 
+bool is_cpp_template_type(string name)
+{
+    // because the < character is invalid C, this should suffice
+    // to detect C++ template classes
+    return name.find('<') != std::string::npos;
+}
+
 int StructTypeLibrary::mapStruct(TypeStruct* ghidra_struct)
 {
     auto name = ghidra_struct->getName();
@@ -589,6 +605,11 @@ int StructTypeLibrary::mapStruct(TypeStruct* ghidra_struct)
     // not mapped - map it now
     int sid = _next_id++;
     _mapped_structures[name] = StructType(sid, ghidra_struct);
+
+    if (is_cpp_template_type(name)) {
+        // we don't want to define any C++ template class internal fields
+        return sid;
+    }
 
     // **AFTER** SID IS MAPPED (don't move this before saving SID to _mapped_structures!!)
     // ...now call toAstType() on each field to ensure we pick up/map any other
@@ -612,6 +633,11 @@ int StructTypeLibrary::mapUnion(TypeUnion* ghidra_union)
     // not mapped - map it now
     int sid = _next_id++;
     _mapped_structures[name] = StructType(sid, ghidra_union);
+
+    if (is_cpp_template_type(name)) {
+        // we don't want to define any C++ template class (or union?) internal fields
+        return sid;
+    }
 
     // **AFTER** SID IS MAPPED (don't move this before saving SID to _mapped_structures!!)
     for (int i = 0; i < ghidra_union->numDepend(); i++) {
@@ -756,6 +782,12 @@ ConstantArrayType::ConstantArrayType(const Datatype* elementType, int numElement
 ConstantArrayType::ConstantArrayType(const TypeArray* arrType)
     : ConstantArrayType(arrType->getBase(), arrType->numElements())
 {
+}
+
+ConstantArrayType::ConstantArrayType(Type* arrType, int numElements)
+    : Type(""), _num_elements(numElements)
+{
+    addChild(arrType);
 }
 
 void* ConstantArrayType::doAccept(ASTVisitor* v, void* context)

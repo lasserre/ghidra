@@ -148,8 +148,14 @@ ASTBuilder::ASTBuilder(Architecture* ghidra, string logfolder)
     : PrintC(ghidra), _logfolder(logfolder),
     _head_translation_unit(nullptr), _next_vdecl_id(0),
     _original_ghidra_printlang_name(ghidra->print->getName()),
-    _logfile_name(""), _logfile_created(false)
+    _logfile_name(""), _logfile_created(false), _dummy_enums()
 {
+    //-----------------------------------------------------------
+    // DON'T GENERATE FULL ENUM DEFINITIONS
+    // (I don't think we plan to use them and they take up space)
+    _use_dummy_enums = true;
+    //-----------------------------------------------------------
+
     // initialize AST callbacks...
     _ast_callbacks.toAstTypeCallback = [this](const Datatype* dt) {
         return this->toAstType(dt);
@@ -178,6 +184,10 @@ ASTBuilder::~ASTBuilder()
 {
     glb->setPrintLanguage(_original_ghidra_printlang_name);
     _builder_ptr = nullptr;     // reset just so we can tell if something is going wrong
+
+    for (EnumConstantDecl* enumdecl : _dummy_enums) {
+        delete enumdecl;
+    }
 }
 
 /**
@@ -486,52 +496,54 @@ vector<string> ASTBuilder::constructStructDepOrder()
         }
 
         string name = remaining_structs.back();
-
-        vector<string> struct_deps;
-        StructType stype = _type_lib.mapped_structures()[name];
-
-        if (stype.is_union()) {
-            TypeUnion* ghidra_union = stype.ghidra_union();
-            for (int i = 0; i < ghidra_union->numDepend(); i++) {
-                const TypeField* ghidra_field = ghidra_union->getField(i);
-                string sdep = get_struct_dep_from_field(ghidra_field, stype, loop_max, pointer_resolve_threshold);
-                if (sdep != "") {
-                    struct_deps.push_back(sdep);
-                }
-            }
-        } else {
-            TypeStruct* ghidra_struct = stype.ghidra_struct();
-            for (TypeField ghidra_field : getStructFields(ghidra_struct)) {
-                string sdep = get_struct_dep_from_field(&ghidra_field, stype, loop_max, pointer_resolve_threshold);
-                if (sdep != "") {
-                    struct_deps.push_back(sdep);
-                }
-            }
-        }
-
-        bool resolved = true;
         // int idx = struct_dep_order.size();  // default to end of list
         int idx = 0;
-        for (string sdep : struct_deps) {
-            auto it = std::find(struct_dep_order.begin(), struct_dep_order.end(), sdep);
-            if (it != struct_dep_order.end()) {
-                // Element found
-                size_t index = std::distance(struct_dep_order.begin(), it) + 1;
-                if (index > idx) {
-                    idx = index;
+
+        if (!is_cpp_template_type(name)) {
+            vector<string> struct_deps;
+            StructType stype = _type_lib.mapped_structures()[name];
+
+            if (stype.is_union()) {
+                TypeUnion* ghidra_union = stype.ghidra_union();
+                for (int i = 0; i < ghidra_union->numDepend(); i++) {
+                    const TypeField* ghidra_field = ghidra_union->getField(i);
+                    string sdep = get_struct_dep_from_field(ghidra_field, stype, loop_max, pointer_resolve_threshold);
+                    if (sdep != "") {
+                        struct_deps.push_back(sdep);
+                    }
                 }
             } else {
-                // wait until it gets added
-                resolved = false;
-                break;
+                TypeStruct* ghidra_struct = stype.ghidra_struct();
+                for (TypeField ghidra_field : getStructFields(ghidra_struct)) {
+                    string sdep = get_struct_dep_from_field(&ghidra_field, stype, loop_max, pointer_resolve_threshold);
+                    if (sdep != "") {
+                        struct_deps.push_back(sdep);
+                    }
+                }
             }
-        }
 
-        if (!resolved) {
-            // rotate to front so we visit the other types first, then retry this one later
-            remaining_structs.insert(remaining_structs.begin(), name);
-            remaining_structs.pop_back();
-            continue;
+            bool resolved = true;
+            for (string sdep : struct_deps) {
+                auto it = std::find(struct_dep_order.begin(), struct_dep_order.end(), sdep);
+                if (it != struct_dep_order.end()) {
+                    // Element found
+                    size_t index = std::distance(struct_dep_order.begin(), it) + 1;
+                    if (index > idx) {
+                        idx = index;
+                    }
+                } else {
+                    // wait until it gets added
+                    resolved = false;
+                    break;
+                }
+            }
+
+            if (!resolved) {
+                // rotate to front so we visit the other types first, then retry this one later
+                remaining_structs.insert(remaining_structs.begin(), name);
+                remaining_structs.pop_back();
+                continue;
+            }
         }
 
         struct_dep_order.insert(struct_dep_order.begin() + idx, name);
@@ -963,16 +975,21 @@ void ASTBuilder::createCharConstant(Datatype* ct, uintb val, const Varnode* vn, 
     // pushAtom(Atom(t.str(),vartoken,EmitMarkup::const_color,op,vn));
 }
 
-DeclRefExpr* createDeclRefForEnumConstant(string enum_valname, EnumDecl* decl, const PcodeOp *op)
+DeclRefExpr* ASTBuilder::createDeclRefForEnumConstant(string enum_valname, EnumDecl* decl, const PcodeOp *op)
 {
     EnumConstantDecl* enumconst = nullptr;
 
-    for (auto child : *decl->children()) {
-        auto enum_child = dynamic_cast<EnumConstantDecl*>(child);
-        if (enum_child) {
-            if (enum_child->name() == enum_valname) {
-                enumconst = enum_child;
-                break;
+    if (_use_dummy_enums) {
+        enumconst = new EnumConstantDecl(_next_vdecl_id++, enum_valname, 0);
+        _dummy_enums.push_back(enumconst);  // DeclRefExpr won't delete this, so we have to
+    } else {
+        for (auto child : *decl->children()) {
+            auto enum_child = dynamic_cast<EnumConstantDecl*>(child);
+            if (enum_child) {
+                if (enum_child->name() == enum_valname) {
+                    enumconst = enum_child;
+                    break;
+                }
             }
         }
     }
@@ -2994,9 +3011,14 @@ FunctionType* ASTBuilder::createNewFunctionType(TypeCode* code_type)
 EnumDecl* ASTBuilder::createNewEnumDecl(TypeEnum* enum_type)
 {
     EnumDecl* enum_decl = new EnumDecl(enum_type->getName());
-    for (auto& enum_val : getEnumFields(enum_type)) {
-        enum_decl->addChild(new EnumConstantDecl(_next_vdecl_id++, enum_val.second, enum_val.first));
+
+    if (!_use_dummy_enums) {
+        // only gen definition if we're using real enums
+        for (auto& enum_val : getEnumFields(enum_type)) {
+            enum_decl->addChild(new EnumConstantDecl(_next_vdecl_id++, enum_val.second, enum_val.first));
+        }
     }
+
     return enum_decl;
 }
 

@@ -248,6 +248,7 @@ protected:
     VarDecl* tryCreateLocalVarDecl(const SymbolEntry* sym_entry);
     FunctionType* createNewFunctionType(TypeCode* code_type);
     EnumDecl* createNewEnumDecl(TypeEnum* enum_type);
+    DeclRefExpr* createDeclRefForEnumConstant(string enum_valname, EnumDecl* decl, const PcodeOp *op);
 
     Type* getOpFuncOutputType(int out_size, string opFuncName, bool is_bool = false, bool is_float = false);
 
@@ -408,6 +409,9 @@ protected:
     ASTCallbacks _ast_callbacks;
     string _original_ghidra_printlang_name;     // save so we can restore at the end
     // LabelStmt* _pending_label;
+
+    bool _use_dummy_enums;      // enable/disable dummy enums
+    vector<EnumConstantDecl*> _dummy_enums;     // delete these pointers when done generating AST
 };
 
 /**

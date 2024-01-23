@@ -957,6 +957,7 @@ public:
      */
     ConstantArrayType(const Datatype* elementType, int numElements);
     ConstantArrayType(const TypeArray* arrType);
+    ConstantArrayType(Type* arrType, int numElements);
     virtual ConstantArrayType* clone()
     {
         return (ConstantArrayType*)clone_my_members(new ConstantArrayType(*this));
@@ -1066,6 +1067,8 @@ protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
     int _size;
 };
+
+bool is_cpp_template_type(string name);
 
 /**
  * @brief Structure type

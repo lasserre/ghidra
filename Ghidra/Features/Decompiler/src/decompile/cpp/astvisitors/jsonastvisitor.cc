@@ -480,6 +480,23 @@ void* JsonASTVisitor::visitSwitchStmt(SwitchStmt* ss, void* context)
     return copy_to_parent(ss_j, context);
 }
 
+json JsonASTVisitor::cppTemplatePlaceholderField(int size)
+{
+    json field_j;
+
+    // { char[<size>] __template_placeholder__; }
+
+    auto dtype = new ConstantArrayType(new BuiltinType("char", 1, false, true), size);
+
+    field_j["name"] = "__template_placeholder__";
+    field_j["offset"] = 0;
+    field_j["dtype"] = typeToJson(dtype);
+
+    delete dtype;
+
+    return field_j;
+}
+
 json JsonASTVisitor::structureFieldToJson(TypeField ghidra_field)
 {
     Type* dtype = _builder->toAstType(ghidra_field.type);
@@ -530,16 +547,36 @@ json JsonASTVisitor::buildStructuresById(StructTypeLibrary* type_lib)
 
         if (stype.is_union()) {
             TypeUnion* ghidra_union = stype.ghidra_union();
-            stype_j["name"] = ghidra_union->getName();
-            stype_j["size"] = ghidra_union->getSize();
+            string name = ghidra_union->getName();
+            auto size = ghidra_union->getSize();
+
+            stype_j["name"] = name;
+            stype_j["size"] = size;
             stype_j["is_union"] = stype.is_union();
-            stype_j["fields"] = buildUnionFields(ghidra_union);
+
+            if (is_cpp_template_type(name)) {
+                // don't define template contents! just a placeholder field
+                // with total size of union/struct
+                stype_j["fields"] = {{"0", cppTemplatePlaceholderField(size)}};
+            } else {
+                stype_j["fields"] = buildUnionFields(ghidra_union);
+            }
         } else {
             TypeStruct* ghidra_struct = stype.ghidra_struct();
+            string name = ghidra_struct->getName();
+            auto size = ghidra_struct->getSize();
+
             stype_j["name"] = ghidra_struct->getName();
             stype_j["size"] = ghidra_struct->getSize();
             stype_j["is_union"] = stype.is_union();
-            stype_j["fields"] = buildStructFields(ghidra_struct);
+
+            if (is_cpp_template_type(name)) {
+                // don't define template contents! just a placeholder field
+                // with total size of union/struct
+                stype_j["fields"] = {{"0", cppTemplatePlaceholderField(size)}};
+            } else {
+                stype_j["fields"] = buildStructFields(ghidra_struct);
+            }
         }
         structs_by_id[sid_str] = stype_j;
     }

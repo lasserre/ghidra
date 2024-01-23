@@ -41,6 +41,8 @@ public:
 
 class ASTBuilder : public PrintC
 {
+    friend class TypeFactory;
+
 public:
     /**
      * @brief Construct a new AST Builder object

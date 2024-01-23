@@ -3029,6 +3029,16 @@ Type* ASTBuilder::toAstType(const Datatype* dt)
     TypeCode* code_type = nullptr;
     int sid = -1;
 
+    auto tid = dt->getId();
+    Datatype* lookup_type = glb->types->hack_findById(dt->getName(), dt->getId(), dt->getSize());
+    unimplementedCode("testing id " + std::to_string(tid));
+
+    // dump tree
+    for (auto entry : glb->types->hack_tree()) {
+        unimplementedCode(entry->getName() + ", ID = " + std::to_string(entry->getId())
+            + ", metatype = " + std::to_string(entry->getMetatype()));
+    }
+
     switch (dt->getMetatype()) {
         case TYPE_VOID:
             return new VoidType();

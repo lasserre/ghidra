@@ -456,102 +456,102 @@ string ASTBuilder::get_struct_dep_from_field(const TypeField* ghidra_field, Stru
     return "";
 }
 
-vector<string> ASTBuilder::constructStructDepOrder()
-{
-    vector<string> struct_dep_order;
-    vector<string> remaining_structs;
+// vector<string> ASTBuilder::constructStructDepOrder()
+// {
+//     vector<string> struct_dep_order;
+//     vector<string> remaining_structs;
 
-    for (auto entry : _type_lib.mapped_structures()) {
-        remaining_structs.push_back(entry.first);
-    }
+//     for (auto entry : _type_lib.mapped_structures()) {
+//         remaining_structs.push_back(entry.first);
+//     }
 
-    // TODO: create a list of struct names and sort it by dependencies
-    // -> for each entry, find the earliest index of a struct it depends on
-    //    and insert it AFTER that dependency
-    // -> if the dependency DNE in the list yet, continue on to the next
-    //    one and we'll get it next time around
-    // -> maybe have a "safety loop count" == total num structs to prevent
-    //    infinite loop if there's a bug...
-    if (remaining_structs.size()) {
-        // add the first one
-        struct_dep_order.push_back(remaining_structs.back());
-        remaining_structs.pop_back();
-    }
+//     // TODO: create a list of struct names and sort it by dependencies
+//     // -> for each entry, find the earliest index of a struct it depends on
+//     //    and insert it AFTER that dependency
+//     // -> if the dependency DNE in the list yet, continue on to the next
+//     //    one and we'll get it next time around
+//     // -> maybe have a "safety loop count" == total num structs to prevent
+//     //    infinite loop if there's a bug...
+//     if (remaining_structs.size()) {
+//         // add the first one
+//         struct_dep_order.push_back(remaining_structs.back());
+//         remaining_structs.pop_back();
+//     }
 
-    // this is just for validation, only go through list up to 100x
-    // I'm afraid we may hit infinite loop conditions because of impossible
-    // circular C code dependencies Ghidra could come up with
-    int loop_max = remaining_structs.size() * 200;
-    // at this point, don't treat pointers to structs as dependencies (we can fix
-    // this with forward decls)
-    int pointer_resolve_threshold = remaining_structs.size() * 100;
+//     // this is just for validation, only go through list up to 100x
+//     // I'm afraid we may hit infinite loop conditions because of impossible
+//     // circular C code dependencies Ghidra could come up with
+//     int loop_max = remaining_structs.size() * 200;
+//     // at this point, don't treat pointers to structs as dependencies (we can fix
+//     // this with forward decls)
+//     int pointer_resolve_threshold = remaining_structs.size() * 100;
 
-    while (remaining_structs.size()) {
-        if (loop_max-- <= 0) {
-            // just add the rest in order
-            for (string name : remaining_structs) {
-                struct_dep_order.push_back(name);
-            }
-            break;
-        }
+//     while (remaining_structs.size()) {
+//         if (loop_max-- <= 0) {
+//             // just add the rest in order
+//             for (string name : remaining_structs) {
+//                 struct_dep_order.push_back(name);
+//             }
+//             break;
+//         }
 
-        string name = remaining_structs.back();
-        // int idx = struct_dep_order.size();  // default to end of list
-        int idx = 0;
+//         string name = remaining_structs.back();
+//         // int idx = struct_dep_order.size();  // default to end of list
+//         int idx = 0;
 
-        if (!is_cpp_template_type(name)) {
-            vector<string> struct_deps;
-            StructType stype = _type_lib.mapped_structures()[name];
+//         if (!is_cpp_template_type(name)) {
+//             vector<string> struct_deps;
+//             StructType stype = _type_lib.mapped_structures()[name];
 
-            if (stype.is_union()) {
-                TypeUnion* ghidra_union = stype.ghidra_union();
-                for (int i = 0; i < ghidra_union->numDepend(); i++) {
-                    const TypeField* ghidra_field = ghidra_union->getField(i);
-                    string sdep = get_struct_dep_from_field(ghidra_field, stype, loop_max, pointer_resolve_threshold);
-                    if (sdep != "") {
-                        struct_deps.push_back(sdep);
-                    }
-                }
-            } else {
-                TypeStruct* ghidra_struct = stype.ghidra_struct();
-                for (TypeField ghidra_field : getStructFields(ghidra_struct)) {
-                    string sdep = get_struct_dep_from_field(&ghidra_field, stype, loop_max, pointer_resolve_threshold);
-                    if (sdep != "") {
-                        struct_deps.push_back(sdep);
-                    }
-                }
-            }
+//             if (stype.is_union()) {
+//                 TypeUnion* ghidra_union = stype.ghidra_union();
+//                 for (int i = 0; i < ghidra_union->numDepend(); i++) {
+//                     const TypeField* ghidra_field = ghidra_union->getField(i);
+//                     string sdep = get_struct_dep_from_field(ghidra_field, stype, loop_max, pointer_resolve_threshold);
+//                     if (sdep != "") {
+//                         struct_deps.push_back(sdep);
+//                     }
+//                 }
+//             } else {
+//                 TypeStruct* ghidra_struct = stype.ghidra_struct();
+//                 for (TypeField ghidra_field : getStructFields(ghidra_struct)) {
+//                     string sdep = get_struct_dep_from_field(&ghidra_field, stype, loop_max, pointer_resolve_threshold);
+//                     if (sdep != "") {
+//                         struct_deps.push_back(sdep);
+//                     }
+//                 }
+//             }
 
-            bool resolved = true;
-            for (string sdep : struct_deps) {
-                auto it = std::find(struct_dep_order.begin(), struct_dep_order.end(), sdep);
-                if (it != struct_dep_order.end()) {
-                    // Element found
-                    size_t index = std::distance(struct_dep_order.begin(), it) + 1;
-                    if (index > idx) {
-                        idx = index;
-                    }
-                } else {
-                    // wait until it gets added
-                    resolved = false;
-                    break;
-                }
-            }
+//             bool resolved = true;
+//             for (string sdep : struct_deps) {
+//                 auto it = std::find(struct_dep_order.begin(), struct_dep_order.end(), sdep);
+//                 if (it != struct_dep_order.end()) {
+//                     // Element found
+//                     size_t index = std::distance(struct_dep_order.begin(), it) + 1;
+//                     if (index > idx) {
+//                         idx = index;
+//                     }
+//                 } else {
+//                     // wait until it gets added
+//                     resolved = false;
+//                     break;
+//                 }
+//             }
 
-            if (!resolved) {
-                // rotate to front so we visit the other types first, then retry this one later
-                remaining_structs.insert(remaining_structs.begin(), name);
-                remaining_structs.pop_back();
-                continue;
-            }
-        }
+//             if (!resolved) {
+//                 // rotate to front so we visit the other types first, then retry this one later
+//                 remaining_structs.insert(remaining_structs.begin(), name);
+//                 remaining_structs.pop_back();
+//                 continue;
+//             }
+//         }
 
-        struct_dep_order.insert(struct_dep_order.begin() + idx, name);
-        remaining_structs.pop_back();
-    }
+//         struct_dep_order.insert(struct_dep_order.begin() + idx, name);
+//         remaining_structs.pop_back();
+//     }
 
-    return struct_dep_order;
-}
+//     return struct_dep_order;
+// }
 
 ofstream& ASTBuilder::get_logfile()
 {
@@ -618,15 +618,24 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
     int4 arch_wordsize = glb->getDefaultSize();
     // glb->getDefaultCodeSpace()->getAddrSize()
 
-    for (auto edecl : _enum_decls) {
-        _head_translation_unit->addChild(edecl.second);
-    }
+    /**
+     * TODO: TEST #2
+     * What speedup do we get by
+     * (1) commenting out/removing most of hte below code and
+     * (2) NOT grabbing struct/union definitions (test this QUICKLY by just throwing
+     *      a struct id and/or name or w/e)
+     *
+    */
 
-    vector<string> struct_dep_order = constructStructDepOrder();
-    for (string sname : struct_dep_order) {
-        auto stype = _type_lib.mapped_structures()[sname];
-        _head_translation_unit->addChild(new RecordDecl(stype));
-    }
+    // for (auto edecl : _enum_decls) {
+    //     _head_translation_unit->addChild(edecl.second);
+    // }
+
+    // vector<string> struct_dep_order = constructStructDepOrder();
+    // for (string sname : struct_dep_order) {
+    //     auto stype = _type_lib.mapped_structures()[sname];
+    //     _head_translation_unit->addChild(new RecordDecl(stype));
+    // }
 
     // add global decls to the AST under top-level translation unit
     for (auto const& entry : _globals) {
@@ -655,8 +664,11 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
     // forward declare types/typedefs
     // (these will be prepended @ top, but have to compute last so we process
     // the globals/fwd decls/function code)
-    TypedefDeclVisitor typedef_visitor(this);
-    typedef_visitor.insertTypedefs(_head_translation_unit);
+    // TypedefDeclVisitor typedef_visitor(this);
+    // typedef_visitor.insertTypedefs(_head_translation_unit);
+
+    ParenRemovalVisitor paren_remover(this);
+    paren_remover.process(_head_translation_unit);
 
     if (_logfile_created) {
         _logfile.flush();
@@ -975,24 +987,25 @@ void ASTBuilder::createCharConstant(Datatype* ct, uintb val, const Varnode* vn, 
     // pushAtom(Atom(t.str(),vartoken,EmitMarkup::const_color,op,vn));
 }
 
-DeclRefExpr* ASTBuilder::createDeclRefForEnumConstant(string enum_valname, EnumDecl* decl, const PcodeOp *op)
+DeclRefExpr* ASTBuilder::createDeclRefForEnumConstant(string enum_valname, const PcodeOp *op)
 {
     EnumConstantDecl* enumconst = nullptr;
 
     if (_use_dummy_enums) {
         enumconst = new EnumConstantDecl(_next_vdecl_id++, enum_valname, 0);
         _dummy_enums.push_back(enumconst);  // DeclRefExpr won't delete this, so we have to
-    } else {
-        for (auto child : *decl->children()) {
-            auto enum_child = dynamic_cast<EnumConstantDecl*>(child);
-            if (enum_child) {
-                if (enum_child->name() == enum_valname) {
-                    enumconst = enum_child;
-                    break;
-                }
-            }
-        }
     }
+    //else {
+    //     for (auto child : *decl->children()) {
+    //         auto enum_child = dynamic_cast<EnumConstantDecl*>(child);
+    //         if (enum_child) {
+    //             if (enum_child->name() == enum_valname) {
+    //                 enumconst = enum_child;
+    //                 break;
+    //             }
+    //         }
+    //     }
+    // }
 
     return enumconst ? new DeclRefExpr(enumconst, ENUM_DECL, op ? op->getAddr().getOffset() : 0) : nullptr;
 }
@@ -1020,10 +1033,10 @@ void ASTBuilder::createEnumConstant(uintb val,const TypeEnum *dt,const Varnode *
             if (i > 0) {
                 BinaryOperator* binop = new BinaryOperator("|", op);
                 binop->addChild(expr_head);
-                binop->addChild(createDeclRefForEnumConstant(valnames[i], etype->getDecl(), op));
+                binop->addChild(createDeclRefForEnumConstant(valnames[i], op));
                 expr_head = binop;
             } else {
-                expr_head = createDeclRefForEnumConstant(valnames[i], etype->getDecl(), op);
+                expr_head = createDeclRefForEnumConstant(valnames[i], op);
             }
         }
 
@@ -3027,17 +3040,11 @@ Type* ASTBuilder::toAstType(const Datatype* dt)
     TypeStruct* ghidra_struct = nullptr;
     TypeUnion* ghidra_union = nullptr;
     TypeCode* code_type = nullptr;
-    int sid = -1;
+    uint8 sid = -1;
 
-    auto tid = dt->getId();
-    Datatype* lookup_type = glb->types->hack_findById(dt->getName(), dt->getId(), dt->getSize());
-    unimplementedCode("testing id " + std::to_string(tid));
-
-    // dump tree
-    for (auto entry : glb->types->hack_tree()) {
-        unimplementedCode(entry->getName() + ", ID = " + std::to_string(entry->getId())
-            + ", metatype = " + std::to_string(entry->getMetatype()));
-    }
+    // auto tid = dt->getId();
+    // Datatype* lookup_type = glb->types->hack_findById(dt->getName(), dt->getId(), dt->getSize());
+    // unimplementedCode("testing id " + std::to_string(tid));
 
     switch (dt->getMetatype()) {
         case TYPE_VOID:
@@ -3047,21 +3054,23 @@ Type* ASTBuilder::toAstType(const Datatype* dt)
         case TYPE_FLOAT:
         case TYPE_BOOL:
             if (dt->isEnumType()) {
-                if (!_enum_decls.count(dt->getName())) {
-                    _enum_decls[dt->getName()] = createNewEnumDecl((TypeEnum*)dt);
-                }
-                return new EnumType(_enum_decls[dt->getName()]);
+                // if (!_enum_decls.count(dt->getName())) {
+                //     _enum_decls[dt->getName()] = createNewEnumDecl((TypeEnum*)dt);
+                // }
+                return new EnumType(dt->getName());
             }
             return new BuiltinType(dt);
         case TYPE_PTR:
             return new PointerType((TypePointer*)dt);
         case TYPE_STRUCT:
             ghidra_struct = (TypeStruct*)dt;
-            sid = _type_lib.mapStruct(ghidra_struct);
+            // sid = _type_lib.mapStruct(ghidra_struct);
+            sid = ghidra_struct->getId();
             return new StructType(sid, ghidra_struct);
         case TYPE_UNION:
             ghidra_union = (TypeUnion*)dt;
-            sid = _type_lib.mapUnion(ghidra_union);
+            // sid = _type_lib.mapUnion(ghidra_union);
+            sid = ghidra_union->getId();
             return new StructType(sid, ghidra_union);
         case TYPE_ARRAY:
             return new ConstantArrayType((TypeArray*)dt);
@@ -3069,7 +3078,8 @@ Type* ASTBuilder::toAstType(const Datatype* dt)
             // convert undefinedX types to Type() and TypedefDeclVisitor will generate
             // the proper typedefs for them
             // -> (we can also change this to generate BuiltinType directly if desired)
-            return new Type(dt);
+            return new BuiltinType(dt->getName(), dt->getSize(), false, false);
+            // return new Type(dt);
         case TYPE_CODE:
             return createNewFunctionType((TypeCode*)dt);
         case TYPE_SPACEBASE:    // fall-through

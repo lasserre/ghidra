@@ -991,19 +991,22 @@ protected:
 class EnumType : public Type
 {
 public:
-    EnumType(EnumDecl* decl)
-        : Type(decl->name()), _decl(decl)
+    // EnumType(EnumDecl* decl)
+    //     : Type(decl->name()), _decl(decl)
+    // { }
+    EnumType(string name)
+        : Type(name)
     { }
     virtual EnumType* clone()
     {
         return (EnumType*)clone_my_members(new EnumType(*this));
     }
 
-    EnumDecl* getDecl() { return _decl; }
+    // EnumDecl* getDecl() { return _decl; }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
-    EnumDecl* _decl;    // we do NOT own this, do not delete it
+    // EnumDecl* _decl;    // we do NOT own this, do not delete it
 };
 
 /**

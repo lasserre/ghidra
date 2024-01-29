@@ -217,7 +217,7 @@ public:
     std::string getTypeStringEnd(const Datatype* dt);
     std::string getProtoInputString(const FuncProto* proto);
 
-    StructTypeLibrary* type_library() { return &_type_lib; }
+    // StructTypeLibrary* type_library() { return &_type_lib; }
 
     Type* toAstType(const Datatype* dt);
 
@@ -250,7 +250,7 @@ protected:
     VarDecl* tryCreateLocalVarDecl(const SymbolEntry* sym_entry);
     FunctionType* createNewFunctionType(TypeCode* code_type);
     EnumDecl* createNewEnumDecl(TypeEnum* enum_type);
-    DeclRefExpr* createDeclRefForEnumConstant(string enum_valname, EnumDecl* decl, const PcodeOp *op);
+    DeclRefExpr* createDeclRefForEnumConstant(string enum_valname, const PcodeOp *op);
 
     Type* getOpFuncOutputType(int out_size, string opFuncName, bool is_bool = false, bool is_float = false);
 
@@ -388,9 +388,9 @@ protected:
      * The structure type library which contains the mapping of structure names
      * (which must be unique in this context) to structure ids
      */
-    StructTypeLibrary _type_lib;
+    // StructTypeLibrary _type_lib;
 
-    std::map<string, EnumDecl*> _enum_decls;
+    // std::map<string, EnumDecl*> _enum_decls;
 
     // counter to generate unique ValueDecl ids within a given context
     // ** This includes globals, locals, and function decls **

@@ -49,7 +49,7 @@ void NewTypedef::addUse(AttachedTypeUpdate* atu, Type* type)
 }
 
 TypedefDeclVisitor::TypedefDeclVisitor(ASTBuilder* builder)
-    : _typedefs_to_add(), _builder(builder), _hidden_parens_to_remove()
+    : _typedefs_to_add(), _builder(builder)
 {
 }
 
@@ -84,23 +84,6 @@ void TypedefDeclVisitor::insertTypedefs(ASTNode* parent)
             );
 
             delete attached_update;     // done with this now
-        }
-    }
-
-    for (ParenExpr* pexpr : _hidden_parens_to_remove) {
-        ASTNode* parent = pexpr->parent();
-        ASTNode* child = pexpr->children()->front();
-
-        for (int i = 0; i < parent->children()->size(); i++) {
-            if ((*parent->children())[i] == pexpr) {
-                // replace ParenExpr with child node
-                (*parent->children())[i] = child;
-                child->setParent(parent);
-                // clear child node handles from pexpr's list so they don't get
-                // deleted when we delete pexpr (child now lives in parent!)
-                pexpr->children()->clear();
-                delete pexpr;
-            }
         }
     }
 }
@@ -366,7 +349,34 @@ void* TypedefDeclVisitor::visitVarDecl(VarDecl* vdecl, void* context)
     return nullptr;
 }
 
-void* TypedefDeclVisitor::visitParenExpr(ParenExpr* pexpr, void* context)
+ParenRemovalVisitor::ParenRemovalVisitor(ASTBuilder* builder)
+    : _builder(builder), _hidden_parens_to_remove()
+{
+}
+
+void ParenRemovalVisitor::process(ASTNode* node)
+{
+    node->accept(this);   // generate list of hidden parens to remove
+
+    for (ParenExpr* pexpr : _hidden_parens_to_remove) {
+        ASTNode* parent = pexpr->parent();
+        ASTNode* child = pexpr->children()->front();
+
+        for (int i = 0; i < parent->children()->size(); i++) {
+            if ((*parent->children())[i] == pexpr) {
+                // replace ParenExpr with child node
+                (*parent->children())[i] = child;
+                child->setParent(parent);
+                // clear child node handles from pexpr's list so they don't get
+                // deleted when we delete pexpr (child now lives in parent!)
+                pexpr->children()->clear();
+                delete pexpr;
+            }
+        }
+    }
+}
+
+void* ParenRemovalVisitor::visitParenExpr(ParenExpr* pexpr, void* context)
 {
     if (pexpr->hidden()) {
         // this logic corresponds to PrintLanguage::parentheses()

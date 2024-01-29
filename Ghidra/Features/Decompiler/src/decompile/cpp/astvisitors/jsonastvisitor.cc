@@ -589,7 +589,7 @@ void* JsonASTVisitor::visitTranslationUnitDecl(TranslationUnitDecl* td, void* co
     json tudecl;
     tudecl["kind"] = "TranslationUnitDecl";
     tudecl["inner"] = json::array();
-    tudecl["structures_by_id"] = buildStructuresById(_builder->type_library());
+    // tudecl["structures_by_id"] = buildStructuresById(_builder->type_library());
     return copy_to_parent(tudecl, context);
 }
 

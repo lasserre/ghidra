@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -642,6 +642,11 @@ public:
 
 /// \brief Container class for all Datatype objects in an Architecture
 class TypeFactory {
+public:
+    // hacking public access to give myself what I need to export to JSON
+    Datatype* hack_findById(const string &n,uint8 id,int4 sz) { return findById(n, id, sz); }
+    DatatypeSet& hack_tree() { return tree; }
+private:
   int4 sizeOfInt;		///< Size of the core "int" datatype
   int4 sizeOfLong;		///< Size of the core "long" datatype
   int4 align;			///< Alignment of structures

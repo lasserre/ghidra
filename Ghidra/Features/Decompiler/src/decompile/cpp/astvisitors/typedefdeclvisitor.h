@@ -26,6 +26,26 @@ struct NewTypedef
     void addUse(AttachedTypeUpdate* atu, Type* type);
 };
 
+class ParenRemovalVisitor : public ASTVisitor
+{
+public:
+    ParenRemovalVisitor(ASTBuilder* builder);
+
+    void process(ASTNode* node);
+
+    /** CLS: HIJACKING THIS CLASS TO DO SOMETHING DIFFERENT */
+    virtual void* visitParenExpr(ParenExpr*, void*);
+
+protected:
+    // hidden parens to remove when finished traversing
+    // the AST (so we don't modify _parent's children while traversing)
+    vector<ParenExpr*> _hidden_parens_to_remove;
+
+    // HACK: this is for access to builder.toAstType() because I'm rushing...
+    // if someone has time to rearchitect this could have a cleaner solution :)
+    ASTBuilder* _builder;
+};
+
 /**
  * @brief ASTVisitor that generates forward declarations for each non-builtin
  * data type referenced within an AST snippet
@@ -66,9 +86,6 @@ public:
     virtual void* visitParmVarDecl(ParmVarDecl*, void*);
     virtual void* visitVarDecl(VarDecl*, void*);
 
-    /** CLS: HIJACKING THIS CLASS TO DO SOMETHING DIFFERENT */
-    virtual void* visitParenExpr(ParenExpr*, void*);
-
 protected:
 
     void insertNewTypedef(Type* alias_type, Type* real_type, AttachedTypeUpdate* atu = nullptr);
@@ -76,9 +93,7 @@ protected:
     // forward-decl nodes to add when finished traversing
     // the AST (so we don't modify _parent's children while traversing)
     map<string, NewTypedef> _typedefs_to_add;
-    // hidden parens to remove when finished traversing
-    // the AST (so we don't modify _parent's children while traversing)
-    vector<ParenExpr*> _hidden_parens_to_remove;
+
     // HACK: this is for access to builder.toAstType() because I'm rushing...
     // if someone has time to rearchitect this could have a cleaner solution :)
     ASTBuilder* _builder;

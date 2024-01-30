@@ -1102,7 +1102,7 @@ public:
     /** @brief Structure ID */
     int sid() const { return _sid; }
 
-    string name() const { return _ghidra_dt->getName(); }
+    string name() const { return _ghidra_dt ? _ghidra_dt->getName() : ""; }
     bool is_union() const { return _is_union; }
 
     TypeStruct* ghidra_struct() const

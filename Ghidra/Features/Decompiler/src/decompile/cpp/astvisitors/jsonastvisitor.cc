@@ -116,9 +116,8 @@ void* JsonASTVisitor::visitBuiltinType(BuiltinType* bit, void* context)
     json bit_j;
     bit_j["kind"] = "BuiltinType";
     bit_j["name"] = bit->name();
-    bit_j["ghidra_name"] = bit->ghidra_name();
-    bit_j["is_floating_point"] = bit->isFloatingPoint();
-    bit_j["is_signed"] = bit->isSigned();
+    bit_j["is_fp"] = bit->isFloatingPoint();
+    bit_j["signed"] = bit->isSigned();
     bit_j["size"] = bit->size();
     return copy_to_parent(bit_j, context);
 }
@@ -180,9 +179,9 @@ void* JsonASTVisitor::visitCompoundStmt(CompoundStmt* cs, void* context)
 void* JsonASTVisitor::visitConstantArrayType(ConstantArrayType* cat, void* context)
 {
     json cat_j;
-    cat_j["kind"] = "ConstantArrayType";
+    cat_j["kind"] = "ArrayType";    // use ArrayType to match astlib
     cat_j["inner"] = json::array();
-    cat_j["num_elements"] = cat->numElements();
+    cat_j["nelem"] = cat->numElements();
     return copy_to_parent(cat_j, context);
 }
 
@@ -321,7 +320,7 @@ void* JsonASTVisitor::visitFunctionType(FunctionType* ftype, void* context)
     ftype_j["kind"] = "FunctionType";
     ftype_j["inner"] = json::array();
     ftype_j["name"] = ftype->name();
-    ftype_j["return_dtype"] = typeToJson(ftype->return_type());
+    ftype_j["rdtype"] = typeToJson(ftype->return_type());
     return copy_to_parent(ftype_j, context);
 }
 
@@ -440,16 +439,24 @@ void* JsonASTVisitor::visitPointerType(PointerType* pt, void* context)
 void* JsonASTVisitor::visitStructType(StructType* st, void* context)
 {
     json st_j;
-    st_j["kind"] = "StructType";
+    // use the proper kind to map to appropriate astlib type
+    st_j["kind"] = st->is_union() ? "UnionType" : "StructType";
     st_j["sid"] = st->sid();
-    st_j["is_union"] = st->is_union();
+    st_j["name"] = st->name();
     return copy_to_parent(st_j, context);
 }
 
 void* JsonASTVisitor::visitVoidType(VoidType* vt, void* context)
 {
     json vt_j;
-    vt_j["kind"] = "VoidType";
+    // vt_j["kind"] = "VoidType";
+
+    // make VoidType a BuiltinType to match astlib
+    vt_j["kind"] = "BuiltinType";
+    vt_j["name"] = "void";
+    vt_j["is_fp"] = false;
+    vt_j["signed"] = false;
+    vt_j["size"] = 0;
     return copy_to_parent(vt_j, context);
 }
 

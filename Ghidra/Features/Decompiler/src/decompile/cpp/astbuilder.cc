@@ -1162,7 +1162,12 @@ void ASTBuilder::push_float(Datatype* dt, uintb val,int4 sz,const Varnode *vn, c
 
         double value_to_use = 0.0;
         if (special_value == "") {
-            value_to_use = std::stod(token);
+            try {
+                value_to_use = std::stod(token);
+            } catch (out_of_range& e) {
+                // something went wrong - just use result of getHostFloat()
+                value_to_use = floatval;
+            }
         }
 
         FloatingLiteral* lit = nullptr;
@@ -3028,6 +3033,8 @@ EnumDecl* ASTBuilder::createNewEnumDecl(TypeEnum* enum_type)
 
 Type* ASTBuilder::toAstType(const Datatype* dt)
 {
+    TypePartialStruct* ghidra_parstruct = nullptr;
+    TypePartialUnion* ghidra_parunion = nullptr;
     TypeStruct* ghidra_struct = nullptr;
     TypeUnion* ghidra_union = nullptr;
     TypeCode* code_type = nullptr;
@@ -3055,37 +3062,39 @@ Type* ASTBuilder::toAstType(const Datatype* dt)
             return new PointerType((TypePointer*)dt);
         case TYPE_STRUCT:
             ghidra_struct = (TypeStruct*)dt;
-            // sid = _type_lib.mapStruct(ghidra_struct);
             sid = ghidra_struct->getId();
             return new StructType(sid, ghidra_struct);
         case TYPE_UNION:
             ghidra_union = (TypeUnion*)dt;
-            // sid = _type_lib.mapUnion(ghidra_union);
             sid = ghidra_union->getId();
             return new StructType(sid, ghidra_union);
         case TYPE_ARRAY:
             return new ConstantArrayType((TypeArray*)dt);
         case TYPE_UNKNOWN:
-            // convert undefinedX types to Type() and TypedefDeclVisitor will generate
-            // the proper typedefs for them
-            // -> (we can also change this to generate BuiltinType directly if desired)
             return new BuiltinType(dt->getName(), dt->getSize(), false, false);
-            // return new Type(dt);
         case TYPE_CODE:
             return createNewFunctionType((TypeCode*)dt);
+        case TYPE_PARTIALSTRUCT:
+        case TYPE_PARTIALUNION:
+            if (dt->hasStripped()) {
+                return toAstType(dt->getStripped());
+            }
+            // fall-through for hasStripped == false
         case TYPE_SPACEBASE:    // fall-through
         default:
-            unimplementedCode("UNHANDLED metatype " + std::to_string((int)dt->getMetatype()) +
-                              " for " + dt->getName());
+            if (dt->getMetatype() == TYPE_PARTIALSTRUCT) {
+                ghidra_parstruct = (TypePartialStruct*)(dt);
+                unimplementedCode("TypePartialStruct with no getStripped (from " + ghidra_parstruct->getParent()->getName() + ")");
+            } else if (dt->getMetatype() == TYPE_PARTIALUNION) {
+                ghidra_parunion = (TypePartialUnion*)(dt);
+                unimplementedCode("TypePartialUnion with no getStripped (from " + ghidra_parunion->getParentUnion()->getName() + ")");
+            } else {
+                unimplementedCode("UNHANDLED metatype " + std::to_string((int)dt->getMetatype()) + " for " + dt->getName());
+            }
             return new Type(dt);
     }
 
-    // TYPE_SPACEBASE = 13,		///< Placeholder for symbol/type look-up calculations
-
     // TYPE_PTRREL = 5,		///< Pointer relative to another data-type (specialization of TYPE_PTR)
-    // TYPE_UNION = 2,		///< An overlapping union of multiple datatypes
-    // TYPE_PARTIALSTRUCT = 1,	///< Part of a structure, stored separately from the whole
-    // TYPE_PARTIALUNION = 0		///< Part of a union
 }
 
 void ASTBuilder::opHiddenFunc(const PcodeOp *op)

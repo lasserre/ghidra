@@ -151,9 +151,8 @@ ASTBuilder::ASTBuilder(Architecture* ghidra, string logfolder)
     _logfile_name(""), _logfile_created(false), _dummy_enums()
 {
     //-----------------------------------------------------------
-    // DON'T GENERATE FULL ENUM DEFINITIONS
-    // (I don't think we plan to use them and they take up space)
-    _use_dummy_enums = true;
+    // set this to true to PREVENT generating full enum definitions
+    _use_dummy_enums = false;
     //-----------------------------------------------------------
 
     // initialize AST callbacks...
@@ -618,15 +617,7 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
     int4 arch_wordsize = glb->getDefaultSize();
     // glb->getDefaultCodeSpace()->getAddrSize()
 
-    /**
-     * TODO: TEST #2
-     * What speedup do we get by
-     * (1) commenting out/removing most of hte below code and
-     * (2) NOT grabbing struct/union definitions (test this QUICKLY by just throwing
-     *      a struct id and/or name or w/e)
-     *
-    */
-
+    /** CLS: do not export enum definitions for now - I don't forsee needing them */
     // for (auto edecl : _enum_decls) {
     //     _head_translation_unit->addChild(edecl.second);
     // }
@@ -987,24 +978,24 @@ void ASTBuilder::createCharConstant(Datatype* ct, uintb val, const Varnode* vn, 
     // pushAtom(Atom(t.str(),vartoken,EmitMarkup::const_color,op,vn));
 }
 
-DeclRefExpr* ASTBuilder::createDeclRefForEnumConstant(string enum_valname, const PcodeOp *op)
+DeclRefExpr* ASTBuilder::createDeclRefForEnumConstant(string enum_valname, EnumDecl* decl, const PcodeOp *op)
 {
     EnumConstantDecl* enumconst = nullptr;
 
-    if (_use_dummy_enums) {
-        enumconst = new EnumConstantDecl(_next_vdecl_id++, enum_valname, 0);
-        _dummy_enums.push_back(enumconst);  // DeclRefExpr won't delete this, so we have to
+    // if (_use_dummy_enums) {
+    //     enumconst = new EnumConstantDecl(_next_vdecl_id++, enum_valname, 0);
+    //     _dummy_enums.push_back(enumconst);  // DeclRefExpr won't delete this, so we have to
+    // }
+    // else {
+    for (auto child : *decl->children()) {
+        auto enum_child = dynamic_cast<EnumConstantDecl*>(child);
+        if (enum_child) {
+            if (enum_child->name() == enum_valname) {
+                enumconst = enum_child;
+                break;
+            }
+        }
     }
-    //else {
-    //     for (auto child : *decl->children()) {
-    //         auto enum_child = dynamic_cast<EnumConstantDecl*>(child);
-    //         if (enum_child) {
-    //             if (enum_child->name() == enum_valname) {
-    //                 enumconst = enum_child;
-    //                 break;
-    //             }
-    //         }
-    //     }
     // }
 
     return enumconst ? new DeclRefExpr(enumconst, ENUM_DECL, op ? op->getAddr().getOffset() : 0) : nullptr;
@@ -1033,10 +1024,10 @@ void ASTBuilder::createEnumConstant(uintb val,const TypeEnum *dt,const Varnode *
             if (i > 0) {
                 BinaryOperator* binop = new BinaryOperator("|", op);
                 binop->addChild(expr_head);
-                binop->addChild(createDeclRefForEnumConstant(valnames[i], op));
+                binop->addChild(createDeclRefForEnumConstant(valnames[i], etype->getDecl(), op));
                 expr_head = binop;
             } else {
-                expr_head = createDeclRefForEnumConstant(valnames[i], op);
+                expr_head = createDeclRefForEnumConstant(valnames[i], etype->getDecl(), op);
             }
         }
 
@@ -1429,7 +1420,7 @@ void ASTBuilder::pushUnnamedLocation(const Address &addr, const Varnode *vn,cons
     if (!_unnamedLoc_globals.count(varname)) {
         Type* addr_dt = new BuiltinType("unsigned long", 8, false, false);
         _unnamedLoc_globals[varname] = new VarDecl(_next_vdecl_id++, varname, addr_dt,
-            getLocFromAddr(addr, vn->getSize()));
+            getLocFromAddr(addr, 8));
     }
 
     VarDecl* vdecl = _unnamedLoc_globals.at(varname);
@@ -3054,10 +3045,11 @@ Type* ASTBuilder::toAstType(const Datatype* dt)
         case TYPE_FLOAT:
         case TYPE_BOOL:
             if (dt->isEnumType()) {
-                // if (!_enum_decls.count(dt->getName())) {
-                //     _enum_decls[dt->getName()] = createNewEnumDecl((TypeEnum*)dt);
-                // }
-                return new EnumType(dt->getName());
+                if (!_enum_decls.count(dt->getName())) {
+                    _enum_decls[dt->getName()] = createNewEnumDecl((TypeEnum*)dt);
+                }
+                return new EnumType(_enum_decls[dt->getName()]);
+                // return new EnumType(dt->getName());
             }
             return new BuiltinType(dt);
         case TYPE_PTR:
@@ -3289,6 +3281,11 @@ void ASTBuilder::opBoolNegate(const PcodeOp *op)
 void ASTBuilder::opBoolXor(const PcodeOp *op)
 {
     unimplementedOp("opBoolXor");
+    // CLS: there is no operator precedence for this at
+    // https://www.learncpp.com/cpp-tutorial/operator-precedence-and-associativity/
+    // ...wait and see if it ever happens
+    // This does not appear to be valid C - maybe ghidra made this up? lol
+    // binaryOperator("^^", op);
 }
 
 void ASTBuilder::opBoolAnd(const PcodeOp *op)
@@ -3323,7 +3320,7 @@ void ASTBuilder::opFloatLessEqual(const PcodeOp *op)
 
 void ASTBuilder::opFloatNan(const PcodeOp *op)
 {
-    unimplementedOp("opFloatNan");
+    opFunc(op);
 }
 
 void ASTBuilder::opFloatAdd(const PcodeOp *op)
@@ -3348,17 +3345,17 @@ void ASTBuilder::opFloatSub(const PcodeOp *op)
 
 void ASTBuilder::opFloatNeg(const PcodeOp *op)
 {
-    unimplementedOp("opFloatNeg");
+    unaryOperator("-", op);
 }
 
 void ASTBuilder::opFloatAbs(const PcodeOp *op)
 {
-    unimplementedOp("opFloatAbs");
+    opFunc(op);
 }
 
 void ASTBuilder::opFloatSqrt(const PcodeOp *op)
 {
-    unimplementedOp("opFloatSqrt");
+    opFunc(op);
 }
 
 void ASTBuilder::opFloatInt2Float(const PcodeOp *op)
@@ -3378,12 +3375,12 @@ void ASTBuilder::opFloatTrunc(const PcodeOp *op)
 
 void ASTBuilder::opFloatCeil(const PcodeOp *op)
 {
-    unimplementedOp("opFloatCeil");
+    opFunc(op);
 }
 
 void ASTBuilder::opFloatFloor(const PcodeOp *op)
 {
-    unimplementedOp("opFloatFloor");
+    opFunc(op);
 }
 
 void ASTBuilder::opFloatRound(const PcodeOp *op)
@@ -3393,12 +3390,12 @@ void ASTBuilder::opFloatRound(const PcodeOp *op)
 
 void ASTBuilder::opMultiequal(const PcodeOp *op)
 {
-    unimplementedOp("opMultiequal");
+    // PrintC has an empty implementation here
 }
 
 void ASTBuilder::opIndirect(const PcodeOp *op)
 {
-    unimplementedOp("opIndirect");
+    // PrintC has an empty implementation here
 }
 
 void ASTBuilder::opPiece(const PcodeOp *op)
@@ -3853,12 +3850,12 @@ void ASTBuilder::opNewOp(const PcodeOp *op)
 
 void ASTBuilder::opInsertOp(const PcodeOp *op)
 {
-    unimplementedOp("opInsertOp");
+    opFunc(op);
 }
 
 void ASTBuilder::opExtractOp(const PcodeOp *op)
 {
-    unimplementedOp("opExtractOp");
+    opFunc(op);
 }
 
 void ASTBuilder::opPopcountOp(const PcodeOp *op)
@@ -3868,6 +3865,5 @@ void ASTBuilder::opPopcountOp(const PcodeOp *op)
 
 void ASTBuilder::opLzcountOp(const PcodeOp *op)
 {
-    unimplementedCode("opLzcountOp");
-    // opFunc(op);
+    opFunc(op);
 }

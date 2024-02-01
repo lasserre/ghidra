@@ -250,7 +250,7 @@ protected:
     VarDecl* tryCreateLocalVarDecl(const SymbolEntry* sym_entry);
     FunctionType* createNewFunctionType(TypeCode* code_type);
     EnumDecl* createNewEnumDecl(TypeEnum* enum_type);
-    DeclRefExpr* createDeclRefForEnumConstant(string enum_valname, const PcodeOp *op);
+    DeclRefExpr* createDeclRefForEnumConstant(string enum_valname, EnumDecl* decl, const PcodeOp *op);
 
     Type* getOpFuncOutputType(int out_size, string opFuncName, bool is_bool = false, bool is_float = false);
 
@@ -390,7 +390,7 @@ protected:
      */
     // StructTypeLibrary _type_lib;
 
-    // std::map<string, EnumDecl*> _enum_decls;
+    std::map<string, EnumDecl*> _enum_decls;
 
     // counter to generate unique ValueDecl ids within a given context
     // ** This includes globals, locals, and function decls **

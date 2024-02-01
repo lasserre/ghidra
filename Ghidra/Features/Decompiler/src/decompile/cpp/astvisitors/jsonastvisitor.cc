@@ -223,6 +223,11 @@ void* JsonASTVisitor::visitDeclRefExpr(DeclRefExpr* dr, void* context)
     decl_ref["kind"] = "DeclRefExpr";
     decl_ref["referencedDecl_id"] = dr->ref()->id();
     decl_ref["type"] = dr->decl_type();
+    if (dr->decl_type() == eDeclRefExprType::ENUM_DECL) {
+        EnumConstantDecl* edecl = dynamic_cast<EnumConstantDecl*>(dr->ref());
+        decl_ref["enum_const_name"] = edecl->name();
+        decl_ref["enum_const_value"] = edecl->value();
+    }
     decl_ref["instr_addr"] = dr->instr_addr();
     return copy_to_parent(decl_ref, context);
 }

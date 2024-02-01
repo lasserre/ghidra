@@ -393,7 +393,7 @@ DeclRefExpr::DeclRefExpr(ValueDecl* referencedDecl, eDeclRefExprType decl_type, 
 }
 
 DeclRefExpr::DeclRefExpr(ValueDecl* referencedDecl, eDeclRefExprType decl_type, uintb instr_addr)
-    : ASTNode(instr_addr), _ref(referencedDecl)
+    : ASTNode(instr_addr), _ref(referencedDecl), _decl_type(decl_type)
 {
 }
 

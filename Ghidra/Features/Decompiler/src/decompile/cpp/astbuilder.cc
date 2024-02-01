@@ -3045,11 +3045,10 @@ Type* ASTBuilder::toAstType(const Datatype* dt)
         case TYPE_FLOAT:
         case TYPE_BOOL:
             if (dt->isEnumType()) {
-                if (!_enum_decls.count(dt->getName())) {
-                    _enum_decls[dt->getName()] = createNewEnumDecl((TypeEnum*)dt);
+                if (!_enum_decls.count(dt->getId())) {
+                    _enum_decls[dt->getId()] = createNewEnumDecl((TypeEnum*)dt);
                 }
-                return new EnumType(_enum_decls[dt->getName()]);
-                // return new EnumType(dt->getName());
+                return new EnumType(_enum_decls[dt->getId()]);
             }
             return new BuiltinType(dt);
         case TYPE_PTR:

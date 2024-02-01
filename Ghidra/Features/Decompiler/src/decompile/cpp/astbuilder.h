@@ -390,7 +390,7 @@ protected:
      */
     // StructTypeLibrary _type_lib;
 
-    std::map<string, EnumDecl*> _enum_decls;
+    std::map<ghidra::uint8, EnumDecl*> _enum_decls;
 
     // counter to generate unique ValueDecl ids within a given context
     // ** This includes globals, locals, and function decls **

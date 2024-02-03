@@ -662,7 +662,7 @@ public:
     bool wouldNextChildBeLeftOfOp() { return true; }
 
     /** @brief SID for the structure that contains this member */
-    int sid() { return _sid; }
+    uint64_t sid() { return _sid; }
     /** @brief Offset of this member within its struct */
     int offset() { return _offset; }
     /** @brief This is a struct pointer dereference (arrow), e.g. X->Y instead of X.Y */
@@ -670,14 +670,14 @@ public:
     /** @brief Name of the structure member */
     string name() { return _name; }
 
-    void setSid(int sid) { _sid = sid; }
+    void setSid(uint64_t sid) { _sid = sid; }
     void setOffset(int offset) { _offset = offset; }
     void setIsArrow(bool isArrow) { _isArrow = isArrow; }
     void setName(string name) { _name = name; }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
-    int _sid;
+    uint64_t _sid;
     int _offset;
     bool _isArrow;
     string _name;
@@ -1080,16 +1080,16 @@ bool is_cpp_template_type(string name);
 class StructType : public Type
 {
 public:
-    StructType(int sid, TypeStruct* ghidra_struct)
+    StructType(uint64_t sid, TypeStruct* ghidra_struct)
         : Type(ghidra_struct), _sid(sid), _is_union(false)
     { }
 
-    StructType(int sid, TypeUnion* ghidra_union)
+    StructType(uint64_t sid, TypeUnion* ghidra_union)
         : Type(ghidra_union), _sid(sid), _is_union(true)
     { }
 
     StructType()
-        : Type(""), _sid(-1), _is_union(false)
+        : Type(""), _sid(0), _is_union(false)
     {}
 
     virtual StructType* clone()
@@ -1098,7 +1098,7 @@ public:
     }
 
     /** @brief Structure ID */
-    int sid() const { return _sid; }
+    uint64_t sid() const { return _sid; }
 
     string name() const { return _ghidra_dt ? _ghidra_dt->getName() : ""; }
     bool is_union() const { return _is_union; }
@@ -1121,7 +1121,7 @@ public:
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
-    int _sid;
+    uint64_t _sid;
     bool _is_union;
 };
 
@@ -1324,13 +1324,13 @@ public:
         return (RecordDecl*)clone_my_members(new RecordDecl(*this));
     }
 
-    int sid() { return _sid; }
+    uint64_t sid() { return _sid; }
     string name() { return _name; }
     bool is_union() const { return _is_union; }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
-    int _sid;
+    uint64_t _sid;
     bool _is_union;
     string _name;
 };
@@ -1509,7 +1509,7 @@ protected:
 class StructTypeLibrary
 {
 public:
-    StructTypeLibrary(int base_id = 0);
+    StructTypeLibrary(uint64_t base_id = 1);
 
     bool isStructMapped(string name)
     {
@@ -1523,12 +1523,12 @@ public:
      * @param ghidra_struct
      * @return int
      */
-    int mapStruct(TypeStruct* ghidra_struct);
+    uint64_t mapStruct(TypeStruct* ghidra_struct);
 
     /**
      * @brief Same as mapStruct but for a union
      */
-    int mapUnion(TypeUnion* ghidra_union);
+    uint64_t mapUnion(TypeUnion* ghidra_union);
 
     vector<StructType> getMappedStructs()
     {
@@ -1558,5 +1558,5 @@ protected:
      * (right now a translation decl, but could be global to a binary)
      */
     std::map<string, StructType> _mapped_structures;
-    int _next_id;
+    uint64_t _next_id;
 };

@@ -582,7 +582,7 @@ void* SwitchStmt::doAccept(ASTVisitor* v, void* context)
     return v->visitSwitchStmt(this, context);
 }
 
-StructTypeLibrary::StructTypeLibrary(int base_id /* = 0 */)
+StructTypeLibrary::StructTypeLibrary(uint64_t base_id /* = 0 */)
     : _next_id(base_id), _mapped_structures({})
 {
 }
@@ -594,7 +594,7 @@ bool is_cpp_template_type(string name)
     return name.find('<') != std::string::npos;
 }
 
-int StructTypeLibrary::mapStruct(TypeStruct* ghidra_struct)
+uint64_t StructTypeLibrary::mapStruct(TypeStruct* ghidra_struct)
 {
     auto name = ghidra_struct->getName();
 
@@ -622,7 +622,7 @@ int StructTypeLibrary::mapStruct(TypeStruct* ghidra_struct)
     return sid;
 }
 
-int StructTypeLibrary::mapUnion(TypeUnion* ghidra_union)
+uint64_t StructTypeLibrary::mapUnion(TypeUnion* ghidra_union)
 {
     auto name = ghidra_union->getName();
 

@@ -340,7 +340,7 @@ protected:
     void opFunc(const PcodeOp* op);
 
     void pushMemberExpression(const PcodeOp* op, const Varnode* struct_vn,
-                              string fieldname, int member_offset, bool is_arrow, uint4 mods, int sid);
+                              string fieldname, int member_offset, bool is_arrow, uint4 mods, uint8 sid);
 
     /** temp functions for logging spots I need to implement */
     void unimplementedCode(std::string description);

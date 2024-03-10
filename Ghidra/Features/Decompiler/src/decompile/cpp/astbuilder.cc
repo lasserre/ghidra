@@ -3038,7 +3038,7 @@ Type* ASTBuilder::toAstType(const Datatype* dt)
     TypeStruct* ghidra_struct = nullptr;
     TypeUnion* ghidra_union = nullptr;
     TypeCode* code_type = nullptr;
-    uint8 sid = -1;
+    uint8 sid = 0;
 
     // auto tid = dt->getId();
     // Datatype* lookup_type = glb->types->hack_findById(dt->getName(), dt->getId(), dt->getSize());
@@ -3420,7 +3420,7 @@ void ASTBuilder::opSubpiece(const PcodeOp *op)
         Datatype *ct = vn->getHighTypeReadFacing(op);
         if (ct->isPieceStructured()) {
             StructType* stype = dynamic_cast<StructType*>(toAstType(ct));   // grab for SID later
-            int sid = -1;
+            int sid = 0;
             if (stype) {
                 sid = stype->sid();
                 delete stype;
@@ -3430,7 +3430,7 @@ void ASTBuilder::opSubpiece(const PcodeOp *op)
             int4 byteOff = TypeOpSubpiece::computeByteOffsetForComposite(op);
             const TypeField *field = ct->findTruncation(byteOff,op->getOut()->getSize(),op,1,offset);	// Use artificial slot
             if (field && (offset == 0)) {      // A formal structure field
-                pushMemberExpression(op, vn, field->name, field->offset, false, mods, -1);
+                pushMemberExpression(op, vn, field->name, field->offset, false, mods, 0);
                 return;
             } else if (vn->isExplicit() && vn->getHigh()->getSymbolOffset() == -1) {    // An explicit, entire, structured object
                 Symbol *sym = vn->getHigh()->getSymbol();
@@ -3543,7 +3543,7 @@ static bool isValueFlexible(const Varnode *vn)
 }
 
 void ASTBuilder::pushMemberExpression(const PcodeOp* op, const Varnode* struct_vn,
-    string fieldname, int member_offset, bool is_arrow, uint4 mods, int sid)
+    string fieldname, int member_offset, bool is_arrow, uint4 mods, uint8 sid)
 {
     MemberExpr* memexpr = new MemberExpr(op, fieldname, member_offset, /* isArrow = */ is_arrow, sid);
     currentASTNode()->addChild(memexpr);

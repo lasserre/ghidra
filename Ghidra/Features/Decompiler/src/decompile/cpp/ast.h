@@ -647,7 +647,7 @@ protected:
 class MemberExpr : public ASTNode
 {
 public:
-    MemberExpr(const PcodeOp* op, string name="", int offset=-1, bool isArrow=false, int sid=-1)
+    MemberExpr(const PcodeOp* op, string name="", int offset=-1, bool isArrow=false, uint8 sid=0)
         : ASTNode(op->getAddr().getOffset()), _sid(sid), _offset(offset),
         _isArrow(isArrow), _name(name)
     { }
@@ -662,7 +662,7 @@ public:
     bool wouldNextChildBeLeftOfOp() { return true; }
 
     /** @brief SID for the structure that contains this member */
-    uint64_t sid() { return _sid; }
+    uint8 sid() { return _sid; }
     /** @brief Offset of this member within its struct */
     int offset() { return _offset; }
     /** @brief This is a struct pointer dereference (arrow), e.g. X->Y instead of X.Y */
@@ -670,14 +670,14 @@ public:
     /** @brief Name of the structure member */
     string name() { return _name; }
 
-    void setSid(uint64_t sid) { _sid = sid; }
+    void setSid(uint8 sid) { _sid = sid; }
     void setOffset(int offset) { _offset = offset; }
     void setIsArrow(bool isArrow) { _isArrow = isArrow; }
     void setName(string name) { _name = name; }
 
 protected:
     virtual void* doAccept(ASTVisitor* v, void* context);
-    uint64_t _sid;
+    uint8 _sid;
     int _offset;
     bool _isArrow;
     string _name;

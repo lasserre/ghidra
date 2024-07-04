@@ -1,14 +1,6 @@
 #include "jsonastvisitor.h"
 #include "astbuilder.h"
 
-struct ExportAstConfig
-{
-    std::string output_folder;
-};
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ExportAstConfig,
-    output_folder
-)
-
 json JsonASTVisitor::datatypeToJson(const Datatype* dt)
 {
     /** TODO: figure out how we want to handle data types */
@@ -21,10 +13,11 @@ json JsonASTVisitor::datatypeToJson(const Datatype* dt)
     return dt ? _builder->getFullTypeString(dt) : "";
 }
 
-json buildAstForFunction(Architecture* ghidra, Funcdata* fd, ExportAstConfig* config)
+json buildAstForFunction(Architecture* ghidra, Funcdata* fd)
 {
-    ASTBuilder builder(ghidra, config->output_folder);
+    ASTBuilder builder(ghidra);
     ASTNode* ast = builder.buildAST(fd);
+    // builder.get_logfile().str()
     if (!ast) {
         json err;
         err["message"] = "AST for function " + fd->getName() + " failed. See log file for details";
@@ -35,34 +28,9 @@ json buildAstForFunction(Architecture* ghidra, Funcdata* fd, ExportAstConfig* co
     ast->accept(&visitor);
     delete ast;
 
-    return visitor.get_json();
-}
-
-// making this its own function so it only gets called 1x just
-// by using static on the config variable :)
-ExportAstConfig readConfig(char* config_file_path)
-{
-    std::ifstream f(config_file_path);
-    if (f.fail()) {
-        throw LowlevelError("AST export config file " +
-            string(config_file_path) + " does not exist");
-    }
-
-    json data = json::parse(f);
-    return data.get<ExportAstConfig>();
-}
-
-void exportFunctionAst(Architecture* ghidra, Funcdata* fd, char* config_file_path)
-{
-    static ExportAstConfig config = readConfig(config_file_path);
-    json ast_json = buildAstForFunction(ghidra, fd, &config);
-
-    std::stringstream stream;
-    stream << "Func" << std::hex << fd->getAddress().getOffset() << "-" << fd->getName();
-    string filename = config.output_folder + "/" + ensureValidFilename(stream.str()) + ".json";
-    ofstream outfile(filename, ios::out);
-    outfile << setw(2) << ast_json << endl;
-    outfile.close();
+    json ast_json = visitor.get_json();
+    ast_json["logfile"] = builder.get_builder_log();
+    return ast_json;
 }
 
 JsonASTVisitor::JsonASTVisitor(ASTBuilder* builder)

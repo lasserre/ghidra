@@ -293,6 +293,7 @@ void DecompileAt::loadParameters(void)
   PackedDecode decoder(ghidra);
   ArchitectureGhidra::readStringStream(sin,decoder);	// Read encoded address directly from in stream
   addr = Address::decode(decoder); 		// Decode for functions address
+  _ast_json = "";
 }
 
 void DecompileAt::rawAction(void)
@@ -334,15 +335,23 @@ void DecompileAt::rawAction(void)
 	  (ghidra->allacts.getCurrentName() == "decompile"))
         ghidra->print->docFunction(fd);
 
-        // export AST if requestedd
-        static char* config_file_path = getenv("GHIDRA_AST_CONFIG_FILE");
-        if (config_file_path) {
-            exportFunctionAst(ghidra, fd, config_file_path);
-        }
+        // export AST if requested (NOTE: always doing this for now...)
+        _ast_json = buildAstForFunction(ghidra, fd).dump();
     }
     encoder.closeElement(ELEM_DOC);
   }
   sout.write("\000\000\001\017",4);
+}
+
+void DecompileAt::sendResult(void)
+{
+  if (ghidra != (ArchitectureGhidra *)0) {
+    sout.write("\000\000\001\020",4);
+    sout << ghidra->getWarnings();
+    sout << "#$#$# BEGIN AST #@#@#";    // use unique separator I can string.split() on
+    sout << _ast_json;
+    sout.write("\000\000\001\021",4);
+  }
 }
 
 void StructureGraph::loadParameters(void)

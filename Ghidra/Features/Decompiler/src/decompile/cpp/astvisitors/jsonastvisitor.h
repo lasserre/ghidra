@@ -17,13 +17,7 @@ class ASTBuilder;
  *
  * CLS: not even sure I need the builder class yet...
 */
-json buildAstForFunction(Architecture* ghidra, Funcdata* fd, ExportAstConfig* config);
-
-/**
- * @brief Exports the AST for the given function as a JSON file
- * per the parameters defined in the config file.
- */
-void exportFunctionAst(Architecture* ghidra, Funcdata* fd, char* config_file_path);
+json buildAstForFunction(Architecture* ghidra, Funcdata* fd);
 
 class JsonASTVisitor : public ASTVisitor
 {

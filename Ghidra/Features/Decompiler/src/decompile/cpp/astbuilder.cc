@@ -47,7 +47,7 @@ void ASTBuilder::unimplementedCode(std::string description)
 
     // log this, set breakpoint or ignore
     _count_unimpl_stuff++;
-    get_logfile() << "[todo] " << description << "\n";
+    _logfile << "[todo] " << description << "\n";
 }
 
 static int _num_unimpl_ops = 0;
@@ -144,11 +144,11 @@ struct PendingExpr
     std::vector<PendingNode*> parts;
 };
 
-ASTBuilder::ASTBuilder(Architecture* ghidra, string logfolder)
-    : PrintC(ghidra), _logfolder(logfolder),
+ASTBuilder::ASTBuilder(Architecture* ghidra)
+    : PrintC(ghidra),
     _head_translation_unit(nullptr), _next_vdecl_id(0),
     _original_ghidra_printlang_name(ghidra->print->getName()),
-    _logfile_name(""), _logfile_created(false), _dummy_enums()
+    _dummy_enums()
 {
     //-----------------------------------------------------------
     // set this to true to PREVENT generating full enum definitions
@@ -552,31 +552,25 @@ string ASTBuilder::get_struct_dep_from_field(const TypeField* ghidra_field, Stru
 //     return struct_dep_order;
 // }
 
-ofstream& ASTBuilder::get_logfile()
+string ASTBuilder::get_builder_log()
 {
-    if (!_logfile_created) {
-        // create file first, then return
-        _logfile.open(_logfile_name, ios::out);
-        _logfile_created = true;
-    }
-    return _logfile;
+    return _logfile.str();
 }
 
 ASTNode* ASTBuilder::buildAST(Funcdata* fd)
 {
     // if I decide to use timestamps, convert to something like this:
     // static string logfile = _logfolder + "/" + getTimestamp() + "-astbuilder.log";
-    _logfile_name = _logfolder + "/" + ensureValidFilename(fd->getName()) + ".log";
+    // _logfile_name = _logfolder + "/" + ensureValidFilename(fd->getName()) + ".log";
 
     if (!fd->isProcStarted()) {
         // not decompiled
         stringstream ss;
-        get_logfile() << "Function at 0x" << to_hex(fd->getAddress().getOffset());
-        get_logfile() << " not decompiled\n";
+        _logfile << "Function at 0x" << to_hex(fd->getAddress().getOffset());
+        _logfile << " not decompiled\n";
         ss << "Function at 0x" << to_hex(fd->getAddress().getOffset());
         ss << " not decompiled";
-        get_logfile() << ss.str();
-        get_logfile().close();
+        _logfile << ss.str();
         return nullptr;
     }
     else if (fd->hasNoStructBlocks()) {
@@ -584,8 +578,7 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
         stringstream ss;
         ss << "Function at 0x" << to_hex(fd->getAddress().getOffset());
         ss << " not fully decompiled (no structure present)";
-        get_logfile() << ss.str();
-        get_logfile().close();
+        _logfile << ss.str();
         return nullptr;
     }
 
@@ -660,11 +653,6 @@ ASTNode* ASTBuilder::buildAST(Funcdata* fd)
 
     ParenRemovalVisitor paren_remover(this);
     paren_remover.process(_head_translation_unit);
-
-    if (_logfile_created) {
-        _logfile.flush();
-        _logfile.close();
-    }
 
     return _head_translation_unit;
 }
@@ -2905,7 +2893,7 @@ std::string ASTBuilder::getTypeStringStart(const Datatype* dt)
             type_str += "()";
         }
         else {
-            get_logfile() << "Bad type expression (so far we had '" << type_str << "')\n";
+            _logfile << "Bad type expression (so far we had '" << type_str << "')\n";
             return "BAD_TYPE_EXPR";
         }
     }

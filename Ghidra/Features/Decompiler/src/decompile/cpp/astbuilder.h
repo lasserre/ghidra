@@ -2,6 +2,7 @@
 
 #include <deque>
 #include <fstream>
+#include <sstream>
 #include <vector>
 
 // #include "funcdata.hh"
@@ -51,7 +52,7 @@ public:
      * @param fbody is the CompoundStmt node (child to FunctionDecl node) that
      * contains the function body statements
      */
-    ASTBuilder(Architecture* ghidra, string logfolder);
+    ASTBuilder(Architecture* ghidra);
     ~ASTBuilder();
 
     /**
@@ -191,6 +192,8 @@ public:
      * pointer must be freed by the caller.
      */
     ASTNode* buildAST(Funcdata* fd);
+
+    string get_builder_log();
 
     /**
      * @brief Pushes current_node onto the top of the AST stack
@@ -398,16 +401,8 @@ protected:
     // appropriate.
     int _next_vdecl_id;
 
-    /**
-     * @brief wrap access to _logfile so I can monitor whether we ever write to
-     * the logfile or not - if not, I won't ever create it
-     */
-    ofstream& get_logfile();
-
-    string _logfolder;
-    ofstream _logfile;  // log unimplemented code for review
-    string _logfile_name;
-    bool _logfile_created;
+    // CLS: moved "logfile" to be a stringstream we send over...
+    std::stringstream _logfile;  // log unimplemented code for review
     ASTCallbacks _ast_callbacks;
     string _original_ghidra_printlang_name;     // save so we can restore at the end
     // LabelStmt* _pending_label;
